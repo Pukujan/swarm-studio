@@ -1,7 +1,8 @@
 # 45. Bring a game or app in
 
-Status: **first slice built** (this spec's PR). Godot projects, crew changes to plain-file projects, the Plan
-board reading a brought-in plan, and source going back to GitHub are the next slices, specified below.
+Status: **first slice built**, and **source on GitHub built** (Push, Pull and the door inside a project: "The other
+direction", below). Godot projects, crew changes to plain-file projects and the Plan board reading a brought-in
+plan are the next slices, specified below.
 
 The owner, 2026-11-13:
 - "i was developing this game with claude before i wanna resume developing this but with our swarm instead now, how do i do this?"
@@ -75,7 +76,11 @@ come in**) and in the room, with git's own words.
   commit and origin are read from `.git/HEAD` and `.git/config`).
 - **History.** The project's own `.git` stays out of `app/`. The run starts its own history there with one
   commit, "Brought in", as every Studio app has its own (the app engine makes the first commit of a workspace
-  that has none, `engine/appbuild.mjs` `runEngine`, and depends on no earlier history).
+  that has none, `engine/appbuild.mjs` `runEngine`, and depends on no earlier history). One exception, so the
+  work can go back: the **whole** of a repository (no subfolder) whose files came in unchanged (nothing left out
+  by name) carries on from that repository's newest commit, fetched alone (`git fetch --depth 1`, hooks off;
+  `engine/sourcehub.mjs` `joinHistory`). The `intake` event then says `joined: true`. A subfolder, or a
+  repository with files that were left out, starts with "Brought in" as before.
 - **A Swarm plan.** A `plan.json` in the Plan board's format (kind, cards, a name or idea) in the folder or
   one folder up is copied to `runs/<id>/plan.json`. `games/ares/plan.json` is one. **The Plan board does not
   read it yet**: it is kept so a later slice can open it.
@@ -173,24 +178,120 @@ today: "built by a tool the Studio does not run yet").
 
 ## The other direction: source on GitHub
 
-What is true today:
-- Every app and game run's `app/` is its own local git repository with a commit per change and no remote
-  (`engine/appbuild.mjs` `runEngine` makes the first commit; the engine commits each turn; a brought-in run
-  starts with "Brought in").
-- **Publish › Website** makes one public repository per site that holds only the exported pages and replaces
-  it on every publish (`engine/publish.mjs` `publishGitHub`: `gh repo create --public`, then
-  `git push -f`). That is the published site, not the source.
-- A working app deploys to Vercel (`engine/appjob.mjs` `deploy`).
-- Nothing pushes an app's or a game's source to GitHub, and nothing pulls changes back.
+Built (`engine/sourcehub.mjs`, `server/sourcehub.mjs`, `web/github.js`; tests in `tests/sourcehub.test.mjs` and
+`tests/githubdoor.test.mjs`). The owner, 2026-11-14: "stilll dont see anyways to link to imporrt or export github
+repos for a project?"
 
-The next slice:
-- **Push source.** The run's own git history to a repository under the person's `gh` login: private by
-  default, the same repository on every later push (remembered with the run, as `publishGitHub` remembers a
-  site's), never a force push, never one the Studio did not make or the person did not name.
-- **Pull.** For a run brought in from a repository: fetch the origin recorded in its `intake` event (`repo`,
-  `path`, `sha`), and bring the new commits in as the project's next version (a new run in the same project,
-  with the same limits and the same nothing-is-run rule). A folder inside a git repository records its
-  `origin` too, so it can pull the same way.
+What was already true, and still is:
+- Every app and game run's `app/` is its own local git repository with a commit per change and no remote
+  (`engine/appbuild.mjs` `runEngine` makes the first commit; the engine commits each turn).
+- **Publish › Website** makes one public repository per site that holds only the exported pages and replaces
+  it on every publish (`engine/publish.mjs` `publishGitHub`, a force push). That is the published site, not
+  the source, and it is a different repository from the one below.
+
+### The door
+
+One entry, **GitHub**, in a project's ☰ menu (after Export) and on its card's menu on Projects. It opens one
+small sheet that says what is true in a few plain lines, and has the moves:
+
+| The project | The sheet says | Moves |
+|---|---|---|
+| has an app or a game, never pushed | **Not on GitHub**, or **Brought in from owner/name/folder** | **Repository** (the project's name, to edit; `owner/name` links one that exists), **Private / Public**, **Push**; **Pull** when it was brought in from a repository |
+| is linked | **owner/name** (a link) and **Private** or **Public**; **Pushed 3 min ago** or **Pulled …**; then **Changes not pushed**, **New commits to pull** or **Up to date** | **Pull**, **Push** (Pull leads when GitHub has new commits) |
+| is linked, but this version has a history of its own | the same, and **This version needs a repository of its own** | **Repository**, **Private / Public**, **Push**, **Pull** |
+| has no app or game yet | **No app or game here yet** | **Repository**, **Subfolder**, **Game / App**, **Bring in** (into this project, as its next version) |
+| anything on its way | a crew cursor (Pip) and the step: checking, making, pushing to, pulling from | the buttons wait |
+
+Opening the sheet asks GitHub once what its newest commit is (`git ls-remote`, 12 seconds at most); without an
+answer the sheet says so and never says "Up to date". No `gh` login: **Not signed in: run gh auth login**.
+A project with both an app and a game shows a **Game / App** toggle: each piece has its own repository. The
+piece shown first is the open run's, else the newest.
+
+The same moves typed in the chat, from the Design deck's chat or a project's "Tell the crew…" (only a message
+that is one of these, whole): **push to github**, **pull from github**, **link owner/name**, **where is this on
+github**. The answer is in the chat, with the crew's cursor while it works, and ends with the repository's link.
+
+### Push
+
+`POST /api/projects/<id>/github { action: 'push', repo?, public?, piece? }`.
+- The run's own history goes to a repository under the person's `gh` login: `git push <address> HEAD:refs/heads/<branch>`,
+  by address, with no remote written into the project's git config, hooks off, and the gh login as the only
+  credential helper. **Never `--force`.**
+- **The first push** makes the repository (`gh repo create`, **private** unless Public was picked; its
+  description says "made with Swarm Studio") from the name in the field, only when that name is free. A name
+  the person typed that is taken is refused; it is never taken over. When no name was given (the field left as
+  it was, or "push to github" typed) and the project's own name is taken, which it is once Publish › Website has
+  made `<login>/<name>` for the site's pages, the next free one is made: `<name>-source`, then `-source-2` to `-5`.
+- **Or links one the person names** (`owner/name` or its https address), only when it is empty or its newest
+  commit is already in this project's history. Otherwise: "already holds other work".
+- **Later pushes** go to the same repository, remembered per project and piece in the Studio's data folder
+  (`github-source.json`: the repository, private or public, the last commit sent and when). Changes not yet in a
+  commit are committed first ("Changes made in Swarm Studio"); untracked packages, build output and key files
+  are kept out of that commit by `.git/info/exclude`, so no file of the project changes. A key file that would
+  still get into that commit (another spelling, or one already tracked and changed) stops the push before the
+  commit is made, and the changes are left as they were: the Studio never commits a key file itself.
+- **The repository has commits the project lacks**: refused in words ("Pull them first"), and Pull leads.
+- **Keys.** Every file name in the commits being sent is read (`git rev-list --objects`, so a `.env` committed
+  once and deleted later still counts). A key file (`.env`, `.env.*` except `.env.example`/`.sample`/`.template`,
+  `.npmrc`, `.netrc`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `id_rsa` and its kin: intake's
+  key names plus the endings) stops the push with the names, before any repository is made. What the app
+  scaffold's own `.gitignore` covers: `node_modules`, `dist`, `*.local`; **not** `.env`, which is why the push
+  checks. There is no way in the Studio yet to take a key file out of a history: an owner question.
+- While the crew is working on the run, a push is refused ("try again when they are done").
+
+### Pull
+
+`POST … { action: 'pull' }`, for a project that is linked or was brought in from a repository (the `intake`
+event's `repo`, `path`, `sha`; a folder inside a git repository records its `origin`).
+- GitHub is asked for its newest commit. The same one as last time, or one already in the project's history:
+  **Nothing new on owner/name**, and no run is made.
+- For a subfolder, GitHub is asked whether anything under it changed between the two commits (`gh api
+  repos/…/compare`); when nothing did: **Nothing new in games/ares on owner/name**. When GitHub does not say
+  (more than 300 files changed, or no answer), the pull goes ahead.
+- Otherwise the repository comes in through intake itself (`bringIn`, the same limits, the same names left out,
+  nothing run) as **the project's next version**: a new run in the same project. The whole of a repository
+  carries its history on (above), so the next push is an ordinary one on top of what was pulled.
+- **Nothing is merged.** Changes made here and not pushed stay in the older version; the new version is what
+  GitHub has.
+- **What a pulled version is.** It is a brought-in run, with everything that means above: a pulled **game**
+  joins the project's site as its game (the Overview keeps its pages). A pulled **app** is a version of its own
+  with the app only: the earlier version's designed pages are not in it, it is given none of the person's
+  database or Stripe keys, a Vite project waits for **Install and run**, and it is never built over. For an app
+  the Studio built itself that is a real cost of pulling, and the reason Push is the ordinary direction for
+  work made here. Seen in the walk-through: the card's status becomes **App · Brought in**.
+- A version whose history could not be carried on (files were left out on the way in) cannot be pushed to that
+  repository; the sheet says so and offers a repository of its own.
+
+### Bring in from inside
+
+`POST … { action: 'bring', repo, path?, kind }`, only for a project with no app or game source: the repository
+comes into **this** project (its name is the project's). ARES: open the ARES project, GitHub, `Pukujan/swarm-studio`,
+Subfolder `games/ares`, Game. A subfolder is pull-only: its first push makes a repository of its own
+(`<login>/ares`), never the one it is a folder of. Projects › **Bring in a project** is unchanged.
+
+### Who may start it
+
+- The person's own click or typed words in the Studio, or `/swarm github [n] [push|pull] [owner/name|name] [public]`.
+- **The model** (the `swarm_studio` tool, `action: github`, `move: push`) goes through Hermes's approval
+  prompt first, as publish, deploy and post do (`commands.py` `outward`, `approval_hook`), and is refused in a
+  cron job with nobody there. A rule each, so an "always" for one is never another: a private push
+  (`swarm-studio:github:push:private`), a new public repository (`…:public`), and each named repository its own
+  (`…:named:<owner/name>`).
+  `move: status` and `move: pull` are not asked about: nothing leaves the computer but the question, and
+  nothing that comes in is run.
+- **Never on the hosted studio**: `server/hosted.mjs` answers 403 to GET and POST (`scripts/check.sh` checks
+  it), the menu entry is not there, and the typed moves are ordinary messages.
+- The server is not replaced or stopped for being idle while a push or a pull runs (`workRunning`).
+
+### Not verified, and not built
+
+- **Not verified against the real GitHub.** The tests and the walk-through use bare repositories in a folder
+  and a stand-in `gh`. `gh repo create`, the credential helper on a private repository, the compare request and
+  GitHub's own refusal words have not been run for real.
+- No merge, no branches (the repository's default branch only), no pull requests, no unlink in the sheet
+  (linking another repository by name replaces the link).
+- A project brought in from Projects before this slice, whole, has a "Brought in" history: it can be pulled,
+  and pushed only to a repository of its own until a pull carries the history on.
 
 ## Done when
 
@@ -199,4 +300,6 @@ The next slice:
       each refused in words (`tests/bringin.test.mjs`).
 - [x] A brought-in run is never built over, and a plain-file one refuses follow-ups without calling the engine.
 - [x] The hosted studio refuses the request.
-- [ ] Godot projects, crew changes to plain files, the Plan board import, Push source and Pull.
+- [x] Push source and Pull: the door in a project's menu, the typed moves, the refusals (`tests/sourcehub.test.mjs`).
+- [ ] The same against the real GitHub, once, by the owner.
+- [ ] Godot projects, crew changes to plain files, the Plan board import.

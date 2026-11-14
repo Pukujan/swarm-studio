@@ -2,7 +2,7 @@
 // web/canvas.js, split by area (web/canvas/README.md): what web/studio.js, web/home.js and web/project.js may read and call (window.swarm).
 import { layerDrag } from '../layerlink.js'
 import { clean } from '../clean.js'
-import { S, Q, WALL, BASE, store, api, cosmosHooks, cam, els } from './core.js'
+import { S, Q, WALL, BASE, BOOT, store, api, cosmosHooks, cam, els } from './core.js'
 import { view, setView, openGame } from './rooms.js'
 import { toggleModels, toggleTheme, showTab } from './settings.js'
 import { viewing, files, openRun, loadFiles, stopReplay } from './replay.js'
@@ -15,7 +15,7 @@ import { readTalk, talkStart, talkAsk, talkEnd, saidOf, talk, gameLock } from '.
 import { setCrewMode, crewMode } from './auto.js'
 import { snapFrame, pageCapture, hiddenCopy, ANCHOR_JS, layerKey, SNAP_SECTION, sendComment } from './marks.js'
 import { gensOf, pics } from './start.js'
-import { nextRoute, setNextRoute } from './loop.js'
+import { nextRoute, setNextRoute, github } from './loop.js'
 import { dataUrl } from '../capture.js'
 
 // ---------- studio hook: what web/studio.js, web/home.js and web/project.js may read and call.
@@ -184,6 +184,9 @@ window.swarm = {
       return { py: py?.[1] ?? '0', gap: lay ? gap?.[1] ?? '0' : null, hsize: hs?.[1] || null, bg: bg?.[1] || null, radius: rad ? (rad[1]?.startsWith('[') ? 'theme' : rad[1] || '') : null }
     }
   },
+  // a project's source on GitHub (web/github.js): its sheet, and a typed move from a project's dock (true when
+  // the words were one); null on the hosted studio, which has no such door
+  github: BOOT.hosted ? null : { open: github.open, say: github.say },
   // start a build from Projects or a project's dock (the second argument, once Auto, is ignored).
   // Without a project (Projects home) it is a new project; with one, `from` is the open version it extends
   // It resolves to the new run's id (null when none started, { busy } while the last turn still builds)
