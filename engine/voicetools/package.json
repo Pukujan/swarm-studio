@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "description": "The Kokoro voice (engine/sound.mjs), installed into the data folder on first use from this lockfile: npm ci --ignore-scripts. onnxruntime-node and sharp ship their prebuilt binaries in the package or as optional platform packages, so no install script is needed: onnxruntime's script only fetches optional GPU builds, sharp's only builds from source when no prebuilt one fits.",
+  "dependencies": {
+    "kokoro-js": "1.2.1"
+  }
+}
