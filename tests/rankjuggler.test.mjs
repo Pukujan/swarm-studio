@@ -8,12 +8,13 @@ import { createServer } from 'node:http'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { planRoutes } from '../server/plans.mjs'
 import { talkRoutes } from '../server/talk.mjs'
 import { planFacts, nextStep, checkClaims, readPicks, goWords } from '../engine/gamestep.mjs'
 import { factsText } from '../engine/talkplan.mjs'
 
-const FIX = new URL('./fixtures/rank-juggler/', import.meta.url).pathname
+const FIX = fileURLToPath(new URL('./fixtures/rank-juggler/', import.meta.url))
 const PLAN = 'p-44c1061860', CHAT = 'c-a081ad00b5'
 const plan0 = () => JSON.parse(readFileSync(join(FIX, 'plans', `${PLAN}.json`), 'utf8'))
 const chat0 = () => JSON.parse(readFileSync(join(FIX, 'chats', CHAT, 'chat.json'), 'utf8'))
