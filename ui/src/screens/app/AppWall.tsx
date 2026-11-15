@@ -4,7 +4,7 @@
 // it tells the server a viewer is here every 30 s, so the app is not stopped under them (decision 0017).
 // A game's App room has not moved: it stays the stand-in.
 import { classicHref } from '../../shell/classic'
-import { useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { search } from '../../nav/address'
 import { useNav } from '../../nav/NavProvider'
 import { LinkButton } from '../../primitives/Button'
@@ -15,6 +15,7 @@ import { AppSourceContext } from './source'
 import { Chat, type ChatLine } from '../../chat'
 import { doneSections } from '../deck/model'
 import { useDeckRun } from '../deck/source'
+import { crew } from '../deck/crew'
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 
@@ -29,6 +30,11 @@ export function AppWall() {
   const line = useCallback((who: ChatLine['who'], text: string) => setLines(ls => [...ls, { id: `${Date.now()}:${ls.length}`, at: Date.now(), who, text }]), [])
   // the design the app is made from: a change sends its finished sections, as the current Studio's appAsk does
   const { model: deck } = useDeckRun(run ?? null)
+  // the chat shows the build's own lines too, as the deck's chat does (the crew in its shade; the build's news in the Log)
+  const feed = useMemo(() => {
+    const all = [...deck.lines.map(l => ({ ...l, ...(l.who === 'crew' && l.name ? { color: crew().color(l.name) } : {}) }) as ChatLine), ...lines].sort((a, b) => a.at - b.at)
+    return { lines: all.filter(l => l.who !== 'sys'), log: all.filter(l => l.who === 'sys' || l.who === 'err') }
+  }, [deck.lines, lines])
   const filePath = useRef<string | null>(null)
 
   const readFile = useCallback((path: string | null) => {
@@ -45,16 +51,16 @@ export function AppWall() {
     const refresh = () => {
       clearTimeout(again)
       again = window.setTimeout(() => {
-        Promise.all([source.state(run), source.files(run).catch(() => ({ files: [] }))]).then(([app, f]) => { if (live) setModel(m => (m ? { ...m, app, files: f.files } : m)) }).catch(() => {})
+        Promise.all([source.state(run), source.files(run).catch(() => ({ files: [] })), source.versions?.(run).catch(() => null)]).then(([app, f, v]) => { if (live) setModel(m => (m ? { ...m, app, files: f.files, ...(v ? { versions: v.versions } : {}) } : m)) }).catch(() => {})
       }, 300)
     }
-    Promise.all([source.state(run), source.map(run).catch(() => null), source.events(run).catch(() => [] as RunEvent[]), source.files(run).catch(() => ({ files: [] }))]).then(([app, map, events, f]) => {
+    Promise.all([source.state(run), source.map(run).catch(() => null), source.events(run).catch(() => [] as RunEvent[]), source.files(run).catch(() => ({ files: [] })), source.versions?.(run).catch(() => null)]).then(([app, map, events, f, v]) => {
       if (!live) return
       const start = events.find(e => e.type === 'run:start')
       const agents = Array.isArray(start?.agents) ? (start.agents as { name?: string }[]).map(x => str(x.name)).filter(Boolean) : []
       setModel({
         run, title: (app.name || str(start?.title) || str(start?.brief)).slice(0, 60), crew: agents.slice(0, 4), app, map, files: f.files, file: null,
-        done: doneScreens(events), deployedAt: events.findLast(e => e.type === 'app:deployed')?.t
+        done: doneScreens(events), deployedAt: events.findLast(e => e.type === 'app:deployed')?.t, versions: v?.versions
       })
       const writing = [...(app.steps || [])].reverse().find(s => s.kind === 'write' && s.file)?.text
       if (writing) readFile(writing)
@@ -112,6 +118,16 @@ export function AppWall() {
     source.open?.(run).then(app => setModel(m => (m ? { ...m, app } : m))).catch(() => {})
   }, [run, source])
 
+  // back to one of the app's versions (issue #542): its files as they were, served again
+  const [going, setGoing] = useState('')
+  const onBack = useCallback((rev: string) => {
+    if (!run || !source.back) return
+    setGoing(rev)
+    source.back(run, rev).then(r => setModel(m => (m ? { ...m, app: { ...m.app, ...r }, versions: r.versions || m.versions } : m)))
+      .catch(err => setSaid({ at: 3, who: 'Hermia', text: String(err.message || err) }))
+      .finally(() => setGoing(''))
+  }, [run, source])
+
   // a game's App room has not moved: it opens in the classic Studio at this address (decision 0024), with its name
   // and the way there while it goes (as NotMovedYet, which this cannot import: it reads the screens' list, which lists this)
   const game = model?.app?.kind === 'game'
@@ -125,9 +141,9 @@ export function AppWall() {
   if (!model) return <section aria-label="App build" aria-busy="true" className="grid flex-1 grid-cols-2 grid-rows-2 gap-[10px] p-3">{WINDOWS.map(w => <div key={w} className="rounded-[12px] border border-edge bg-deep" />)}</section>
   return (
     <>
-      <AppWallView model={model} said={said} onAsk={onAsk} onOpen={onOpen} onFile={readFile} docked />
+      <AppWallView model={model} said={said} onAsk={onAsk} onOpen={onOpen} onFile={readFile} onBack={onBack} going={going} docked />
       {/* the App room opens with its chat docked (issue #542): it is where a change to the app is asked for */}
-      <Chat from={run} project={view.project} lines={lines} onSubmit={onChat}
+      <Chat from={run} project={view.project} lines={feed.lines} log={feed.log} onSubmit={onChat}
         box={{ placeholder: "Change the app, or ask the crew…", empty: "Ask the crew what they are on, or say what to change: once the app is built, your words change it.", action: "Send" }} />
     </>
   )

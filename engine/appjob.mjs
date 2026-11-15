@@ -177,6 +177,19 @@ export function appVersions(events, commits = [], now = '') {
   return out.reverse().map(v => ({ ...v, now: !!now && short(v.rev) === short(now) }))
 }
 
+// The screen a change is on (issue #542): the route whose component lives in a file the change touched, read from
+// the app's router (dyad's scaffold uses React Router: <Route path="/tasks" element={<Tasks />} />). `routes` is
+// the router file's text; `changed`, the change's files. The page first, then a component, then null (the app's
+// own first screen).
+export function screenOf(routes, changed = []) {
+  const byName = new Map()
+  for (const m of String(routes || '').matchAll(/<Route\b[^>]*?\bpath=["'`]([^"'`*]+)["'`][^>]*?\belement=\{\s*<(\w+)/g)) if (!byName.has(m[2])) byName.set(m[2], m[1])
+  for (const m of String(routes || '').matchAll(/<Route\b[^>]*?\belement=\{\s*<(\w+)[^}]*\}[^>]*?\bpath=["'`]([^"'`*]+)["'`]/g)) if (!byName.has(m[1])) byName.set(m[1], m[2])
+  const names = changed.map(f => String(f).replace(/\\/g, '/')).sort((a, b) => Number(/\/pages?\//i.test(b)) - Number(/\/pages?\//i.test(a))).map(f => f.split('/').pop().replace(/\.[jt]sx?$/, ''))
+  for (const n of names) if (byName.has(n)) return byName.get(n)
+  return null
+}
+
 export const lastPlay = events => { const p = events.findLast(e => ['app:paused', 'app:done'].includes(e.type)); return p?.type === 'app:paused' ? p.result?.stages?.at(-1)?.playtest || null : null }
 // A play test that still fails, as the first thing the next slice is told
 export const playCarry = play => (play && !play.ok && !play.skipped && (play.carry || play.problem) ? `the play test of the slice before this one still fails${play.tries ? ` after ${play.tries} fix attempt${play.tries === 1 ? '' : 's'}` : ''}. Fix it before building anything new, and build nothing on top of it until the game starts and plays. What the play test found:\n\n${String(play.carry || play.problem).slice(0, 6000)}\n\n(End of the play test's findings.)` : '')
@@ -884,13 +897,17 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   async function photo(id, j) {
     const pw = await loadPlaywright()
     if (!pw || !j.url) return
+    // the version the app is at, and the screen its change is on (issue #542): that screen is the one photographed,
+    // and the photo is kept as the version's own, so the next change can show it as "before"
+    const v = versions(id).versions.find(x => x.now)
     const browser = await launch(pw.chromium)
     try {
       const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
-      await page.goto(j.url, { waitUntil: 'load', timeout: 20000 })
+      await page.goto(new URL(v?.screen || '/', j.url).href, { waitUntil: 'load', timeout: 20000 })
       await page.waitForTimeout(800)
       mkdirSync(join(runsDir, id, 'img'), { recursive: true })
       await page.screenshot({ path: join(runsDir, id, 'img', 'app.jpg'), type: 'jpeg', quality: 80 })
+      if (v?.rev) copyFileSync(join(runsDir, id, 'img', 'app.jpg'), join(runsDir, id, 'img', `app-${v.rev.slice(0, 7)}.jpg`))
       j.photo = `/img/${id}/app.jpg?v=${Date.now()}`
       send(id, 'app:photo', { src: j.photo })
     } finally { await browser.close().catch(() => {}) }
@@ -1034,17 +1051,29 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   const snap = (dir, msg) => {
     const g = (...a) => execFileSync('git', ['-c', 'core.autocrlf=false', ...a], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
     try {
-      g('add', '-A')
-      if (g('status', '--porcelain')) g('-c', 'user.name=Swarm Studio', '-c', 'user.email=swarm@localhost', 'commit', '-qm', msg)
+      g('add', '-A', '--', '.', ':(exclude).swarm-built.json')
+      if (g('diff', '--cached', '--name-only')) g('-c', 'user.name=Swarm Studio', '-c', 'user.email=swarm@localhost', 'commit', '-qm', msg)
       return g('rev-parse', 'HEAD')
     } catch { return '' }
   }
   const commitsOf = dir => { try { return execFileSync('git', ['log', '--format=%H|%ct', '-n', '200'], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n').filter(Boolean).map(l => { const [hash, t] = l.split('|'); return { hash, t: Number(t) * 1000 } }) } catch { return [] } }
   const headOf = dir => commitsOf(dir)[0]?.hash || ''
 
+  // a change's files, against the version before it: the engine's notes and lock files are not the change
+  const changedBetween = (dir, from, to) => { try { return execFileSync('git', ['diff', '--name-only', from, to], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split('\n').map(f => f.trim()).filter(f => f && !/(^|\/)(RUN_META\.json|pnpm-lock\.yaml|package-lock\.json|\.gitignore|\.swarm-built\.json)$/.test(f)) } catch { return [] } }
+  const routesOf = dir => { for (const f of ['src/App.tsx', 'src/App.jsx', 'src/main.tsx', 'src/routes.tsx']) try { const t = readFileSync(join(dir, f), 'utf8'); if (/<Route\b/.test(t)) return t } catch {} return '' }
+  // a version's own photo, kept beside the newest one (photo below)
+  const photoOf = (id, rev) => { const f = `app-${String(rev).slice(0, 7)}.jpg`; try { return `/img/${id}/${f}?v=${Math.round(statSync(join(runsDir, id, 'img', f)).mtimeMs)}` } catch { return null } }
+
   function versions(id) {
-    const dir = dirOf(id)
-    return { versions: appVersions(readEvents(id) || [], commitsOf(dir), headOf(dir)), working: jobs.get(id)?.state === 'working' }
+    const dir = dirOf(id), list = appVersions(readEvents(id) || [], commitsOf(dir), headOf(dir)), routes = routesOf(dir)
+    return {
+      versions: list.map((v, i) => {
+        const before = list[i + 1], changed = before && i < 12 ? changedBetween(dir, before.rev, v.rev) : []
+        return { ...v, changed: changed.slice(0, 20), screen: screenOf(routes, changed), photo: photoOf(id, v.rev) }
+      }),
+      working: jobs.get(id)?.state === 'working'
+    }
   }
 
   // Back to a version (issue #542): the app's files as they were then, as one more commit, so the versions after it
