@@ -5,11 +5,6 @@
     "why": "The App room is spec 44's four-window build wall (#477), a new design rather than the current room's code wall, so its entrance and Hermia's work on its loading window differ."
   },
   {
-    "key": "app only in /: page @in 300ms x1 ease-out",
-    "label": "later (#542)",
-    "why": "The current App room opens with its chat open (issue #542, one box), so its lines fade in there; the /next/ app build wall has no chat docked yet, which #542 leaves open."
-  },
-  {
     "key": "app only in /: page @radio-dash endless 800ms linear",
     "label": "later (#529)",
     "why": "Hermia's radio line to the crew over the App room; the /next/ build wall draws no crew cursor yet, a later slice of spec 44."

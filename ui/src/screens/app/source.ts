@@ -18,6 +18,8 @@ export interface AppSource {
   open?(run: string): Promise<AppState>
   // a question to the crew, or to one of them about the window they are on; their answer
   tell?(run: string, text: string, who?: string, on?: string): Promise<{ answer?: string }>
+  // one more change to the app (web/canvas/rooms.js appAsk): the words, and the design's finished sections it is made from
+  change?(run: string, ask: string, sections: { key: string, html: string }[]): Promise<AppState>
   stream?(on: (e: RunEvent) => void): () => void
 }
 
@@ -45,6 +47,7 @@ export const serverAppSource: AppSource = {
   seen: run => post(`${base(run)}/app/seen`).then(() => {}),
   open: run => post(`${base(run)}/app/open`),
   tell: (run, text, who, on) => post(`${base(run)}/app/tell`, { text, ...(who ? { who, on } : {}) }),
+  change: (run, ask, sections) => post(`${base(run)}/app`, { ask, sections }),
   stream(on) {
     const es = new EventSource(`/events?k=${encodeURIComponent(token())}`)
     es.onmessage = m => { try { on(JSON.parse(m.data) as RunEvent) } catch { /* a keep-alive or a torn line */ } }

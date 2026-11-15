@@ -96,6 +96,9 @@ export interface ChatProps {
   // where a layer is on screen, for its wire: { left, top, width, height }, or null when it is not drawn
   layerRect?: (key: string) => DOMRectReadOnly | { left: number, top: number, width: number, height: number } | null
   api?: ChatApi
+  // what Send does here when it does not build (the App room's box asks the crew or changes the app, issue #542):
+  // the box's placeholder, the line while the chat is empty, and the button's word
+  box?: { placeholder: string, empty: string, action: string }
 
   // ---------- what the chat tells the screen
   // Send while no talk is on: a build (or, when it starts with /, a command), with the pickers' values and the
