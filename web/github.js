@@ -89,7 +89,8 @@ export const ownerWhere = v => (v.owner ? `New sites and repositories go to ${v.
 export async function ownerSay(text, host) {
   const want = ownerAsk(text)
   if (!want) return false
-  const view = async (/** @type {any} */ opts) => {
+  /** @param {any} [opts] */
+  const view = async opts => {
     const r = await host.api('/api/github/owner', opts).catch(() => null)
     const j = await r?.json().catch(() => ({}))
     return { ok: !!r?.ok, j: /** @type {any} */ (j || {}) }
