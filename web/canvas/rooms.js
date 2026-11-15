@@ -17,6 +17,7 @@ import { esc } from './design.js'
 import { saveModel, modelsInfo, loadModels, showTab } from './settings.js'
 import { loadFiles, openRun, rec, stopReplay } from './replay.js'
 import { appPill } from '../replaytalk.js'
+import { githubAgo } from '../github.js'
 import { HOSTS } from './publish.js'
 import { adoptVideos, boardVideo } from '../video.js'
 
@@ -79,6 +80,46 @@ function renderBadges() {
 setInterval(renderBadges, 1000)
 
 export const appApi = (path = '', body) => api(`/api/runs/${encodeURIComponent(appv.run)}/app${path}`, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(async r => { const out = await r.json().catch(() => ({})); if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`); return out })
+
+// The app's versions (issue #542): its first build and each change, newest first, from the server (engine/appjob.mjs
+// versions). One press goes back to one; going back is a version too, so the one left stays there to come back to.
+const ver = { run: '', list: /** @type {any[]} */ ([]), busy: '' }
+async function loadVersions(run) {
+  if (!run || rec.on) return
+  try {
+    const r = await appApi('/versions')
+    if (shownRun() !== run) return
+    Object.assign(ver, { run, list: r.versions || [] })
+    renderVersions()
+  } catch {}
+}
+function renderVersions() {
+  const box = $('#app-versions')
+  if (!box) return
+  const show = view === 'app' && ver.run === shownRun() && appv.kind !== 'game' && appv.state !== 'working' && !rec.on && ver.list.length > 1
+  box.hidden = !show
+  if (!show) return
+  box.innerHTML = `<h3>Versions</h3>${ver.list.slice(0, 12).map(v => `<div class="av${v.now ? ' now' : ''}"><span>${esc(v.what)}<small>${esc(githubAgo(v.t))}</small></span>${v.now ? '<em>Now</em>' : `<button type="button" data-rev="${esc(v.rev)}"${ver.busy ? ' disabled' : ''}>${ver.busy === v.rev ? 'Going back…' : 'Go back to this'}</button>`}</div>`).join('')}`
+  for (const b of box.querySelectorAll('button[data-rev]')) /** @type {HTMLButtonElement} */ (b).onclick = () => goBack(/** @type {HTMLButtonElement} */ (b).dataset.rev || '')
+}
+async function goBack(rev) {
+  const run = shownRun(), v = ver.list.find(x => x.rev === rev)
+  ver.busy = rev
+  renderVersions()
+  try {
+    const r = await appApi('/back', { rev })
+    if (shownRun() !== run) return
+    ver.list = r.versions || ver.list
+    if (r.url) appv.url = r.url
+    appEls.frame.dataset.src = '' // the app as it is now
+    sayAs(botMsg(`The app is back to: ${v?.what || 'an earlier version'}. The one you left is still in Versions.`), 'went back')
+    // its files are back but it did not build: the room says so, with Try again
+    if (r.message && !r.url) Object.assign(appv, { message: r.message, openFailed: true })
+  } catch (err) { botMsg(`App: ${err.message}`) } finally {
+    ver.busy = ''
+    renderApp()
+  }
+}
 
 export function resetApp(run) {
   appStore.reset({ run })
@@ -149,6 +190,7 @@ async function loadApp() {
   try {
     const st = await appApi()
     if (appv.run !== run || rec.on) return
+    if (ver.run !== run || st.state !== appv.state) loadVersions(run)
     Object.assign(appv, { at: st.at || null, state: st.state, elsewhere: !!st.elsewhere, kind: st.kind || appv.kind, stage: st.stage || '', message: st.message || '', result: st.result, deployed: st.deployed || appv.deployed, hasApp: !!st.hasApp, canServe: !!st.canServe, loaded: true, engineReady: st.engineReady, intake: st.intake || null })
     if (st.steps?.length >= appv.steps.length) appv.steps = st.steps
     if (st.asks?.length) appv.asks = st.asks
@@ -352,6 +394,7 @@ function renderApp() {
   const stick = appEls.steps.scrollHeight - appEls.steps.scrollTop - appEls.steps.clientHeight < 60
   appEls.steps.innerHTML = stepsHtml()
   if (stick) appEls.steps.scrollTop = appEls.steps.scrollHeight
+  renderVersions()
   // Stop ends the build; while a replay plays it is there throughout and ends the replay
   appEls.stop.hidden = rec.on ? false : !working || elsewhere
   if (appv.url) appEls.open.href = appv.url; else appEls.open.removeAttribute('href')
@@ -1074,8 +1117,11 @@ export function appEvent(e) {
     appv.url = null
     appEls.frame.dataset.src = ''
     if (view === 'app' && !document.hidden) loadApp()
+  } else if (e.type === 'app:back') {
+    if (real) loadVersions(e.run)
   } else if (e.type === 'app:done') {
     Object.assign(appv, { state: 'done', result: e.result, hasApp: true, stage: 'ready' })
+    if (real) loadVersions(e.run)
     if (e.url && real) appv.url = e.url
     appEls.frame.dataset.src = '' // reload to the new build
     // brought in: no engine turned, so nothing to count; the room reads what came (its shape, its page)

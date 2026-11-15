@@ -216,6 +216,9 @@ export async function openRun(id) {
     if (!S.tEnd && events.length) S.tEnd = events.at(-1).t
     if (S.t0) els.timer.textContent = `${((S.tEnd - S.t0) / 1000).toFixed(1)}s`
     if (S.progress) { S.progress.classList.remove('working'); S.progress.querySelector('.txt').textContent = 'This run stopped before it finished.' }
+    // a saved build: its agents may still hold sections, but none is working, so the camera does not follow them
+    // (web/canvas/deck.js bboxActive); a replay or the live build starts afresh and follows
+    S.stalled = true
     // a build that stopped for a reason (the model, Hermes, a timeout) says that reason, with what to do: never
     // that the file is old (#541)
     const stop = events.findLast(e => e.type === 'run:stopped' && e.reason && e.reason.code !== 'person')
