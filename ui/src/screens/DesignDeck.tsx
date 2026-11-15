@@ -94,7 +94,9 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
   }, [sel, part, select, edits, view.player, tool, pressTool])
   const pickedLayer = sel ? model.layers[sel.key] : undefined
   useEffect(() => { setPicked(null); setFollow(true) }, [model.run, view.replay])
-  const working = model.state === 'planning' || model.state === 'building'
+  // a crew at work: a saved build that stopped before it finished has agents still holding sections, but none is
+  // working, so there is nothing to Follow (as web/canvas/deck.js bboxActive skips a stalled build's)
+  const working = (model.state === 'planning' || model.state === 'building') && !unfinished
   const play = () => go({ type: 'play', page: page ?? undefined, pages: model.pages.length })
   const canPlay = !loading && model.pages.some(p => model.order.some(k => model.layers[k].text && (model.layers[k].page === p.id || model.layers[k].page === '*')))
   const replay = { on: view.replay, can: !loading && (view.replay || model.state === 'done'), toggle: () => go({ type: 'replay', on: !view.replay }) }
