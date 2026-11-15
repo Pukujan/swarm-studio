@@ -428,6 +428,9 @@ export function makePet({ sw, C, doc = document }) {
   // the address: a new screen loads; a Studio step reached (or skipped)
   function onView(v) {
     if (!v) return
+    // a replay is a build from its first frame, however the address reached the machine (it can be read after she
+    // starts): she is away before its run:start arrives, as at start-up below
+    if (v.replay && !P.building) { P.building = true; P.buildAt = Date.now(); away() }
     const room = v.room
     if (room !== P.room) {
       P.room = room
