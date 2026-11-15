@@ -75,6 +75,7 @@ import { pictureMessages, linksIn, readPage, pageRead, withRefs } from '../engin
 import { refStore } from '../engine/refs.mjs'
 import { workshopRoutes } from './workshops.mjs'
 import { setupRoutes } from './setup.mjs'
+import { uiChoice, UIS } from './uichoice.mjs'
 import { pictureRun, isPictures } from '../engine/setup.mjs'
 import { ckffPaint, ckffCreds } from '../engine/ckff.mjs'
 import { chooseImage, paintWithBackup } from '../engine/paintretry.mjs'
@@ -106,6 +107,8 @@ const webDir = join(root, 'web')
 const uiDist = join(root, 'ui', 'dist')
 const runsDir = process.env.SWARM_RUNS_DIR || join(root, 'runs')
 const dataDir = process.env.SWARM_DATA_DIR || root
+// which Studio `/` opens: the next UI unless the person chose the classic one (decision 0024)
+const ui = uiChoice({ dataDir })
 const argPort = process.argv.indexOf('--port')
 // 0: the system picks a free one when the server listens (tests and check scripts: a port picked beforehand and
 // let go can be taken by another process before this one binds it); `port` is the real one from then on
@@ -3009,14 +3012,37 @@ const server = createServer((req, res) => {
     }
   }
 
-  if (url.pathname === '/' || url.pathname === '/index.html') {
+  // the person's choice of Studio (decision 0024, server/uichoice.mjs)
+  if (url.pathname === '/api/ui') {
+    if (req.method === 'GET') return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ui: ui.get() }))
+    if (req.method === 'POST') {
+      let body = ''
+      req.on('data', c => { body += c; if (body.length > 1000) req.destroy() })
+      req.on('end', () => {
+        let want = ''
+        try { want = JSON.parse(body || '{}').ui } catch {}
+        if (!UIS.includes(want)) return void res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: `ui is one of ${UIS.join(', ')}` }))
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ui: ui.set(want) }))
+      })
+      return
+    }
+  }
+
+  // `/` is the next UI (decision 0024), unless the person chose the classic Studio or there is no next UI built
+  // (decision 0018); `/classic/` is always the classic Studio, at the same address
+  const classic = url.pathname === '/classic/' || url.pathname === '/classic/index.html'
+  if (url.pathname === '/classic') return void res.writeHead(302, { location: `/classic/${url.search}` }).end()
+  if (url.pathname === '/' || url.pathname === '/index.html' || classic) {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
     // the code changed under this server (an update): the page's parts would no longer fit. With no work
     // running, a new server takes over and the page opens again on it
     if (replaceSelf()) return res.end('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="2"><title>Swarm Studio</title><body style="margin:0;background:#0f0f0f">')
-    res.end(canvasPage())
+    const next = !classic && ui.get() === 'next' ? nextPage(uiDist, { token }) : null
+    res.end(next || canvasPage())
     return
   }
+  // the classic page's own files beside it (its brand mark): the same files as at /
+  if (url.pathname.startsWith('/classic/')) url.pathname = url.pathname.slice('/classic'.length)
 
   // the Studio's next UI, its screens moving over one at a time (docs/decisions/0013-react-ui-coexists.md). Same
   // address as /: ?project=…&version=…&room=… opens the same place in either

@@ -30,7 +30,8 @@ one; don't edit the old one quietly.
 | [0019](0019-how-swarm-is-tested.md) | 2026-11-13 | How Swarm is tested: specs bound to tests, BDD runs the OpenSpec scenarios, metamorphic relations, property tests, prompt evals gate prompt changes |
 | [0020](0020-ask-before-build.md) | 2026-11-13 | Ask before every build: skip all, step by step or pick steps, with a recommended path; every build is its own |
 | [0022](0022-copy-the-look-from-a-link.md) | 2026-11-13 | Copy the look from a link: the crew walks the site, 2D first, traced to where it was given |
-| [0023](0023-switching-on-the-next-ui.md) | 2026-11-14 | **Proposed:** switching the next UI on for people (an opt-in preview, then all at once) |
+| [0023](0023-switching-on-the-next-ui.md) | 2026-11-14 | Switching the next UI on for people: the choices (decided in 0024) |
+| [0024](0024-the-next-ui-is-the-studio.md) | 2026-11-14 | The next UI is the Studio at `/`; the classic one stays at `/classic/`, one click away; unmoved screens open there |
 
 `tests/decisions.test.mjs` fails if the hosted studio, build credits or "paid per build" come back in
 `docs/brand/` or the README.

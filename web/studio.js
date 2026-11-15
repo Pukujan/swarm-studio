@@ -181,6 +181,8 @@ function draw(planId) {
     C.homeView.hide()
     const want = room === 'deck' || room === 'draft' ? 'canvas' : room === 'game' ? 'app' : room
     if (sw.view !== want) sw.setView(want)
+    // the App room's chat is where a change is asked for: it opens with the room (issue #542)
+    if (room === 'app') C.chat(true)
   }
   renderBack()
   renderMode()

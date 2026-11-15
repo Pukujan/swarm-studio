@@ -24,7 +24,7 @@ echo "· type-check ratchet"
 # lines of code (not blank, comment or import lines) in web files without // @ts-check on their first line
 # (tsconfig.json; CI runs the type check itself with tools/dev). Counted in lines, not files, so splitting a
 # file (web/canvas/) neither helps nor hurts. The cap only goes down: type a file, then lower it.
-cap=4859
+cap=4754
 untyped=$(for f in $(git ls-files 'web/*.js' | grep -v '^web/vendor/'); do head -1 "$f" | grep -q '^// @ts-check' || echo "$f"; done)
 n=$(for f in $untyped; do cat "$f"; done | grep -cvE '^[[:space:]]*(//|$|import )' || true)
 if [ "$n" -gt "$cap" ]; then echo "$n untyped lines of web code, over the cap of $cap; start new files with // @ts-check. Untyped files:"; echo "$untyped"; exit 1; fi
@@ -60,6 +60,12 @@ if [ -f ui/dist/index.html ]; then
   # Mermaid for the app build wall's Map (spec 44): its own classic script beside the page, and nothing else from ui/dist/
   curl -sf http://127.0.0.1:$port/next/vendor/mermaid.min.js > "$tmp/reply"; has 'mermaid'
   [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$port/next/vendor/index.html)" = 404 ] || { echo '/next/vendor/ serves a file it does not list'; exit 1; }
+  # / is the next UI and /classic/ the classic Studio (decision 0024); "Use the classic Studio" makes / the classic one
+  curl -sf http://127.0.0.1:$port/ > "$tmp/reply"; has '<div id="root">'
+  curl -sf http://127.0.0.1:$port/classic/ > "$tmp/reply"; has '"frameHtml"'
+  curl -sf -H 'x-swarm-token: ci' -H 'content-type: application/json' -d '{"ui":"classic"}' http://127.0.0.1:$port/api/ui > "$tmp/reply"; has '"classic"'
+  curl -sf http://127.0.0.1:$port/ > "$tmp/reply"; has '"frameHtml"'
+  curl -sf -H 'x-swarm-token: ci' -H 'content-type: application/json' -d '{"ui":"next"}' http://127.0.0.1:$port/api/ui > /dev/null
 elif [ -n "${SWARM_NEED_UI:-}" ]; then echo 'ui/dist/ is not built: npm ci --prefix ui && npm run --prefix ui build'; exit 1
 else echo '  /next/ skipped: ui/dist/ is not built (npm run --prefix ui build)'
 fi
