@@ -22,20 +22,30 @@ const seatOf = (i: number, w: number, h: number): Point => ({
   y: h - DOCK.edge - DOCK.h + DOCK.top + Math.floor(i / DOCK.cols) * DOCK.ch
 })
 const SAY_MS = 2800
+// a cursor that has finished a section: its resize there, then its fade
+const RESIZE_MS = 1000, FADE_MS = 600
 // the marquee (web/canvas/deck.js): how long, how much of it is the walk to the corner, and its box in world units
 const MARQUEE = { dur: 900, approach: 0.15, w: 420, h: 180 }
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
 type Gesture = { layer: string, t0: number, p0: Point, p1: Point, ghost: HTMLDivElement | null }
 
 // `cam`: the camera as it is on screen this frame (DeckStage eases it while Follow moves it)
-export function CrewCursors({ model, cam, stage, target }: {
-  model: DeckModel, cam: RefObject<Cam>, stage: RefObject<HTMLElement | null>, target: (a: DeckAgent) => Point | null
+// `box(key)`: a section's box in world units, for the resize a cursor makes on the section it has just finished
+// `spot(page, n)`: the n-th place the reviewer looks at on a page under review (a section, a little way in)
+export function CrewCursors({ model, cam, stage, target, box, spot }: {
+  model: DeckModel, cam: RefObject<Cam>, stage: RefObject<HTMLElement | null>, target: (a: DeckAgent) => Point | null,
+  box?: (key: string) => { x: number, y: number, w: number, h: number } | null,
+  spot?: (page: string, n: number) => Point | null
 }) {
   const els = useRef(new Map<string, HTMLDivElement>())
   const pos = useRef(new Map<string, Point>())
   // what the frame loop reads: the newest model, camera and targets
-  const now = useRef({ model, cam, target })
-  now.current = { model, cam, target }
+  const now = useRef({ model, cam, target, box, spot })
+  now.current = { model, cam, target, box, spot }
+  // The Critic's reviewer (web/canvas/auto.js rvMove, rvTick): while a page is under review its cursor comes in from
+  // 200 px up and left of a spot on it, looks somewhere else on the page every 1.1 s, easing 0.12 a frame; 1.5 s after
+  // the review ends it fades and goes
+  const rv = useRef<{ el: HTMLDivElement | null, p: Point | null, to: Point | null, page: string | null, hop: number, at: number }>({ el: null, p: null, to: null, page: null, hop: 0, at: 0 })
 
   // the letters that fly off a cursor as its agent types (web/canvas/deck.js spark): one a 140 ms at most, a letter
   // from what it just wrote, never under reduced motion or zoomed far out
@@ -76,12 +86,20 @@ export function CrewCursors({ model, cam, stage, target }: {
   useEffect(() => {
     let raf = 0
     const tick = () => {
-      const { model: m, cam: { current: c }, target: at } = now.current
+      const { model: m, cam: { current: c }, target: at, box: boxOf } = now.current
       const s = stage.current
       for (const [i, a] of m.agents.entries()) {
         const el = els.current.get(a.id)
         if (!el) { pos.current.delete(a.id); continue }
         let t = at(a)
+        // just finished a section: the resize it makes there (web/canvas/deck.js startGesture 'resize': 1 s from the
+        // middle of the section's bottom edge to 40 px below it), then it fades
+        const off = leaving.current.get(a.id)
+        if (!t && off) {
+          const b = boxOf?.(off.layer)
+          const v = Math.min(1, (Date.now() - off.t0) / RESIZE_MS)
+          if (b) t = { x: b.x + b.w / 2, y: b.y + b.h + 40 * ease(v) }
+        }
         if (!t) continue
         // a new section: the marquee over it, then back to following the words
         let g = gestures.current.get(a.id)
@@ -116,24 +134,56 @@ export function CrewCursors({ model, cam, stage, target }: {
         if (l) spark(a, p, l, c.k)
         el.classList.toggle('talking', !!a.said && Date.now() - a.said.t < SAY_MS)
       }
+      // the reviewer
+      const r = rv.current, page = m.reviewing[0] ?? null
+      if (r.el && page && now.current.spot) {
+        if (page !== r.page || performance.now() - r.at > 1100) {
+          const to = now.current.spot(page, r.hop++)
+          if (to) { if (!r.p || page !== r.page) r.p = { x: to.x - 200, y: to.y - 200 }; r.to = to }
+          r.page = page
+          r.at = performance.now()
+        }
+        if (r.p && r.to) {
+          r.p.x += (r.to.x - r.p.x) * 0.12; r.p.y += (r.to.y - r.p.y) * 0.12
+          r.el.style.transform = `translate(${(c.x + r.p.x * c.k).toFixed(1)}px, ${(c.y + r.p.y * c.k).toFixed(1)}px)`
+        }
+      } else if (r.el && r.p) r.el.style.transform = `translate(${(c.x + r.p.x * c.k).toFixed(1)}px, ${(c.y + r.p.y * c.k).toFixed(1)}px)`
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
   }, [stage])
 
-  // An agent that stops writing: its cursor fades out where it was (the current deck's .cursor opacity .6s) and goes.
-  // Decided while drawing, so the same element stays and fades; a timer draws again once the fade is over.
+  // the reviewer is on screen while a page is under review, and for 1.5 s after (then 600 ms to fade)
+  const since = model.reviewing.length ? 0 : Date.now() - model.reviewEnd
+  const reviewer = model.reviewing.length > 0 || (model.reviewEnd > 0 && since < 2100)
+  const reviewerFading = !model.reviewing.length && since >= 1500
+  useEffect(() => {
+    if (model.reviewing.length || !model.reviewEnd || since >= 2100) return
+    const t = setTimeout(() => redraw(n => n + 1), (since < 1500 ? 1500 : 2100) - since + 20)
+    return () => clearTimeout(t)
+  })
+  useEffect(() => { if (!reviewer) Object.assign(rv.current, { p: null, to: null, page: null }) }, [reviewer])
+
+  // An agent that stops writing: its cursor stays for the resize on the section it finished (1 s), then fades out
+  // where it is (the current deck's .cursor opacity .6s) and goes. Decided while drawing, so the same element stays;
+  // a timer draws again when the fade starts and when it is over.
   const working = model.agents.filter(a => a.layer && target(a)).map(a => a.id)
   const was = useRef<string[]>([])
-  const leaving = useRef(new Map<string, number>())
+  const wrote = useRef(new Map<string, string>())
+  const leaving = useRef(new Map<string, { layer: string, t0: number }>())
   const nowMs = Date.now()
-  for (const id of was.current) if (!working.includes(id) && !leaving.current.has(id)) leaving.current.set(id, nowMs + 600)
+  for (const id of was.current) {
+    const l = wrote.current.get(id)
+    if (!working.includes(id) && !leaving.current.has(id) && l) leaving.current.set(id, { layer: l, t0: nowMs })
+  }
   for (const id of working) leaving.current.delete(id)
-  for (const [id, until] of leaving.current) if (until <= nowMs) leaving.current.delete(id)
+  for (const [id, o] of leaving.current) if (o.t0 + RESIZE_MS + FADE_MS <= nowMs) leaving.current.delete(id)
+  for (const a of model.agents) if (a.layer) wrote.current.set(a.id, a.layer)
   was.current = working
+  const fading = (id: string) => { const o = leaving.current.get(id); return !!o && nowMs >= o.t0 + RESIZE_MS }
   const [, redraw] = useState(0)
-  const next = Math.min(...leaving.current.values())
+  const next = Math.min(...[...leaving.current.values()].map(o => (nowMs < o.t0 + RESIZE_MS ? o.t0 + RESIZE_MS : o.t0 + RESIZE_MS + FADE_MS)))
   useEffect(() => {
     if (!Number.isFinite(next)) return
     const t = setTimeout(() => redraw(n => n + 1), Math.max(0, next - Date.now()) + 20)
@@ -146,13 +196,29 @@ export function CrewCursors({ model, cam, stage, target }: {
       {shown.map(a => {
         const c = crew().color(a.name)
         return (
-          <div key={a.id} data-agent={a.name} className={`cursor ${working.includes(a.id) ? '' : 'leaving'}`} ref={el => { if (el) els.current.set(a.id, el); else els.current.delete(a.id) }}>
+          <div key={a.id} data-agent={a.name} className={`cursor ${fading(a.id) ? 'leaving' : ''}`} ref={el => {
+            if (!el) { els.current.delete(a.id); return }
+            els.current.set(a.id, el)
+            // placed at its seat before it is first drawn, never at the corner for a frame
+            const s = stage.current
+            if (!pos.current.has(a.id) && s) {
+              const p = seatOf(model.agents.indexOf(a), s.clientWidth, s.clientHeight)
+              pos.current.set(a.id, p)
+              el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px)`
+            }
+          }}>
             <svg className="nib" viewBox="0 0 10 10" width="14" height="14"><path d="M.6.6L9.2 4 5 5 4 9.2z" fill={c} stroke="#0b0b0c" strokeWidth="1" strokeLinejoin="round" /></svg>
             <div className="tag" style={{ background: c, color: crew().ink(c) }}><span>{a.name}</span><em className="doing" /></div>
             <div className="bubble" style={{ color: c }}><span>{a.said?.text}</span></div>
           </div>
         )
       })}
+      {reviewer && (
+        <div data-agent="Reviewer" className={`cursor ${reviewerFading ? 'leaving' : ''}`} ref={el => { rv.current.el = el }}>
+          <svg className="nib" viewBox="0 0 10 10" width="14" height="14"><path d="M.6.6L9.2 4 5 5 4 9.2z" fill="var(--info)" stroke="#0b0b0c" strokeWidth="1" strokeLinejoin="round" /></svg>
+          <div className="tag" style={{ background: 'var(--info)', color: 'var(--accent-ink)' }}><span>Reviewer</span></div>
+        </div>
+      )}
     </div>
   )
 }

@@ -558,7 +558,7 @@ export function bboxActive() {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
   const add = (ax, ay, bx, by) => { x0 = Math.min(x0, ax); y0 = Math.min(y0, ay); x1 = Math.max(x1, bx); y1 = Math.max(y1, by) }
   for (const a of S.agents.values()) {
-    if (!a.layer) continue
+    if (!a.layer || S.stalled) continue
     const s = slotFor(S.layers.get(a.layer))
     if (!s) continue
     const b = s.box
