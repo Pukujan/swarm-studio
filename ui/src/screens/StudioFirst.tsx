@@ -340,8 +340,8 @@ export function StudioFirst() {
         <div className="col">{sections}</div>
       </StudioBoard>
 
-      {d && <StepPath steps={steps} gone={gone} current={sel?.startsWith('step:') ? sel.slice(5) : null} stateOf={stateOf}
-        onStep={s => { if (s !== 'proposal') select(`step:${s}`); board.current?.focus(s) }}
+      {d && <StepPath steps={steps} gone={gone} current={sel?.startsWith('step:') ? sel.slice(5) : sel?.startsWith('lock:') ? 'proposal' : null} stateOf={stateOf}
+        onStep={s => { select(s === 'proposal' ? 'lock:look' : `step:${s}`); board.current?.focus(s) }}
         onAdd={s => { actions.setStep(s, 'empty').then(() => requestAnimationFrame(() => board.current?.focus(s))).catch(fail) }} />}
 
       {insp && d && sel && <StudioInspector sel={sel} d={d} card={x} pack={pack} ctx={ctx} version={tick} onClose={() => select(null)} act={{

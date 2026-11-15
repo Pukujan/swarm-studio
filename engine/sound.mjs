@@ -4,10 +4,15 @@
 // lays both under the silent render, the music ducking while the voice speaks.
 
 import { execFile } from './proc.mjs'
+import { npmCi } from './npmci.mjs'
 import { existsSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const KOKORO = 'kokoro-js@1.2.1'
+// the Kokoro voice, pinned with every dependency in engine/voicetools/package-lock.json
+const VOICE_TOOLS = join(dirname(fileURLToPath(import.meta.url)), 'voicetools')
+// where it is installed: a folder of its own, since npm ci empties node_modules (never shared with the film renderer)
+export const voiceToolsDir = dataDir => join(dataDir, 'voice-tools')
 const run = (cmd, args, opts = {}) => new Promise((ok, fail) => execFile(cmd, args, { maxBuffer: 1 << 24, ...opts }, (err, out, errOut) => (err ? fail(new Error(`${err.message}\n${String(errOut).slice(-600)}`)) : ok(out))))
 
 // Kokoro's voices that suit a promo; the theme's mood picks one.
@@ -74,11 +79,10 @@ async function speakRemote({ url, lines, voices = [], voice, dir, onStage }) {
 export async function speak({ dataDir, lines, voices = [], voice, dir, onStage = () => {} }) {
   const url = process.env.SWARM_TTS_URL
   if (url) return speakRemote({ url, lines, voice: process.env.SWARM_TTS_VOICE || voice, voices: process.env.SWARM_TTS_VOICE ? [] : voices, dir, onStage })
-  const tools = join(dataDir, 'video-tools')
+  const tools = voiceToolsDir(dataDir)
   if (!existsSync(join(tools, 'node_modules', 'kokoro-js'))) {
     onStage('fetching the Kokoro voice (first time only)')
-    const npm = [join(dirname(process.execPath), 'npm'), 'npm'].find(p => p === 'npm' || existsSync(p))
-    await run(npm, ['install', '--no-audit', '--no-fund', KOKORO], { cwd: tools, timeout: 600000 })
+    await npmCi(VOICE_TOOLS, tools, { timeout: 600000 })
   }
   writeFileSync(join(tools, 'voice-worker.mjs'), WORKER)
   const job = { voice, speed: 1.04, lines: lines.map((text, i) => ({ text, voice: voices[i] || voice, file: join(dir, `voice${i}.wav`) })) }

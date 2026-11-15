@@ -3,7 +3,7 @@
 // Tools do real, deterministic work (a seat map, an SKU sheet, three visual
 // directions…) and write files into the app; the app engine then wires them in.
 import { readFileSync, readdirSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { join, dirname, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'packs')
@@ -56,8 +56,9 @@ export async function runTools(p, { appDir, runDir, prompt, intake, say = () => 
     const mod = await import(pathToFileURL(join(root, p.id, 'tools', `${t.id}.mjs`)).href)
     say(`${t.label}…`)
     const write = (rel, text) => {
-      const f = join(appDir, rel)
-      if (!f.startsWith(appDir)) throw new Error(`a tool may only write inside the app: ${rel}`)
+      // inside the app folder itself, not a sibling whose name starts the same ("app" and "app-old")
+      const root = resolve(appDir), f = resolve(root, String(rel))
+      if (!f.startsWith(root + sep)) throw new Error(`a tool may only write inside the app: ${rel}`)
       mkdirSync(dirname(f), { recursive: true })
       writeFileSync(f, typeof text === 'string' ? text : JSON.stringify(text, null, 2))
       return rel

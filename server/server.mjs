@@ -35,7 +35,7 @@ import { standins as standinsMake } from '../engine/standins.mjs'
 import { githubLogin, publishGitHub, publishVercel, publishCloudflare } from '../engine/publish.mjs'
 import { connect, connections, credentials, PROVIDERS } from '../engine/connect.mjs'
 import { MOTION_CSS, SNAPPY, swarmMotion, motionPreset } from '../engine/motion.mjs'
-import { speak, mix, VOICES } from '../engine/sound.mjs'
+import { speak, mix, VOICES, voiceToolsDir } from '../engine/sound.mjs'
 import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
 import { canvasPage as sharedCanvasPage, webVersion as pageVersion, playBoot } from './page.mjs'
@@ -1483,7 +1483,7 @@ const CHATTER_LINES = ['ship it!', 'looks good!', 'boss fight!', 'on it!', 'we d
 const chatterDir = join(dataDir, 'chatter')
 const chatterBusy = new Set()
 const chatterFile = (text, voice) => join(chatterDir, `${createHash('sha1').update(`${voice}|${text}`).digest('hex').slice(0, 16)}.wav`)
-const chatterTts = () => !!process.env.SWARM_TTS_URL || existsSync(join(dataDir, 'video-tools', 'node_modules', 'kokoro-js'))
+const chatterTts = () => !!process.env.SWARM_TTS_URL || existsSync(join(voiceToolsDir(dataDir), 'node_modules', 'kokoro-js'))
 async function chatterMake(text, voice) {
   const file = chatterFile(text, voice)
   if (existsSync(file) || chatterBusy.has(file)) return

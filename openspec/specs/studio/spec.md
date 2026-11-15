@@ -119,16 +119,19 @@ SHALL go to the planner as before. There SHALL be no row of reply buttons (decis
 - **WHEN** the chat has asked which pages and the person types "Home, Work, Contact"
 - **THEN** the Plan shows Home, Work and Contact, and the chat asks about pictures
 - Gate: `manual`
+- Manual: the chat's next question is the planner's answer to the pages typed, and the test Studio has no model (its planner answers HTTP 500)
 
 #### Scenario: You choose
 - **WHEN** the chat has asked which pages and the person types "you choose"
 - **THEN** no page is added, the Pages fact reads Crew decides, and the build's brief carries no Pages line
 - Gate: `manual`
+- Manual: the chat's next question is the planner's answer to the pages typed, and the test Studio has no model (its planner answers HTTP 500)
 
 #### Scenario: Pictures typed
 - **WHEN** the chat has asked about pictures and the person types "stock photos"
 - **THEN** the Pictures fact reads Stock photos, Setup's Pictures pick is Stock photos, and a build that was waiting starts
 - Gate: `manual`
+- Manual: the chat's next question is the planner's answer to the pages typed, and the test Studio has no model (its planner answers HTTP 500)
 
 #### Scenario: Skip all, just build
 - **WHEN** the person types "skip all, just build" while either question is open

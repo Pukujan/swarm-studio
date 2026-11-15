@@ -3,8 +3,9 @@
 //
 // Two kinds of pack:
 //   - assetrizz (github.com/mojomast/assetrizz, its author gave this studio full use): about
-//     14,600 pictures in 23 style packs, the catalog in dataDir/assetrizz/manifest.jsonl, each
-//     picture fetched the first time it is used and kept there.
+//     14,600 pictures in 23 style packs, the catalog in dataDir/assetrizz/<pin>/manifest.jsonl, each
+//     picture fetched the first time it is used and kept there (the pinned commit and the path checks:
+//     engine/library.mjs RIZZ_SHA, safeRel, inside).
 //   - imported packs: a folder or a .zip of the owner's own (or bought) art, copied into
 //     dataDir/library/<pack>/ with pack.json { id, name, credit, license, url, imported } and
 //     manifest.jsonl, one row per picture in assetrizz's shape.
@@ -17,7 +18,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSyn
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFile } from './proc.mjs'
-import { RAW, CREDIT, terms } from './library.mjs'
+import { RAW, CREDIT, terms, rizzDir as rizzDirOf, safeRel, inside } from './library.mjs'
 
 const IMG = /\.(png|webp|jpe?g|gif)$/i
 export const CATEGORIES = ['icons', 'markers', 'characters', 'vfx', 'tiles', 'decals', 'enemies', 'ui', 'foliage', 'furniture', 'creatures', 'props', 'backgrounds', 'portraits', 'weapons', 'vehicles', 'buildings', 'terrain', 'misc']
@@ -87,10 +88,11 @@ export function categoryOf(rel) {
 }
 
 export function assetLib({ dataDir, fetchImpl = fetch, unzip = (zip, to) => new Promise((ok, no) => execFile('unzip', ['-qq', '-o', zip, '-d', to], { timeout: 300000 }, err => (err ? no(err) : ok()))) }) {
-  const rizzDir = join(dataDir, 'assetrizz'), ownDir = join(dataDir, 'library')
+  const rizzDir = rizzDirOf(dataDir), ownDir = join(dataDir, 'library')
   let rizz = null, own = null
   const readLines = f => readFileSync(f, 'utf8').split('\n').map(l => { try { return l ? JSON.parse(l) : null } catch { return null } }).filter(r => r && r.path)
-  const loadRizz = () => (rizz ||= existsSync(join(rizzDir, 'manifest.jsonl')) ? readLines(join(rizzDir, 'manifest.jsonl')).filter(r => IMG.test(r.path)).map(r => rowOf(r)) : [])
+  // a catalog row whose path would leave the folder is dropped (engine/library.mjs safeRel)
+  const loadRizz = () => (rizz ||= existsSync(join(rizzDir, 'manifest.jsonl')) ? readLines(join(rizzDir, 'manifest.jsonl')).filter(r => safeRel(r.path) && IMG.test(r.path)).map(r => rowOf(r)) : [])
   const ownPacks = () => {
     if (!existsSync(ownDir)) return []
     return readdirSync(ownDir).flatMap(d => { try { return [JSON.parse(readFileSync(join(ownDir, d, 'pack.json'), 'utf8'))] } catch { return [] } })
@@ -114,8 +116,8 @@ export function assetLib({ dataDir, fetchImpl = fetch, unzip = (zip, to) => new 
     const r = get(String(id || ''))
     if (!r) return null
     if (r.own) { const f = resolve(ownDir, r.pack, r.path); return f.startsWith(resolve(ownDir) + sep) && existsSync(f) ? { file: f, row: view(r) } : null }
-    const f = resolve(rizzDir, r.path)
-    if (!f.startsWith(resolve(rizzDir) + sep)) return null
+    const f = inside(rizzDir, r.path)
+    if (!f) return null
     if (!existsSync(f)) {
       try {
         const res = await fetchImpl(RAW + r.path.split('/').map(encodeURIComponent).join('/'), { signal: AbortSignal.timeout(30000) })

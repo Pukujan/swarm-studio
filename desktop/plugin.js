@@ -12,7 +12,7 @@
  *
  * The frame has no clipboard and can't open windows, so the canvas asks this
  * side to copy or open a published link: a postMessage from that frame only,
- * and only for an http(s) URL.
+ * only for an http(s) URL, and only right after a real click (user activation).
  */
 
 import {
@@ -43,12 +43,20 @@ function useCanvas(ctx) {
 }
 
 const linkOk = u => typeof u === 'string' && u.length < 2048 && /^https?:\/\/[^\s]+$/.test(u)
+// a real click just happened: a click inside the frame gives this window transient user activation too (it
+// passes up to every ancestor frame), so a script in the frame cannot copy or open anything on its own
+const clicked = () => !!navigator.userActivation?.isActive
 
 function useLinkDoor(ctx, frame) {
   useEffect(() => {
     const onMessage = async ev => {
       const m = ev.data
       if (!frame.current || ev.source !== frame.current.contentWindow || !m || typeof m !== 'object') return
+      if (!clicked()) {
+        // no click before it: nothing is copied or opened; a copy hears no, so the canvas falls back to its own
+        if (m.type === 'swarm-studio:copy') ev.source.postMessage({ type: 'swarm-studio:copied', id: m.id, ok: false }, '*')
+        return
+      }
       if (m.type === 'swarm-studio:copy' && linkOk(m.text)) {
         const ok = await ctx.os.writeClipboard(m.text).catch(() => false)
         ev.source.postMessage({ type: 'swarm-studio:copied', id: m.id, ok: !!ok }, '*')

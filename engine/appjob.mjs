@@ -25,6 +25,7 @@ import { gameSlug, isBig, artList, sheetList, stagesFor, bigStagePrompt, sliceAs
 import { takeAsks, askedBefore, keepAsked, askBrief, ASKS_PER_STAGE } from './artask.mjs'
 import { TARGETS, portTarget, portPrompt, checkPort, copyPortModels, checkGodot } from './port.mjs'
 import { intakeOf } from './bringin.mjs'
+import { withPicker } from './apppick.mjs'
 import { godotFirst, isGodotFirst, seedGodot, syncGodotArt, godotArtBrief, godotStagePrompt, exportWeb, serveStatic, webBuild } from './godotfirst.mjs'
 
 const KEEP = `This project already holds a finished design made in Swarm Studio: every section is a component in src/components/swarm/, every page is in src/pages/, and the theme lives in the CSS variables in src/globals.css. The look is decided. Keep that markup, those Tailwind classes and those variables. Change a section only where it needs real behaviour, and then keep its look. New pages and components use the same variables and shadcn/ui components so they match. Don't read every section first: the page list below says what each page holds; open only the files you are about to change.`
@@ -112,9 +113,22 @@ export const hasServer = dir => ['nitro.config.ts', 'nitro.config.js', 'server']
 
 // A built app's server behind a front on the app's own port that adds CORS: Hermes shows the Studio in a
 // sandboxed frame (origin null), and the app's module scripts need it to load there (the dev server's --cors)
-export function corsFront(port, to) {
+export function corsFront(port, to, { html = null } = {}) {
   const srv = httpServer((req, res) => {
-    const up = request({ host: '127.0.0.1', port: to, path: req.url, method: req.method, headers: { ...req.headers, host: `127.0.0.1:${to}` } }, r => {
+    // an HTML page is asked for unencoded, so it can be read and changed on its way out
+    const headers = { ...req.headers, host: `127.0.0.1:${to}`, ...(html ? { 'accept-encoding': 'identity' } : {}) }
+    const up = request({ host: '127.0.0.1', port: to, path: req.url, method: req.method, headers }, r => {
+      if (html && /text\/html/i.test(String(r.headers['content-type'] || '')) && !r.headers['content-encoding']) {
+        const parts = []
+        r.on('data', c => parts.push(c))
+        r.on('end', () => {
+          const body = Buffer.from(html(Buffer.concat(parts).toString('utf8')))
+          const { 'content-length': _, ...rest } = r.headers
+          res.writeHead(r.statusCode || 200, { ...rest, 'content-length': body.length, 'access-control-allow-origin': '*' })
+          res.end(body)
+        })
+        return
+      }
       res.writeHead(r.statusCode || 502, { ...r.headers, 'access-control-allow-origin': '*' })
       r.pipe(res)
     })
@@ -879,11 +893,12 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       const inner = await freePort()
       const p = startProc(process.execPath, [out], { cwd: dir, stdout: 'pipe', stderr: 'pipe', env: { PORT: String(inner), HOST: '127.0.0.1', NITRO_PORT: String(inner), NITRO_HOST: '127.0.0.1', NODE_ENV: 'production', ...appEnvFor(id, j) } })
       await answers(id, j, p, `http://127.0.0.1:${inner}/`, 'built')
-      j.front = await corsFront(j.port, inner)
+      j.front = await corsFront(j.port, inner, { html: j.kind === 'game' ? null : withPicker })
       j.url = j.front.url
     } else {
       // files from this process: no process to stop, so not one of the maxApps
-      j.files = await serveStatic(join(dir, 'dist'), j.port, { spa: true })
+      // its pages with the App room's picker (issue #542), on their way out only
+      j.files = await serveStatic(join(dir, 'dist'), j.port, { spa: true, html: j.kind === 'game' ? null : withPicker })
       Object.assign(j, { mode: 'files', url: j.files.url })
     }
     send(id, 'app:ready', { url: j.url, built: true })

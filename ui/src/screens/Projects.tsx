@@ -21,6 +21,7 @@ import {
 } from './projects/model'
 import { Cover, ProjectCard, RenameInput } from './projects/ProjectCard'
 import { DRAG_TYPE, Logo, Sidebar, Who, type Me } from './projects/Sidebar'
+import { revealLabel } from '../shared/reveal'
 
 interface Data { folders: Folder[], projects: Project[] }
 type Op = 'trash' | 'restore' | 'purge' | 'move' | 'rename' | 'duplicate' | 'split'
@@ -454,7 +455,7 @@ export function Projects() {
             <MenuRow key="o" id="open" icon="ext" label="Open" />,
             <MenuRow key="s" id="split" icon="layers" label="Make its own project" />,
             <MenuRow key="d" id="dl" icon="download" label="Download" />,
-            <MenuRow key="f" id="show" icon="file" label="Show in Finder" />
+            <MenuRow key="f" id="show" icon="file" label={revealLabel()} />
           ]}
           {menu.k === 'card' && p1 && (view === 'trash' ? [
             <MenuRow key="r" id="restore" icon="restore" label="Restore" />,
@@ -471,7 +472,7 @@ export function Projects() {
             <MenuRow key="d" id="dup" icon="layers" label="Duplicate" />,
             <Submenu key="m" icon="folder" label="Move to" name="Move to" onAction={k => { setMenu(null); moveTo(ids, String(k)) }}>{moveRows(ids)}</Submenu>,
             <MenuRow key="dl" id="dl" icon="download" label="Download" />,
-            <MenuRow key="f" id="show" icon="file" label="Show in Finder" />,
+            <MenuRow key="f" id="show" icon="file" label={revealLabel()} />,
             <MenuSeparator key="-" />,
             <MenuRow key="t" id="trash" icon="trash" label="Delete" red />
           ])}

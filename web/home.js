@@ -11,6 +11,7 @@ import { templatePicker } from './templatepick.js'
 import { bringEntry } from './bringin.js'
 import { hermesLine } from './hermesline.js'
 import { takeGameTalk } from './gametalk.js'
+import { revealLabel } from './reveal.js'
 
 const KIND = { site: 'site', app: 'code', game: 'game', film: 'film' }
 const KIND_NAME = { site: 'Site', app: 'App', game: 'Game', film: 'Film' }
@@ -492,7 +493,7 @@ export function makeHome({ sw, C, root }) {
       { k: 'dup', icon: 'layers', label: 'Duplicate', run: () => act('duplicate', [id]) },
       { k: 'move', icon: 'folder', label: 'Move to', sub: b => subMenu(b, moveItems(ids)) },
       { k: 'dl', icon: 'download', label: 'Download', run: () => download(p.head) },
-      { k: 'show', icon: 'file', label: 'Show in Finder', run: () => post(`/api/projects/${encodeURIComponent(id)}/reveal`, {}).catch(() => {}) }, ...(sw.github ? [{ k: 'github', icon: 'branch', label: 'GitHub', run: () => sw.github.open(id) }] : []),
+      { k: 'show', icon: 'file', label: revealLabel(), run: () => post(`/api/projects/${encodeURIComponent(id)}/reveal`, {}).catch(() => {}) }, ...(sw.github ? [{ k: 'github', icon: 'branch', label: 'GitHub', run: () => sw.github.open(id) }] : []),
       '-',
       { k: 'trash', icon: 'trash', label: 'Delete', red: true, run: () => act('trash', ids) }
     ]
@@ -507,7 +508,7 @@ export function makeHome({ sw, C, root }) {
       { k: 'open', icon: 'ext', label: 'Open', run: () => openProject(p, run) },
       { k: 'split', icon: 'layers', label: 'Make its own project', run: () => act('split', [p.id], { run }) },
       { k: 'dl', icon: 'download', label: 'Download', run: () => download(run) },
-      { k: 'show', icon: 'file', label: 'Show in Finder', run: () => post(`/api/projects/${encodeURIComponent(p.id)}/reveal`, { run }).catch(() => {}) }
+      { k: 'show', icon: 'file', label: revealLabel(), run: () => post(`/api/projects/${encodeURIComponent(p.id)}/reveal`, { run }).catch(() => {}) }
     ], anchor, at)
   }
   // only the kinds and states the projects really have
