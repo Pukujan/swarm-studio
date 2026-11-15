@@ -30,7 +30,7 @@ Swarm's "current renderer" and HyperFrames are the same thing today. Decision 00
 11. `engine/filmscore.mjs` scores a regression set of storyboards (kind match, likeness, cuts on beat) for scripts/film-set.mjs (engine/filmscore.mjs:1-4).
 
 ## What the person connects
-- Nothing for the render itself. First use runs `npm install --save-exact hyperframes@0.9.26`, plus `@ffmpeg-installer/ffmpeg@1.1.0` and `@ffprobe-installer/ffprobe@2.1.2` when ffmpeg/ffprobe are not on PATH; those binaries are checked against recorded SHA-256 sums (engine/video.mjs:602-656). Needs Node's npm and Chrome (README.md:216, README.md:235).
+- Nothing for the render itself. First use installs `hyperframes@0.9.26`, `@ffmpeg-installer/ffmpeg@1.1.0` and `@ffprobe-installer/ffprobe@2.1.2` into `video-tools` from the committed lockfile `engine/videotools/package-lock.json`, with `npm ci --ignore-scripts` (engine/npmci.mjs, `videoTools` in engine/video.mjs; catalog review of `e8ae13c4`). No install script runs: the ffmpeg packages' only one sets the execute bit, which `videoTools` does itself. The pinned ffmpeg and ffprobe are used only when they are not on PATH, and are checked against recorded SHA-256 sums first (engine/video.mjs `FF_SHA256`, `checkFf`). Checked on macOS on 2026-11-14: installed in 2.4 s, HyperFrames 0.9.26 answered, both checksums matched. Needs Node's npm and Chrome (README.md:216, README.md:235).
 - HyperFrames' docs list Node.js 22+ and FFmpeg as requirements (https://github.com/heygen-com/hyperframes, fetched 2026-11-12).
 - Optional: ElevenLabs for music (`ELEVENLABS_API_KEY`, plugin.yaml:15); moving clips through a signed-in Hermes video provider (docs/specs/15-prompt-films.md:75).
 
@@ -38,7 +38,7 @@ Swarm's "current renderer" and HyperFrames are the same thing today. Decision 00
 - The render child gets only PATH, the base env, `HYPERFRAMES_SKIP_SKILLS=1`, `HYPERFRAMES_NO_TELEMETRY=1`, `HYPERFRAMES_NO_UPDATE_CHECK=1`, `DO_NOT_TRACK=1` and `NO_COLOR=1` (engine/video.mjs `renderEnv`, engine/proc.mjs:12-24; tests/enginegaps.test.mjs). HyperFrames collects command names, render performance and a detected coding agent's name unless opted out (https://hyperframes.heygen.com/packages/cli, fetched 2026-11-12). The pinned 0.9.26 does carry that code and reads these names: `telemetryRuntimeOverride()` turns reports off for `HYPERFRAMES_NO_TELEMETRY` or `DO_NOT_TRACK`, and `updateCheckDisabled()` for `HYPERFRAMES_NO_UPDATE_CHECK=1` (read 2026-11-14 in the installed package, `hyperframes@0.9.26/dist/chunk-CMQZP52Y.js` and `dist/chunk-AIJMFLLS.js`). So Swarm's renders report nothing (owner, 2026-11-13: "Yes, fix them").
 - The composition loads GSAP from cdn.jsdelivr.net and fonts from Google Fonts at render time, so a render needs the network (engine/video.mjs:519-520).
 - A platform with no recorded checksum needs ffmpeg and ffprobe on PATH (engine/video.mjs:599-622).
-- Footage needs `puppeteer-core` inside `video-tools`; Unchecked: which package brings it in (it is not in the install list at engine/video.mjs:643; settle by reading hyperframes@0.9.26's dependencies).
+- Footage needs `puppeteer-core` inside `video-tools`: hyperframes@0.9.26 brings it in (25.17.0, engine/videotools/package-lock.json).
 - Only eleven fixed scene kinds and ten camera moves exist; composed layouts and the per-shot route are spec'd as "next" (engine/storyboard.mjs:15-17, docs/specs/26-directed-films.md:93-110).
 - At most 3 paid clips are animated per cut (docs/specs/15-prompt-films.md:83).
 

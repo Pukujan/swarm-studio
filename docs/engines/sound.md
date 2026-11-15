@@ -15,7 +15,7 @@ Four sources. Kokoro: an 82M TTS model run locally through the npm package `koko
 Film voiceover (server/server.mjs:1121-1131):
 - Voice plays only when the film wants narration or the person picked one; `input.voice: 'off'` silences it (server/server.mjs:1123-1124).
 - Who speaks: a picked voice wins; else the storyboard's `cast.narrator` and `cast.second` (model-chosen from `CAST`, kept only if real ids); else the theme's mood maps to `af_bella` (snappy) or `af_heart` (gentle) (server/server.mjs:1125, engine/video.mjs:162-165, engine/sound.mjs:14).
-- `speak()` sends every line to `SWARM_TTS_URL` (any OpenAI-compatible `/v1/audio/speech`) when set; otherwise it installs kokoro-js once into `video-tools`, writes a worker, and runs it as a child process that loads `onnx-community/Kokoro-82M-v1.0-ONNX` (q8, cpu) and writes one WAV per line (engine/sound.mjs:33-45, engine/sound.mjs:53-89).
+- `speak()` sends every line to `SWARM_TTS_URL` (any OpenAI-compatible `/v1/audio/speech`) when set; otherwise it installs kokoro-js once into `voice-tools` (a folder of its own: `npm ci` empties `node_modules`) from the committed lockfile `engine/voicetools/package-lock.json`, with `npm ci --ignore-scripts` (engine/npmci.mjs; catalog review of `e8ae13c4`), writes a worker, and runs it as a child process that loads `onnx-community/Kokoro-82M-v1.0-ONNX` (q8, cpu) and writes one WAV per line (engine/sound.mjs:33-45, engine/sound.mjs:53-89).
 - Returns `{ file, seconds }` per line; beat lengths stretch to fit the line (engine/musiccut.mjs:175-176).
 
 Film music (server/server.mjs:1133-1163). First match wins:
@@ -35,7 +35,7 @@ Other uses:
 - Hearing sound: `readMedia()` and the film critic send a small mp3 (mono, 16 kHz, at most 120 s) to the person's media model, or measure loudness and silence with ffmpeg alone (engine/mediareader.mjs:1-24, engine/mediareader.mjs:117, engine/filmcritic.mjs:1-5).
 
 ## What the person connects
-- Free, local, no key: Kokoro and the code score (engine/sound.mjs:1-3, engine/media.mjs:11-12). Kokoro needs Node's npm the first time (engine/sound.mjs:78-81).
+- Free, local, no key: Kokoro and the code score (engine/sound.mjs:1-3, engine/media.mjs:11-12). Kokoro needs Node's npm the first time (engine/sound.mjs `speak`). No install script in its tree is needed: onnxruntime-node ships its CPU binaries (its script fetches optional GPU builds), sharp takes its prebuilt binary from an `@img` package; checked on macOS on 2026-11-14 (one line read, 2.73 s of speech).
 - ElevenLabs music: `ELEVENLABS_API_KEY` in Hermes's secret scope (plugin.yaml:15), which launcher.py passes to the server as `SWARM_ELEVENLABS_KEY` (launcher.py:219-223); or Hermes's ElevenLabs MCP connector (`elevenlabs`, `eleven-labs`, `elevenlabs-mcp`) (engine/media.mjs:30); or a key pasted in the Film panel, checked against `/v1/models` and stored in `media-keys.json` mode 0600 (engine/media.mjs:9-10, engine/media.mjs:46-50).
 - Other TTS: `SWARM_TTS_URL`, `SWARM_TTS_KEY`, `SWARM_TTS_MODEL`, `SWARM_TTS_VOICE` (engine/sound.mjs:50-52, engine/sound.mjs:75-76). Not declared in plugin.yaml (plugin.yaml:12-56).
 - Game voices: `FISH_API_KEY` or `ELEVENLABS_API_KEY` in the environment (`FISH_API_KEY` is declared in plugin.yaml, optional and secret, and passed by launcher.py `PASSED_KEYS`; ElevenLabs reaches the server as `SWARM_ELEVENLABS_KEY`, which `speakLine` takes too: tests/enginegaps.test.mjs, tests/test_manifest.py), else `OCTO_VAULT_GRANT` for an Octo vault lease called through the vault proxy (engine/voice.mjs:9-11, engine/voice.mjs:68-102). `OCTO_VAULT_GRANT` is not in plugin.yaml, so the launcher does not pass it.
@@ -43,7 +43,7 @@ Other uses:
 ## Limits inside Swarm
 - Every source above except the local ones is keyed and paid; none is free. Unchecked: whether Fish offers a free model or tier; settle from Fish's pricing page.
 - Kokoro speaks English voices only in Swarm's cast (engine/sound.mjs:16-27); the Japanese game lines go through Fish or ElevenLabs (games/ares/README.md:33).
-- The first Kokoro run downloads the model by id at run time (engine/sound.mjs:36); README's "What it does on your machine" names HyperFrames and ffmpeg but not Kokoro or its model download (README.md:216). kokoro-js is installed without `--save-exact`, though the spec string is exact (engine/sound.mjs:10, engine/sound.mjs:81).
+- The first Kokoro run downloads the model by id at run time (engine/sound.mjs:36); README's "What it does on your machine" names HyperFrames and ffmpeg but not Kokoro or its model download (README.md:216). kokoro-js and every dependency are pinned by the lockfile (engine/voicetools/package-lock.json).
 - `voice.mjs` sends a `curl/8.7.1` user agent because Cloudflare in front of Fish refuses script agents (engine/voice.mjs:21-22), and defaults its vault to `octodb.design-bakery.com` (engine/voice.mjs:20).
 - A generated ElevenLabs track keeps its own length; cuts move to it instead (server/server.mjs:1159-1162).
 - `music()` in sound.mjs, an older bed, is exported but no caller was found by grep (engine/sound.mjs:102).
