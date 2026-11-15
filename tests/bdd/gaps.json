@@ -202,5 +202,34 @@
    "why": "when the brand request fails nothing says so: no toast shows",
    "match": "no toast"
   }
+ },
+ "plan-board › Breadcrumb › The plan menu": {
+  "current": {
+   "why": "the plan's menu has no × to close it",
+   "match": "the menu has no"
+  },
+  "next": {
+   "why": "the plan's name is not a button: there is no menu to open",
+   "match": "the plan's name is not a button"
+  }
+ },
+ "plan-board › Loading › A saved plan opening": {
+  "current": {
+   "why": "a saved plan lands eight cards (Cast, Moves, Enemies, World, Progression, Look, Money, Systems), not nine",
+   "match": "cards land, not nine"
+  },
+  "next": {
+   "why": "a saved plan lands eight cards (Cast, Moves, Enemies, World, Progression, Look, Money, Systems), not nine, and four waiting cards show while it is held, not three",
+   "match": [
+    "cards land, not nine",
+    "waiting cards show while"
+   ]
+  }
+ },
+ "plan-board › Empty state › A fresh talk": {
+  "next": {
+   "why": "the next UI's Plan board shows no cards, waiting or named, for a talk that has answered nothing",
+   "match": "the board shows no cards"
+  }
  }
 }
