@@ -52,6 +52,8 @@ export interface ChatTalk {
   brief?: string
   what?: string
   sheet?: boolean
+  // the brief's first button's word, in place of Build (the Design deck's "Try again" after a failed first build, #541)
+  go?: string
   // a new project with nothing built yet: the canvas is empty (the screen clears it)
   blank?: boolean
 }

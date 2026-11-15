@@ -7,6 +7,7 @@
 // The Studio's model always fails (no model here), so an act that needs the crew (a comment, the chat's change,
 // visitors written afresh) is judged by whether it reached the server and said what happened, not by a new section.
 import { createRequire } from 'node:module'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { studio } from './walkthrough-fixtures.mjs'
 
@@ -22,7 +23,17 @@ const wait = ms => new Promise(r => setTimeout(r, ms))
 const rows = []
 const note = (act, ok, saw) => { rows.push({ act, ok, saw }); console.log(`${ok === true ? '✓' : ok === false ? '✗' : '?'} ${act}: ${saw}`) }
 
-const s = await studio()
+// one more build: a first build that stopped for a reason before any page was planned (the model did not answer,
+// #541), as server/server.mjs records it
+const FAILED = '2026-11-01T20-00-00-000Z'
+const s = await studio({ setup: ({ runs, T0 }) => {
+  const t = T0 + 20 * 3600e3
+  mkdirSync(join(runs, FAILED))
+  writeFileSync(join(runs, FAILED, 'events.jsonl'), [
+    { type: 'run:start', t, run: FAILED, brief: 'Tide Table, the tides for a harbour town', agents: [{ id: 'a0', name: 'Ada', color: '#d4d4d8' }] },
+    { type: 'run:stopped', t: t + 4000, run: FAILED, reason: { code: 'model', message: "The model didn't answer (no model here).", action: 'Try again, or pick another model in `hermes model`.' } }
+  ].map(e => JSON.stringify(e)).join('\n') + '\n')
+} })
 // the Setup sheet seen, as the BDD kit does (it would cover the deck on a first run)
 await s.api('/api/setup', { seen: true })
 const pw = await loadPlaywright()
@@ -197,6 +208,19 @@ try {
     note('replay', /building|planning|replay/i.test(st), `address ${url.replace(s.BASE, '')} · status "${st}" · cursors ${await page.locator('.deck-crew .cursor').count()}`)
     await wait(6000)
     note('replay, later', null, `status "${await page.locator('.deck-status').innerText().catch(() => '-')}" · address ${page.url().replace(s.BASE, '')}`)
+  })
+
+  // a failed first build: why, and Try again, in the chat (#541)
+  await deck(FAILED).catch(() => {})
+  await tryAct('a failed first build: Try again', async () => {
+    await page.locator('section[aria-label="Chat"]').waitFor({ timeout: 15000 })
+    const chat = (await page.locator('section[aria-label="Chat"]').innerText()).replace(/\s+/g, ' ')
+    const again = page.locator('section[aria-label="Chat"]').getByRole('button', { name: 'Try again' })
+    const n = await again.count()
+    if (!n) return note('a failed first build: Try again', false, `no Try again · chat "${chat.slice(-200)}"`)
+    const m = calls.length
+    await again.first().click(); await wait(2500)
+    note('a failed first build: Try again', since(m).some(c => /^POST \/api\/run /.test(c)), `why shown ${/didn't answer/.test(chat)} · calls ${since(m).join(', ') || 'none'} · address ${page.url().replace(s.BASE, '')}`)
   })
 
   // the image-first board (?board=tiers): a click on a page, a photo until then, picks the section under it

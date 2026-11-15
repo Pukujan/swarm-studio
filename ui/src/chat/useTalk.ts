@@ -15,7 +15,7 @@ import type { BuildRoute, ChatApi, ChatChip, ChatGo, ChatKind, ChatLine, ChatOpt
 export type Acts =
   | { type: 'build' }
   | { type: 'options', spec: boolean, options: ChatOption[], on?: string }
-  | { type: 'brief', text: string, routes: BuildRoute[], sheet: boolean, sheetLabel: string, open: boolean, done: boolean }
+  | { type: 'brief', text: string, routes: BuildRoute[], sheet: boolean, sheetLabel: string, open: boolean, done: boolean, go?: string }
 
 export interface Turn extends ChatLine { acts?: Acts }
 
@@ -103,12 +103,12 @@ export function useTalk({ api = chatApi, from = null, project = null, events, ad
   }
 
   // the brief: inside a project the planner says which way it goes (engine/talkplan.mjs routeFor)
-  function showBrief(text: string, route: string, what = '', sheet = false) {
+  function showBrief(text: string, route: string, what = '', sheet = false, go?: string) {
     const s = T.current
     const inProject = !!s.from
     const routes: BuildRoute[] = inProject && route === 'new' ? ['new', 'add'] : inProject && route === 'redo' ? ['redo', 'add'] : ['add']
     // a website or app can settle its story, palette and type first (spec 31); Build works without it
-    const id = add({ who: 'hermia', text: what || 'The brief', acts: { type: 'brief', text, routes, sheet: s.kind === 'site' || s.kind === 'app', sheetLabel: 'Brand sheet', open: true, done: false } })
+    const id = add({ who: 'hermia', text: what || 'The brief', acts: { type: 'brief', text, routes, sheet: s.kind === 'site' || s.kind === 'app', sheetLabel: 'Brand sheet', open: true, done: false, ...(go ? { go } : {}) } })
     if (sheet) void brandSheet(id, text)
   }
 
@@ -208,7 +208,7 @@ export function useTalk({ api = chatApi, from = null, project = null, events, ad
     let last: string | null = null
     for (const m of t.said || []) { s.said.push(m); last = add({ who: m.who, text: m.text }) }
     redraw()
-    if (t.brief) { s.said.push({ who: 'you', text: t.brief }); return showBrief(t.brief, '', t.what || '', !!t.sheet) }
+    if (t.brief) { s.said.push({ who: 'you', text: t.brief }); return showBrief(t.brief, '', t.what || '', !!t.sheet, t.go) }
     if (t.text) return void say(t.text, [])
     // a game chat reopened: its open question's chips come back under the planner's last words
     if (s.kind === 'game' && s.chat) return void gameResume(last)
