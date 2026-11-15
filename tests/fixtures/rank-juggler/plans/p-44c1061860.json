@@ -1,0 +1,267 @@
+{
+ "id": "p-44c1061860",
+ "v": 1,
+ "kind": "game",
+ "created": "2026-11-15T03:15:00.178Z",
+ "from": null,
+ "title": "Rank Juggler",
+ "idea": "thinking of a cool godot 4 game with pixelated characters and fighters or something idk do u wanna reocmmend me something? lets start with assets?",
+ "answers": {
+  "genre": "Action RPG",
+  "cast": "Hero 1, Hero 2, Hero 3",
+  "size": "3",
+  "combat": "launcher plus air juggles with a D-SSS style rank",
+  "enemies": "mixed",
+  "progression": "Rank unlocks specials",
+  "money": "Free",
+  "look": "2D pixel sprites on a magenta key"
+ },
+ "given": {
+  "enemies": "mixed",
+  "combat": "launcher plus air juggles with a D-SSS style rank",
+  "look": "2D pixel sprites on a magenta key",
+  "progression": "Rank unlocks specials",
+  "cast": "Hero 1, Hero 2, Hero 3"
+ },
+ "decided": {
+  "family": "action",
+  "size": "normal",
+  "art": "2d",
+  "engine": "godot"
+ },
+ "note": "what now?. but u already did i think",
+ "shape": {
+  "family": "action",
+  "label": "action game",
+  "size": "normal",
+  "art": "2d",
+  "engine": {
+   "target": "godot",
+   "label": "Godot 4",
+   "asked": true,
+   "installed": false
+  },
+  "view": "2D side-on",
+  "subject": "fighter",
+  "setting": "arena rooftops at dusk",
+  "title": "Rank Juggler",
+  "humanoid": true,
+  "closeups": true,
+  "backdrops": true,
+  "scale": {
+   "cast": 6,
+   "stages": 3,
+   "items": 5,
+   "mocks": 5,
+   "perStage": 3
+  }
+ },
+ "engine": {
+  "target": "godot",
+  "label": "Godot 4",
+  "asked": true,
+  "installed": false
+ },
+ "key": {
+  "name": "green",
+  "hex": "#00FF00"
+ },
+ "sheets": [
+  {
+   "id": "s-f16a4558",
+   "kind": "cast",
+   "grid": [
+    5,
+    4
+   ],
+   "picks": [],
+   "notes": {},
+   "prompt": "A rough concept sketch sheet: a 5 × 4 grid of 20 numbered options (1 to 20, left to right, top to bottom), thin white gutters between the cells, a small number in each cell's corner, nothing crossing a cell's edge. 20 different character designs for this cast: Hero 1, Lead, with twin blades; Hero 2, Bruiser, with greatsword; Hero 3, Gunner, with gauntlets. Full body, front view, standing, each a distinct silhouette and outfit. Game: Rank Juggler, thinking of a cool godot 4 game with pixelated characters and fighters or something idk do u wanna reocmmend me something? lets start with assets?. Style: 2D pixel sprites on a magenta key. Loose pencil and flat colour, a designer's exploration sheet, not finished art.",
+   "quality": "medium",
+   "state": "done",
+   "started": 1794713004877,
+   "error": null,
+   "file": "s-f16a4558.png",
+   "src": "/plans/p-44c1061860/s-f16a4558.png",
+   "model": "ckff/gpt-image-2.5"
+  }
+ ],
+ "mocks": [],
+ "backdrops": [],
+ "style": {
+  "name": "2D pixel sprites on a magenta key",
+  "locked": false,
+  "refs": []
+ },
+ "gate": {
+  "locked": false,
+  "testFirst": false,
+  "price": null,
+  "lockedAt": null,
+  "phase": null
+ },
+ "build": {
+  "characters": [],
+  "props": [],
+  "animations": null,
+  "sprites": []
+ },
+ "cards": [
+  {
+   "id": "cast",
+   "name": "Cast",
+   "body": {
+    "count": "3",
+    "rule": "Hero 1, Hero 2, Hero 3",
+    "roster": [
+     {
+      "name": "Hero 1",
+      "role": "Lead",
+      "look": "",
+      "weapon": "twin blades"
+     },
+     {
+      "name": "Hero 2",
+      "role": "Bruiser",
+      "look": "",
+      "weapon": "greatsword"
+     },
+     {
+      "name": "Hero 3",
+      "role": "Gunner",
+      "look": "",
+      "weapon": "gauntlets"
+     }
+    ]
+   }
+  },
+  {
+   "id": "story",
+   "name": "Story",
+   "body": {
+    "premise": "thinking of a cool godot 4 game with pixelated characters and fighters or something idk do u wanna reocmmend me something? lets start with assets?",
+    "acts": "3",
+    "ending": "One ending, unlocked by the final boss"
+   }
+  },
+  {
+   "id": "combat",
+   "name": "Combat",
+   "body": {
+    "style": "launcher plus air juggles with a D-SSS style rank",
+    "ults": "One charged special",
+    "weapons": "One weapon each",
+    "tools": "",
+    "tactic": ""
+   }
+  },
+  {
+   "id": "enemies",
+   "name": "Enemies",
+   "body": {
+    "tiers": "mixed",
+    "boss": "",
+    "final": "",
+    "telegraphs": "Every attack is telegraphed"
+   }
+  },
+  {
+   "id": "progression",
+   "name": "Progression",
+   "body": {
+    "levelUp": "Rank unlocks specials",
+    "ngPlus": "",
+    "growth": "An aura and wings that grow",
+    "pet": "A pet companion"
+   }
+  },
+  {
+   "id": "world",
+   "name": "World",
+   "body": {
+    "setting": "arena rooftops at dusk",
+    "stages": "3",
+    "camera": "Side view",
+    "backdrops": "3 painted panoramas a stage"
+   }
+  },
+  {
+   "id": "look",
+   "name": "Look",
+   "body": {
+    "style": "2D pixel sprites on a magenta key",
+    "palette": "",
+    "locked": "no"
+   }
+  },
+  {
+   "id": "money",
+   "name": "Money",
+   "body": {
+    "model": "Free",
+    "gacha": "",
+    "subscription": "",
+    "carry": ""
+   }
+  },
+  {
+   "id": "systems",
+   "name": "Systems",
+   "body": {
+    "Logins": "on",
+    "Payments": "off",
+    "Subscriptions": "off",
+    "Leaderboard": "on",
+    "Gacha": "off",
+    "Autoplay pilot": "on",
+    "Enemy AI": "on",
+    "Loadout": "off"
+   }
+  }
+ ],
+ "systems": {
+  "logins": true,
+  "payments": false,
+  "subscriptions": false,
+  "leaderboard": true,
+  "gacha": false,
+  "pilot": true,
+  "enemyAI": true,
+  "loadout": false
+ },
+ "settings": {
+  "polycount": 40000,
+  "clips": 8,
+  "stages": 3,
+  "backdropsPerStage": 3
+ },
+ "art": {
+  "sheets": null,
+  "shots": null,
+  "sprites": []
+ },
+ "starter": {
+  "engine": {
+   "value": "godot",
+   "why": "a real engine project you can open, change and ship to desktop or consoles",
+   "by": "planner"
+  },
+  "template": {
+   "value": null,
+   "why": "no starter for this kind of game yet; the crew starts from an empty project",
+   "by": "planner"
+  },
+  "assets": {
+   "value": "paint",
+   "why": "the crew paints the art for this game once the plan is locked",
+   "by": "planner"
+  },
+  "systems": {}
+ },
+ "replanned": {
+  "at": "2026-11-15T03:22:24.330Z",
+  "note": "what now?. but u already did i think",
+  "was": "action"
+ },
+ "updated": "2026-11-15T03:24:05.416Z"
+}
