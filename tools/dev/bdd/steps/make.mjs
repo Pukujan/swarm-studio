@@ -4,6 +4,7 @@
 // planner and the builders answer is a Manual line in the spec: the test Studio has no model. A project a scenario
 // makes is its own (Make in the Studio opens a new one each time).
 import { bind, problems, step } from '../kit.mjs'
+import { studio as newStudio } from '../../../../scripts/walkthrough-fixtures.mjs'
 
 const phone = page => page.setViewportSize({ width: 390, height: 844 })
 const desktop = page => page.setViewportSize({ width: 1440, height: 900 })
@@ -34,6 +35,13 @@ const shownText = page => page.evaluate(() => document.body.innerText.replace(/\
 // Hermes does not answer: the Studio is asked, and says it is not signed in (what the line under the box reads)
 const hermesOff = page => page.route(url => new URL(url).pathname === '/api/hermes' && new URL(url).searchParams.has('ready'), route =>
   route.fulfill({ json: { needed: true, health: { ok: false, message: 'Hermes is not signed in to a model.', action: 'Run hermes login, then check again.', code: 'no-login' } } }))
+
+// a scenario that makes a project does it in a Studio of its own, so the shared one's Projects (which the Projects
+// scenarios' axe reads) is left as it was
+const inOwn = fn => async fx => {
+  const own = await newStudio()
+  try { await own.api('/api/setup', { seen: true }); fx.studio = own; await fn(fx) } finally { try { own.stop() } catch { /* its folder may be held a moment on Windows */ } }
+}
 
 const BIND = {
   'make › One box, one primary button › At rest': [
@@ -93,31 +101,31 @@ const BIND = {
     ]))
   ],
   'make › The ways each kind offers › An empty box': [
-    step('the kind Website, an empty box, Make pressed', async fx => {
+    step('the kind Website, an empty box, Make pressed', inOwn(async fx => {
       await home(fx)
       if ((await kindNow(fx.page)) !== 'Website') await pickKind(fx.page, 'Website')
       await makeBtn(fx.page).click({ timeout: 5000 }); await wait(fx.page, 3000)
       fx.seen.menu = await menu(fx.page).count(); fx.seen.room = roomOf(fx.page)
-    }),
+    })),
     step('straight to the Studio, no menu', async ({ seen }) => problems([
       seen.menu && 'a menu opens',
       seen.room !== 'studio' && `the address's room is ${seen.room}, not the Studio`
     ]))
   ],
   'make › The ways each kind offers › A brand': [
-    step('the kind Brand, Make pressed', async fx => {
+    step('the kind Brand, Make pressed', inOwn(async fx => {
       await home(fx)
       await pickKind(fx.page, 'Brand')
       await makeBtn(fx.page).click({ timeout: 5000 }); await wait(fx.page, 3000)
       fx.seen.menu = await menu(fx.page).count(); fx.seen.room = roomOf(fx.page)
-    }),
+    })),
     step('straight to the Studio, no menu', async ({ seen }) => problems([
       seen.menu && 'a menu opens',
       seen.room !== 'studio' && `the address's room is ${seen.room}, not the Studio`
     ]))
   ],
   'make › The ways each kind offers › Remembered per kind': [
-    step('Studio picked for an App, then Make pressed on an App again', async fx => {
+    step('Studio picked for an App, then Make pressed on an App again', inOwn(async fx => {
       await home(fx)
       await pickKind(fx.page, 'App')
       await input(fx.page).fill('A habit tracker for night owls')
@@ -129,7 +137,7 @@ const BIND = {
       await input(fx.page).fill('A habit tracker for night owls')
       await makeBtn(fx.page).click({ timeout: 5000 }); await wait(fx.page, 900)
       fx.seen.items = await menuItems(fx.page)
-    }),
+    })),
     step('Studio is pre-selected', async ({ seen }) => problems([
       !seen.items.length && 'no menu opens for the App',
       seen.items.length && seen.items.find(i => i.on)?.label !== 'Studio' && `${seen.items.find(i => i.on)?.label || 'nothing'} is pre-selected, not Studio`
@@ -157,7 +165,7 @@ const BIND = {
     ]))
   ],
   'make › The question before a new website › Asked before a new site': [
-    step('a new website made from the Make box', async fx => {
+    step('a new website made from the Make box', inOwn(async fx => {
       await home(fx)
       if ((await kindNow(fx.page)) !== 'Website') await pickKind(fx.page, 'Website')
       await input(fx.page).fill('A tea shop in Kyoto with an online menu')
@@ -168,7 +176,7 @@ const BIND = {
         const e = [...document.querySelectorAll('button, [role="button"]')].find(b => b.getClientRects().length && b.innerText.trim().startsWith(l))
         return e ? { label: l, text: e.innerText.trim().replace(/\s+/g, ' '), top: e.getBoundingClientRect().top } : null
       }).filter(Boolean))
-    }),
+    })),
     step('the chat asks, three answers, the recommended first with its reason, no agent started', async ({ seen }) => problems([
       !/skip the steps, or go through them/i.test(seen.text) && 'the chat does not ask the question',
       seen.answers.length !== 3 && `${seen.answers.length} of the three answers show (${seen.answers.map(a => a.label).join(', ')})`,
@@ -177,7 +185,7 @@ const BIND = {
     ]))
   ],
   'make › The question before a new website › Pick steps to skip': [
-    step('Pick steps to skip, then Skip Brand', async fx => {
+    step('Pick steps to skip, then Skip Brand', inOwn(async fx => {
       await home(fx)
       if ((await kindNow(fx.page)) !== 'Website') await pickKind(fx.page, 'Website')
       await input(fx.page).fill('A tea shop in Kyoto with an online menu')
@@ -194,7 +202,7 @@ const BIND = {
         const b = [...document.querySelectorAll('nav[aria-label="Steps"] button')].find(b => b.innerText.replace(/^\s*\+\s*/, '').trim() === 'Brand')
         return b ? (b.querySelector('[role="img"]')?.getAttribute('aria-label') || 'none') : 'no chip'
       })
-    }),
+    })),
     step('the Studio opens on Plan, Brand marked skipped', async ({ seen }) => seen.missing ? problems(seen.missing) : problems([
       seen.room !== 'studio' && `the room is ${seen.room}, not the Studio`,
       seen.step !== 'plan' && `the Studio opens on ${seen.step}, not Plan`,
