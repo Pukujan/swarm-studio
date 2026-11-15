@@ -51,5 +51,7 @@ export const ROUTES: Record<string, unknown> = {
   'GET /api/connectors': { supabase: { installed: false } },
   'POST /api/connectors/connect': { confirm: "Add Hermes's Supabase connector? This runs: hermes mcp install supabase" },
   'GET /api/gateway': { platforms: {} },
-  'GET /api/me': { name: 'Pat Kim', handle: 'pk' }
+  'GET /api/me': { name: 'Pat Kim', handle: 'pk' },
+  'GET /api/github/owner': { login: 'pk', owner: null, orgs: [{ login: 'pk-builds', can: true, why: '' }, { login: 'acme', can: false, why: 'No permission to make repositories' }], error: null },
+  'POST /api/github/owner': { login: 'pk', owner: 'pk-builds', orgs: [{ login: 'pk-builds', can: true, why: '' }, { login: 'acme', can: false, why: 'No permission to make repositories' }], error: null }
 }

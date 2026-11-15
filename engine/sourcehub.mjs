@@ -1,6 +1,7 @@
 // A project's source on GitHub (docs/specs/45-intake.md, "The other direction"): the run's own git history
 // (runs/<id>/app/.git, a commit per change) pushed to a repository under the person's own `gh` login, and what
-// is new there brought back. This file is the parts with no server in them.
+// is new there brought back. A new repository is made where builds go: the person's account, or the organization
+// they chose (engine/ghowner.mjs). This file is the parts with no server in them.
 //   Never a force push. Never a repository the Studio did not make or the person did not name. A file that
 //   looks like a key anywhere in the commits being sent stops the push, with its name.
 // git and gh run through engine/proc.mjs (a minimal environment), with no prompt, no hook, and the person's gh
@@ -129,7 +130,7 @@ export async function changedUnder(slug, from, to, path, gh = ghCli) {
 export const repoName = title => String(title || '').normalize('NFKD').replace(/[^\w\s.-]+/g, '').trim().toLowerCase().replace(/[\s_.]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'project'
 
 /** What the person typed in the sheet's Repository field: "owner/name" (or its https address) names one that
- * exists; a bare name is a new one under their login. → { repo } or { name } */
+ * exists; a bare name is a new one where builds go (their login, or their chosen organization). → { repo } or { name } */
 export function readTarget(given) {
   const s = String(given ?? '').trim()
   if (!s) return {}
@@ -148,9 +149,11 @@ export function readTarget(given) {
  *   - the remote having commits this history lacks is refused, with `pull: true`
  *   - a key file in the commits being sent is refused, with the names in `keys`
  * `onLink(link)` is called as soon as the repository is known (before the push), so a push that fails goes back
- * to the same one. → { repo, url, private, branch, sha, made, fresh, same: nothing new to send }
+ * to the same one. `ownerOf(login)` says where a new repository is made (engine/ghowner.mjs ownerFor: the login,
+ * or the chosen organization); it is asked only when one is about to be made, so a linked project never waits on it.
+ * → { repo, url, private, branch, sha, made, fresh, same: nothing new to send }
  */
-export async function pushSource({ dir, link = null, want = {}, title = '', hub = GITHUB, gh = ghCli, step = () => {}, onLink = () => {} }) {
+export async function pushSource({ dir, link = null, want = {}, title = '', hub = GITHUB, gh = ghCli, step = () => {}, onLink = () => {}, ownerOf = async login => login }) {
   const login = await ghLogin(gh)
   if (!login) throw fail(SIGN_IN, 424)
   if (!existsSync(join(dir, '.git'))) throw fail('Nothing to push yet: this project has no source', 409)
@@ -170,10 +173,10 @@ export async function pushSource({ dir, link = null, want = {}, title = '', hub 
 
   const named = want.repo ? parseRepo(want.repo).slug : null
   const fresh = !named && (want.name || !link)
-  let slug = named || (fresh ? `${login}/${readTarget(want.name || repoName(title)).name}` : link.repo)
+  let slug = named || (fresh ? `${await ownerOf(login)}/${readTarget(want.name || repoName(title)).name}` : link.repo)
   step(`checking ${slug}`)
   let facts = await repoFacts(slug, gh)
-  // no name was given and the project's own is taken (Publish › Website makes <login>/<name> for the site's
+  // no name was given and the project's own is taken (Publish › Website makes <owner>/<name> for the site's
   // pages): the next free one, <name>-source first. One that exists is never taken over.
   if (fresh && facts && !want.name) {
     for (const cand of ['source', ...[2, 3, 4, 5].map(n => `source-${n}`)].map(s => `${slug}-${s}`)) {

@@ -70,6 +70,7 @@ import { chatMediaRoutes } from './chatmedia.mjs'
 import { autoplayRoutes } from './autoplay.mjs'
 import { bringInRoutes } from './bringin.mjs'
 import { sourceRoutes } from './sourcehub.mjs'
+import { savedOwner } from '../engine/ghowner.mjs'
 import { joinHistory } from '../engine/sourcehub.mjs'
 import { pictureMessages, linksIn, readPage, pageRead, withRefs } from '../engine/chatmedia.mjs'
 import { refStore } from '../engine/refs.mjs'
@@ -2723,7 +2724,8 @@ async function publish(id, input = {}) {
   const rebase = base => { try { out.rebase(base) } catch (err) { send('error', { where: 'seo', message: String(err.message || err) }) } }
   const go = target === 'vercel' ? publishVercel({ dir, name: hostName, creds, dataDir, rebase, onStage })
     : target === 'cloudflare' ? publishCloudflare({ dir, name: hostName, creds, dataDir, rebase, onStage })
-    // each version of a project is its own site: Bot Wiki at <login>.github.io/bot-wiki, its version 2
+    // each version of a project is its own site: Bot Wiki at <owner>.github.io/bot-wiki (the person's login, or the
+    // organization builds go to: engine/ghowner.mjs), its version 2
     // at …/bot-wiki-2, so publishing one never replaces another (owner, 2026-11-12)
     : publishGitHub({ dir, name: versionOf(id) > 1 ? `${out.name}-${versionOf(id)}` : out.name, title, key: id, dataDir, rebase, onStage })
   go.then(r => finish(r.url, { repo: r.repo, pending: !!r.pending }))
@@ -3796,7 +3798,7 @@ const server = createServer((req, res) => {
   // Where a site can be published, and who is signed in there (never a token).
   if (url.pathname === '/api/publish' && req.method === 'GET') {
     Promise.all([githubLogin(), connections(dataDir)])
-      .then(([login, conn]) => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ github: login, ...conn, providers: PROVIDERS })))
+      .then(([login, conn]) => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ github: login, githubOwner: savedOwner(dataDir), ...conn, providers: PROVIDERS })))
     return
   }
 

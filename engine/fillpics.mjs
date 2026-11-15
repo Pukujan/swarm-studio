@@ -130,7 +130,7 @@ export async function fillPictures(appDir, { pick, bytesOf, run = null, step = (
 }
 
 // An exported site: its static pages (html/, relative links so it works under any
-// path, like <login>.github.io/<repo>/) and its React copy (react/, an app layout)
+// path, like <owner>.github.io/<repo>/) and its React copy (react/, an app layout)
 // get the same stand-ins as an app, so no published site ships grey boxes.
 export async function fillSite(exportDir, opts) {
   const html = await fillPictures(join(exportDir, 'html'), { ...opts, root: '', out: join('img', 'stock'), prefix: 'img/stock/' })

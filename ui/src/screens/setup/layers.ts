@@ -51,7 +51,9 @@ export const SETTINGS_LAYERS = {
     // Setup is a row here too, but it is not a layer: Settings closes and the Setup sheet opens on its Parts
     // (the statechart's `setup: '#projects.setup.parts'`), which the sheets' provider does
     index: { on: { you: 'you', lite: 'lite', data: 'data' } },
-    you: { entry: 'shutGoes', on: { up: 'index', goes: { actions: 'toggleGoes' } } },
+    you: { entry: 'shutGoes', on: { up: 'index', goes: { actions: 'toggleGoes' }, github: 'github' } },
+    // You › GitHub: where builds go on GitHub (the person's account or one of their organizations); up is You
+    github: { on: { up: 'you' } },
     lite: { on: { up: 'index' } },
     data: { on: { up: 'index' } }
   }

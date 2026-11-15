@@ -29,7 +29,7 @@ export const setupMachine = setup({
   }
 }).createMachine({ ...SETUP_LAYERS, context: ({ input }) => ({ row: input.row ?? '', group: input.group ?? '', part: input.part ?? '' }) })
 
-export type SettingsEvent = { type: 'you' | 'lite' | 'data' | 'up' | 'goes' }
+export type SettingsEvent = { type: 'you' | 'lite' | 'data' | 'up' | 'goes' | 'github' }
 
 export const settingsMachine = setup({
   types: {} as { context: { goes: boolean }, events: SettingsEvent },

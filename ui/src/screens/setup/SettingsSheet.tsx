@@ -2,12 +2,14 @@
 // its data goes. iOS Settings, as docs/ux/PATTERNS.md assigns for Me › Settings: grouped lists, one level per tap,
 // names and a state.
 //
-// Layer 1: You, Setup, Lite mode, Data. You is the Feed account and its "Goes to" line. Setup closes Settings and
+// Layer 1: You, Setup, Lite mode, Data. You is the Feed account and its "Goes to" line, and GitHub: where builds go on
+// GitHub, the person's account or one of their organizations (engine/ghowner.mjs, GET/POST /api/github/owner; one
+// that can't be used says why and can't be picked; no row in the hosted studio, which has no door). Setup closes Settings and
 // opens the Setup sheet on its Parts (one sheet at a time). Lite mode is the pick and what it does. Data is where
 // data goes. Which layer is open is the statechart's `#me.settings` (layers.ts), run as settingsMachine.
 import { useMachine } from '@xstate/react'
 import { useEffect, useState, type ReactNode } from 'react'
-import { Button as AriaButton } from 'react-aria-components'
+import { Button as AriaButton, Radio, RadioGroup } from 'react-aria-components'
 import { Dialog } from '../../primitives/Dialog'
 import { ToggleGroup } from '../../primitives/ToggleGroup'
 import { get, post } from './api'
@@ -38,7 +40,10 @@ const LITE_PICKS = [{ k: 'auto', label: 'Auto', on: null }, { k: 'on', label: 'O
 type LitePick = typeof LITE_PICKS[number]['k']
 const small = () => ((navigator as Navigator & { deviceMemory?: number }).deviceMemory || 8) <= 4
 
-const TITLE = { index: 'Settings', you: 'You', lite: 'Lite mode', data: 'Data' } as const
+const TITLE = { index: 'Settings', you: 'You', github: 'GitHub', lite: 'Lite mode', data: 'Data' } as const
+
+// GET /api/github/owner: who is signed in to gh, the organization builds go to (null: their account), the organizations
+type Owner = { login: string | null, owner: string | null, orgs: { login: string, can: boolean, why: string }[], error: string | null }
 
 const Chevron = ({ back }: { back?: boolean }) => (
   <svg aria-hidden viewBox="0 0 24 24" className="size-3.5 flex-none fill-none stroke-current stroke-2 text-muted"><path d={back ? 'm15 18-6-6 6-6' : 'm9 18 6-6-6-6'} /></svg>
@@ -68,19 +73,24 @@ const Table = ({ rows }: { rows: readonly (readonly [string, string])[] }) => (
 
 export function SettingsSheet({ at: start, onClose, onSetup }: {
   // a layer to open on (a story)
-  at?: 'you' | 'lite' | 'data'
+  at?: 'you' | 'github' | 'lite' | 'data'
   onClose: () => void
   onSetup: () => void
 }) {
   const [state, send] = useMachine(settingsMachine)
   // a second send of the same move does nothing, so it is safe in StrictMode
-  useEffect(() => { if (start) send({ type: start }) }, [start, send])
+  useEffect(() => {
+    if (start === 'github') { send({ type: 'you' }); send({ type: 'github' }) } else if (start) send({ type: start })
+  }, [start, send])
   // each state fills in when its own answer comes: the sheet never waits
   const [me, setMe] = useState<{ name?: string, handle?: string } | null>(null)
   const [lite, setLite] = useState<boolean | null | undefined>(undefined)
+  const [gh, setGh] = useState<Owner | null>(null)
+  const [ghErr, setGhErr] = useState('')
   useEffect(() => {
     let alive = true
     get<{ name?: string, handle?: string }>('/api/me').then(v => { if (alive) setMe(v) })
+    get<Owner>('/api/github/owner').then(v => { if (alive) setGh(v) })
     get<{ lite?: boolean | null }>('/api/models').then(v => { if (alive) setLite(v ? v.lite ?? null : null) })
     return () => { alive = false }
   }, [])
@@ -96,6 +106,14 @@ export function SettingsSheet({ at: start, onClose, onSetup }: {
     await post('/api/models', { role: 'lite', on: p.on })
     // the Design deck reads the pick again (web/canvas/settings.js loadModels)
     dispatchEvent(new CustomEvent('swarm:models'))
+  }
+
+  async function pickOwner(k: string) {
+    setGhErr('')
+    const r = await fetch('/api/github/owner', { method: 'POST', headers: { 'content-type': 'application/json', 'x-swarm-token': window.SWARM?.token ?? '' }, body: JSON.stringify({ owner: k || null }) }).catch(() => null)
+    const j = await r?.json().catch(() => null) as (Owner & { error?: string }) | null
+    if (r?.ok && j) setGh(j)
+    else setGhErr(j?.error || 'That did not work')
   }
 
   const at = state.value as keyof typeof TITLE
@@ -121,6 +139,27 @@ export function SettingsSheet({ at: start, onClose, onSetup }: {
             {back}
             <Row name="Swarm Feed" dot={!!me?.handle} state={you} expanded={state.context.goes} onPress={() => send({ type: 'goes' })} />
             {state.context.goes && <p className="m-0 px-3.5 py-3 font-body text-[12.5px] leading-[1.4] text-muted">{FEED_GOES}</p>}
+            {gh && <Row name="GitHub" state={gh.owner || gh.login || 'Not signed in'} more onPress={() => send({ type: 'github' })} />}
+          </>
+        )}
+        {at === 'github' && (
+          <>
+            <AriaButton onPress={() => send({ type: 'up' })} className="flex min-h-[52px] w-full cursor-pointer items-center gap-2.5 px-3.5 text-left text-text outline-none data-[hovered]:bg-panel-2 data-[focus-visible]:outline-2 data-[focus-visible]:-outline-offset-2 data-[focus-visible]:outline-frame-hi">
+              <Chevron back /><b className="font-label text-sm font-semibold uppercase tracking-[.08em]">You</b>
+            </AriaButton>
+            {gh?.login && (
+              <RadioGroup aria-label="Where builds go" value={gh.owner ?? ''} onChange={k => void pickOwner(k)} className="divide-y divide-edge">
+                {[{ login: '', name: gh.login, can: true, why: 'Your account' }, ...gh.orgs.map(o => ({ ...o, name: o.login, why: o.can ? '' : o.why }))].map(o => (
+                  <Radio key={o.login} value={o.login} isDisabled={!o.can}
+                    className="group flex min-h-[52px] w-full cursor-pointer items-center gap-2.5 px-3.5 text-text outline-none data-[disabled]:cursor-default data-[disabled]:text-muted data-[hovered]:bg-panel-2 data-[disabled]:bg-transparent data-[focus-visible]:outline-2 data-[focus-visible]:-outline-offset-2 data-[focus-visible]:outline-frame-hi">
+                    <i aria-hidden className="inline-block size-2 flex-none rounded-full border-[1.5px] border-muted group-data-[selected]:border-text group-data-[selected]:bg-text" />
+                    <b className="flex-none font-body text-sm font-semibold">{o.name}</b>
+                    <span className="min-w-0 flex-1 truncate text-right font-body text-[13px] text-muted">{o.why}</span>
+                  </Radio>
+                ))}
+              </RadioGroup>
+            )}
+            {(ghErr || gh?.error) && <p role="alert" className="m-0 px-3.5 py-3 font-body text-[12.5px] leading-[1.4] text-muted">{ghErr || gh?.error}</p>}
           </>
         )}
         {at === 'lite' && (

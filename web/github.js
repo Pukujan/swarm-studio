@@ -3,7 +3,8 @@
 // project's menu and on its card's menu, opens one small sheet. It says what is true (not linked, linked to
 // owner/name, private or public, pushed or pulled when, changes not pushed, new commits to pull) and has the
 // two moves: Push and Pull. A project with no app or game yet brings a repository in from here. The same
-// moves typed in the chat: "push to github", "pull from github", "link owner/name", "where is this on github".
+// moves typed in the chat: "push to github", "pull from github", "link owner/name", "where is this on github". And
+// where builds go (the person's account or an organization): "publish to <organization>", "where do builds go".
 // Anything on its way shows a crew cursor with what it is doing. The server does the work (server/sourcehub.mjs)
 // with the person's own gh login; the hosted studio has no such door.
 // Imports only the icons, so node tests the words; the canvas hands it what it needs (web/canvas/loop.js).
@@ -13,6 +14,7 @@ import { cursor, CREW } from './icons.js'
  * @typedef {object} GitHubState
  * @property {string} project @property {string} name @property {string} piece @property {string[]} pieces
  * @property {string | null} run @property {boolean} source @property {string | null} login @property {string} suggest
+ * @property {string | null} [owner] the organization a new repository goes to (null: the person's account)
  * @property {{ repo: string, url: string, private: boolean, pushed: number | null, pulled: number | null, fits: boolean } | null} link
  * @property {{ repo: string, path: string, url: string, pulled: number | null } | null} origin
  * @property {boolean} ahead @property {boolean | null} behind @property {string | null} unreachable
@@ -46,6 +48,66 @@ export function githubAsk(text) {
   return null
 }
 
+// ---------- where builds go on GitHub (engine/ghowner.mjs): the person's account or one of their organizations.
+// Typed in any chat: "publish to Swarm-Generations", "builds go to my account", "where do builds go". A name is
+// taken only when it is the person's login or one of their organizations, so "publish to vercel" or "publish to
+// production" never becomes a setting.
+const NOT_OWNER = /^(?:github|gh|gh-pages|pages|vercel|cloudflare|netlify|local|localhost|feed|here|it|this|that|web|prod|production|staging)$/i
+const ME = '(?:my (?:own )?(?:github )?(?:account|login|profile)|my (?:own )?github|me)'
+const MOVE = '(?:please )?(?:(?:publish|send|put) (?:my |new |all )?(?:builds |sites |repos |repositories |everything )?(?:to|on|under|in(?:to)?)|(?:my |new )?builds (?:go|should go) (?:to|on|under|in(?:to)?))'
+
+/**
+ * A typed "where builds go" move, or null. `owner` is a name to check against the person's organizations (null:
+ * their own account).
+ * @param {string} text @returns {{ did: 'show' } | { did: 'set', owner: string | null } | null}
+ */
+export function ownerAsk(text) {
+  const t = String(text || '').trim().replace(/[.!?]+$/, '').replace(/\s+/g, ' ')
+  const s = t.toLowerCase()
+  if (/^(?:where do (?:my |new )?builds go(?: on github)?|where (?:do|does) (?:it|swarm) publish(?: on github)?|which (?:github )?(?:org|organization|account) do (?:my )?builds go (?:to|in))$/.test(s)) return { did: 'show' }
+  if (new RegExp(`^${MOVE} ${ME}$`).test(s)) return { did: 'set', owner: null }
+  const m = t.match(new RegExp(`^${MOVE} (?:the )?(?:github )?(?:org(?:anization)? )?(?:https://(?:www\\.)?github\\.com/)?@?([A-Za-z0-9][A-Za-z0-9-]{0,38})/?$`, 'i'))
+  if (m && !NOT_OWNER.test(m[1])) return { did: 'set', owner: m[1] }
+  return null
+}
+
+/**
+ * @typedef {object} OwnerView
+ * @property {string | null} login @property {string | null} owner the organization builds go to, null: the account
+ * @property {{ login: string, can: boolean, why: string }[]} orgs @property {string | null} error
+ */
+/** "Builds go to Swarm-Generations." @param {OwnerView} v */
+export const ownerWhere = v => (v.owner ? `New sites and repositories go to ${v.owner}.` : v.login ? `New sites and repositories go to your account, ${v.login}.` : v.error || 'Not signed in: run gh auth login.')
+
+/**
+ * The typed move, answered in the chat (true when it was one). Asks the server for the person's organizations
+ * first: a name that is neither theirs nor one of them is not taken, and the message goes on as it would have.
+ * @param {string} text
+ * @param {{ api: (path: string, opts?: any) => Promise<Response>, said: (text: string) => void, answer: (text: string) => void }} host
+ * @returns {Promise<boolean>}
+ */
+export async function ownerSay(text, host) {
+  const want = ownerAsk(text)
+  if (!want) return false
+  const view = async (/** @type {any} */ opts) => {
+    const r = await host.api('/api/github/owner', opts).catch(() => null)
+    const j = await r?.json().catch(() => ({}))
+    return { ok: !!r?.ok, j: /** @type {any} */ (j || {}) }
+  }
+  const now = await view()
+  if (!now.ok) return false
+  const v = /** @type {OwnerView} */ (now.j)
+  if (want.did === 'set' && want.owner) {
+    const k = want.owner.toLowerCase()
+    if (k !== String(v.login || '').toLowerCase() && !v.orgs.some(o => o.login.toLowerCase() === k)) return false
+  }
+  host.said(text)
+  if (want.did === 'show') { host.answer(ownerWhere(v)); return true }
+  const got = await view({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ owner: want.owner }) })
+  host.answer(got.ok ? ownerWhere(got.j) : String(got.j.error || 'That did not work'))
+  return true
+}
+
 /** "3 min ago", for a time of this computer's clock @param {number | null} t @param {number} [now] */
 export function githubAgo(t, now = Date.now()) {
   if (!t) return ''
@@ -71,6 +133,8 @@ export function githubLines(st, now = Date.now()) {
     if (last) out.push(`${last === st.link.pushed ? 'Pushed' : 'Pulled'} ${githubAgo(last, now)}`)
     if (!st.link.fits) out.push('This version needs a repository of its own')
   }
+  // a first push makes the repository in the organization builds go to (Settings › You › GitHub)
+  if ((!st.link || !st.link.fits) && st.owner) out.push(`New repositories go to ${st.owner}`)
   if (!st.link && st.origin?.pulled) out.push(`Pulled ${githubAgo(st.origin.pulled, now)}`)
   if (st.ahead) out.push('Changes not pushed')
   if (st.behind) out.push('New commits to pull')

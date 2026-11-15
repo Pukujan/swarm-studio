@@ -5,9 +5,12 @@
 //   anything else, with a build open  the project's next version extends it, after the planner reads whether the
 //                                     person wants to build now or talk first (engine/talkplan.mjs)
 //   no build                          a new build
+//   "publish to <organization>"       where builds go on GitHub, answered here (web/github.js ownerSay), when the
+//                                     name is the person's account or one of their organizations
 // A talk (the Chat's own) ends in a brief; its Build starts the build here. A new build takes the deck over.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { routeMessage } from '@studio/route'
+import { ownerSay } from '@studio/github'
 import { Chat, type BuildRoute, type ChatCommand, type ChatGo, type ChatLine, type ChatTalk } from '../../chat'
 import { useNav } from '../../nav/NavProvider'
 import { crew } from './crew'
@@ -86,6 +89,7 @@ export function DeckChat({ model, picked, onCommand }: {
   }
 
   const submit = useCallback(async ({ text, agents, chips }: { text: string, agents: number, chips: { key: string, kind: string }[] }) => {
+    if (!chips.length && await ownerSay(text, { api: (path, opts) => fetch(path, { ...opts, headers: { ...(opts?.headers as Record<string, string> | undefined), 'x-swarm-token': token() } }), said: t => note('you', t), answer: t => note('hermia', t) })) return
     const layers = chips.filter(c => c.kind === 'layer').map(c => c.key)
     if (layers.length && run) return comment(text, { targets: layers })
     const route = routeMessage({ text, run, site: model.kind !== 'game' && model.pages.length > 0, selected: !!picked })

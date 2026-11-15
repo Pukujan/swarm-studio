@@ -27,6 +27,7 @@
       "@studio/clean": ["./src/screens/deck/studio-clean.d.ts"],
       "@studio/edit": ["./src/screens/deck/studio-edit.d.ts"],
       "@studio/route": ["./src/screens/deck/studio-route.d.ts"],
+      "@studio/github": ["./src/screens/deck/studio-github.d.ts"],
       "@studio/kits": ["./src/legacy/studio-kits.d.ts"],
       "@studio/pet": ["./src/legacy/studio-pet.d.ts"],
       "@studio/video": ["./src/primitives/studio-video.d.ts"],

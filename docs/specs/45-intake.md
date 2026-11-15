@@ -276,6 +276,40 @@ event's `repo`, `path`, `sha`; a folder inside a git repository records its `ori
 - A version whose history could not be carried on (files were left out on the way in) cannot be pushed to that
   repository; the sheet says so and offers a repository of its own.
 
+### Where builds go
+
+Owner, 2026-11-14: "a lot of swarm generated website and published from me atleast into here
+https://github.com/Swarm-Generations ... so they wont flood my public repos".
+
+- Every repository the Studio makes, a site's (Publish › Website) and a source's (the first Push), is made under
+  **one owner**: the person's own account (the default), or an organization they belong to. The site is then
+  served at `<owner>.github.io/<name>/`, and every link the Studio keeps (the publish event, the Feed's live link,
+  the project's menu, `github-source.json`, `connections.json` `github:repos`) is GitHub's own answer for that
+  repository, never a login put together by hand.
+- **Settings › You › GitHub**: the account and each organization from `gh api user/orgs --paginate`, one picked.
+  An organization that can't be used says why on its row and can't be picked: **Invitation not accepted**, **No
+  permission to make repositories** (a member, and the organization does not let members make public ones),
+  **Needs single sign-on: gh auth refresh**. No gh login: **GitHub CLI is not signed in: run gh auth login**.
+- **Typed**, in the Design deck's chat (either Studio): "publish to Swarm-Generations", "builds go to my account",
+  "where do builds go". A name is taken only when it is the person's login or one of their organizations, so
+  "publish to vercel" or "publish to production" stay ordinary messages.
+- Kept as `{ "owner": "<org>" }` in `github.json` in the data folder (engine/ghowner.mjs), read each time a
+  repository is about to be made, so a hand edit counts at once. `GET /api/github/owner`, `POST { owner }` (null:
+  the account; a name that is not theirs or can't be used is refused in words).
+- **When the chosen organization can no longer be used**, making a repository stops, in words ("Builds go to X,
+  which can't be used: …"). It is never made on the person's account instead.
+- **What is not moved.** A source repository a project is already linked to stays its repository. A site a build
+  published before goes to a new repository in the organization; the old one is not touched (moving repositories
+  is the person's own step on GitHub). A site repository moved into the organization by hand is found again by
+  its name.
+- **Shared organizations.** Other members' Studios publish there too: a marked site repository there is replaced
+  only when it is this build's own (its name is the one this build published to). Any other is skipped, as one the
+  Studio did not make.
+- The rules above still hold in an organization: the source push never forces, never takes over a repository the
+  Studio did not make or the person did not name, and refuses key files. The site's repository is replaced on
+  each publish (a force push, as before) only when it is this build's own; a site with a key file in it is not
+  published.
+
 ### Bring in from inside
 
 `POST … { action: 'bring', repo, path?, kind }`, only for a project with no app or game source: the repository

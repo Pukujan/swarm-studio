@@ -40,7 +40,8 @@ HELP = """Swarm Studio commands
   /swarm publish [n|id] [github|vercel|cloudflare|local]   a live link (GitHub Pages by default)
   /swarm hosts                    where you can publish, and how to connect Vercel or Cloudflare
   /swarm github [n] [push|pull] [owner/name|name] [public]   a build's source on GitHub: where it is; push it
-                                  (a private repository under your gh login unless you say public); pull what is new
+                                  (a private repository under your gh login, or the organization builds go to,
+                                  unless you say public); pull what is new
   /swarm video [n] [style] [cut] [voice|off] [nomusic] [idea]  cut a video with a Kokoro voiceover and music
                                   styles: promo kinetic slideshow teaser story · cuts: wipe fade zoom slide flash
   /swarm app [n] [change]         make a build a working full-stack app (React + shadcn, server routes),
@@ -93,8 +94,8 @@ def outward(args: dict | None) -> tuple[str, str] | None:
         if "/" in repo:
             return f"push the source of {build} to the GitHub repository {repo}", f"swarm-studio:github:push:named:{repo.lower()}"
         if a.get("public") is True:
-            return f"push the source of {build} to a new PUBLIC GitHub repository under your login", "swarm-studio:github:push:public"
-        return f"push the source of {build} to a private GitHub repository under your login", "swarm-studio:github:push:private"
+            return f"push the source of {build} to a new PUBLIC GitHub repository (on your login, or the organization builds go to)", "swarm-studio:github:push:public"
+        return f"push the source of {build} to a private GitHub repository (on your login, or the organization builds go to)", "swarm-studio:github:push:private"
     if action == "post":
         return f"post {build} to the Swarm Feed, where anyone can see it", "swarm-studio:post"
     return None
@@ -369,7 +370,8 @@ def _dispatch(cmd: str, args: list[str]) -> str:
 
     if cmd == "hosts":
         h = _api("/api/publish")
-        lines = [f"github      {'signed in as ' + h['github'] if h.get('github') else 'not signed in: run `gh auth login`'}"]
+        lines = [f"github      {'signed in as ' + h['github'] if h.get('github') else 'not signed in: run `gh auth login`'}"
+                 + (f"; builds go to {h['githubOwner']}" if h.get('github') and h.get('githubOwner') else "")]
         for p in ("vercel", "cloudflare"):
             c = h.get(p)
             lines.append(f"{p:<11} " + (f"connected ({c['user']})" if c else f"not connected: 🌐 Publish on the canvas → Connect, or set {h['providers'][p]['env']} (token from {h['providers'][p]['tokenUrl']})"))

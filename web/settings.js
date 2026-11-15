@@ -3,7 +3,9 @@
 // iOS Settings, as docs/ux/PATTERNS.md assigns for Me › Settings: grouped lists, one level per tap, names
 // and a state.
 //
-// Layer 1: You, Setup, Lite mode, Background, Data. You is the Feed account and its "Goes to" line. Setup opens the
+// Layer 1: You, Setup, Lite mode, Background, Data. You is the Feed account and its "Goes to" line, and GitHub: where
+// builds go on GitHub, the person's account or one of their organizations (engine/ghowner.mjs, GET/POST
+// /api/github/owner; one that can't be used says why and can't be picked). Setup opens the
 // Setup sheet on its Parts (web/setup-parts.js: every model, tool, connector, key and program a build
 // uses, its state and its fix; Crew and Publish moved there). Lite mode is the pick and what it does.
 // Background is when the studio's background work stops by itself (decision 0017, issue #450). Data is where data goes.
@@ -45,7 +47,7 @@ export function openSettings({ sw, esc }) {
   const d = ui.dialog({ title: 'Settings', className: 'set', body: '<div class="set-list" role="list"></div>' })
   const list = d.body.querySelector('.set-list')
   // each state fills in when its own answer comes: the sheet never waits
-  const S = { me: null, lite: undefined, stops: null }
+  const S = { me: null, lite: undefined, stops: null, gh: null, ghErr: '' }
   let at = null, open = false
 
   // one row: a name, and its state on the right (an account, a pick, or nothing but the dot)
@@ -85,8 +87,18 @@ export function openSettings({ sw, esc }) {
         + `<dl class="set-data set-litedl">${LITE.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`
       return
     }
+    if (at === 'github') {
+      d.setHead('', 'GitHub')
+      const v = S.gh
+      const pick = (k, name, { state = '', on = false, off = false } = {}) => `<button type="button" class="set-row" role="radio" aria-checked="${on}"${off ? ' aria-disabled="true"' : ''} data-owner="${esc(k)}"><i class="set-dot${on ? ' on' : ''}" aria-hidden="true"></i><b>${esc(name)}</b><span>${esc(state)}</span></button>`
+      list.innerHTML = `<button type="button" class="set-row set-back" data-k="you">${ic('chl', 14)}<b>You</b></button>`
+        + (!v ? '' : `<div role="radiogroup" aria-label="Where builds go">${v.login ? pick('', v.login, { state: 'Your account', on: !v.owner }) : ''}${v.orgs.map(o => pick(o.login, o.login, { state: o.can ? '' : o.why, on: v.owner === o.login, off: !o.can })).join('')}</div>`)
+        + (S.ghErr || v?.error ? `<p class="set-goes" role="alert">${esc(S.ghErr || v?.error || '')}</p>` : '')
+      return
+    }
     d.setHead('', 'You')
     list.innerHTML = back + `${row('feed', 'Swarm Feed', { on: !!S.me?.handle, state: you() })}<p class="set-goes"${open ? '' : ' hidden'}>${esc(FEED_GOES)}</p>`
+      + (S.gh ? row('github', 'GitHub', { state: S.gh.owner || S.gh.login || 'Not signed in', more: true }) : '')
     if (open) list.querySelector('.set-row[data-k="feed"]')?.setAttribute('aria-expanded', 'true')
   }
 
@@ -109,7 +121,21 @@ export function openSettings({ sw, esc }) {
     await sw.api('/api/models', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ role: 'stops', [k]: m }) }).catch(() => null)
   }
 
+  async function pickOwner(k) {
+    if (!S.gh) return
+    S.ghErr = ''
+    const r = await sw.api('/api/github/owner', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ owner: k || null }) }).catch(() => null)
+    const j = await r?.json().catch(() => null)
+    if (r?.ok && j) S.gh = j
+    else S.ghErr = j?.error || 'That did not work'
+    if (d.closed) return
+    draw()
+    list.querySelector(`[data-owner="${CSS.escape(k)}"]`)?.focus({ preventScroll: true })
+  }
+
   list.onclick = e => {
+    const o = e.target.closest('[data-owner]')
+    if (o) { if (o.getAttribute('aria-disabled') !== 'true') pickOwner(o.dataset.owner || ''); return }
     const l = e.target.closest('[data-lite]')
     if (l) { pickLite(l.dataset.lite); return }
     const st = e.target.closest('[data-stop]')
@@ -119,7 +145,7 @@ export function openSettings({ sw, esc }) {
     const k = b.dataset.k
     // one sheet at a time: Settings closes and Setup opens on its Parts
     if (!at && k === 'setup') { d.close(); window.SwarmSetup?.open('parts'); return }
-    if (!at || !k) { at = k || null; open = false; draw(); list.querySelector('.set-row')?.focus({ preventScroll: true }); return }
+    if (!at || !k || (at === 'you' && k === 'github') || (at === 'github' && k === 'you')) { at = k || null; open = false; draw(); list.querySelector('.set-row')?.focus({ preventScroll: true }); return }
     // layer 3: the one line that says where the account's data goes
     open = !open
     draw()
@@ -129,6 +155,8 @@ export function openSettings({ sw, esc }) {
   draw()
   list.querySelector('.set-row')?.focus({ preventScroll: true })
   get('/api/me').then(v => { if (!d.closed) { S.me = v; if (!at || at === 'you') draw() } })
+  // the hosted studio has no GitHub door: its answer is a 403, and the row says nothing
+  get('/api/github/owner').then(v => { if (!d.closed && v) { S.gh = v; if (at === 'you' || at === 'github') draw() } })
   get('/api/models').then(v => { if (!d.closed) { S.lite = v ? v.lite ?? null : null; S.stops = v?.stops || null; if (!at || at === 'lite' || at === 'stops') draw() } })
   return d
 }

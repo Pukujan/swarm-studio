@@ -1,5 +1,6 @@
 // Publish an exported site. GitHub Pages through the person's own `gh` login:
-// one public repo per site, pushed and served at <login>.github.io/<repo>/.
+// one public repo per site, pushed and served at <owner>.github.io/<repo>/. The owner is the person's
+// account, or the organization they chose for their builds (engine/ghowner.mjs, Settings › You › GitHub).
 // Vercel and Cloudflare Pages through a token the person connected (connect.mjs).
 // Without any of them, the canvas server hosts it on this computer (see /site/ in the server).
 
@@ -9,6 +10,8 @@ import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { claimRepo, ownProjects, rememberProject, siteRepos } from './connect.mjs'
+import { ownerFor } from './ghowner.mjs'
+import { ghCli, keyFile } from './sourcehub.mjs'
 
 // Repos this makes say so in their description; a repo without it is never touched.
 const MARK = 'made with Swarm Studio'
@@ -38,16 +41,20 @@ export async function githubLogin() {
   return login
 }
 
-// The repo for this site: the one this build published to before, else its own name if free, else a
-// variant. A repo another build already publishes to is skipped (two projects named Bot Wiki get
+// The repo for this site under `owner`: the one this build published to before, else its own name if free,
+// else a variant. A repo another build already publishes to is skipped (two projects named Bot Wiki get
 // bot-wiki and bot-wiki-site), and a repo this studio didn't make is never touched.
-export async function pickRepo(login, name, { mine = '', taken = new Set(), check = repo => gh(['api', `repos/${login}/${repo}`, '--jq', '.description // ""'], { timeout: 15000 }) } = {}) {
-  const was = mine.split('/')[0].toLowerCase() === login.toLowerCase() ? mine.split('/')[1] : ''
+// In an organization (`shared`), other people's Studios publish too: a marked repo there is taken over only
+// when it is this build's own (its name is the one this build published to, also when that repo was moved
+// into the organization from the person's account); any other is skipped like one the studio didn't make.
+export async function pickRepo(owner, name, { mine = '', taken = new Set(), shared = false, check = repo => gh(['api', `repos/${owner}/${repo}`, '--jq', '.description // ""'], { timeout: 15000 }) } = {}) {
+  const [mo = '', mr = ''] = mine.split('/')
+  const was = mr && (shared || mo.toLowerCase() === owner.toLowerCase()) ? mr : ''
   for (const cand of [...(was ? [was] : []), name, `${name}-site`, ...[2, 3, 4, 5].map(n => `${name}-${n}`)]) {
     if (cand !== was && taken.has(cand.toLowerCase())) continue
     try {
       const desc = await check(cand)
-      if (desc.includes(MARK)) return { repo: cand, fresh: false }
+      if (desc.includes(MARK) && (!shared || cand === was)) return { repo: cand, fresh: false }
     } catch (err) {
       if (/404|Not Found/i.test(err.message + err.stderr)) return { repo: cand, fresh: true }
       throw err
@@ -59,18 +66,32 @@ export async function pickRepo(login, name, { mine = '', taken = new Set(), chec
 // rebase(url): writes the site's address into its pages (canonical, share tags, sitemap,
 // robots: engine/seo.mjs) before the files go up; called again if the host answers elsewhere.
 // key: the build (its run id), so publishing it again goes back to the same repo.
-export async function publishGitHub({ dir, name, title, key = '', dataDir = '', rebase = null, onStage = () => {} }) {
-  const login = await githubLogin()
-  if (!login) throw new Error('GitHub CLI is not signed in (run `gh auth login`), so the site is hosted on this computer only')
+// `ask` (gh, → { ok, out, err }), `hub` (where git pushes) and `probe` (is the site answering) are parameters so
+// the tests can stand in for GitHub; nothing but a test passes them.
+const PAGES_HUB = { url: full => `https://github.com/${full}.git`, file: false }
+const answers = url => fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(10000) }).then(r => r.ok).catch(() => false)
+export async function publishGitHub({ dir, name, title, key = '', dataDir = '', rebase = null, onStage = () => {}, ask = ghCli, hub = PAGES_HUB, probe = answers }) {
+  const gh = async (args, o) => {
+    const r = await ask(args, o)
+    if (!r.ok) throw Object.assign(new Error(`gh ${args[0]}: ${String(r.err || '').trim().split('\n').filter(Boolean).pop() || 'failed'}`), { stderr: String(r.err || '') })
+    return String(r.out).trim()
+  }
+  // a file that holds keys never goes up in a public site (engine/sourcehub.mjs keyFile)
+  const keys = files(dir).map(f => f.rel).filter(keyFile)
+  if (keys.length) throw new Error(`Not published. ${keys.length === 1 ? 'This file looks' : 'These files look'} like keys: ${keys.slice(0, 8).join(', ')}`)
+  const { login, owner } = await ownerFor(dataDir, ask).catch(err => {
+    throw err.status === 424 ? new Error('GitHub CLI is not signed in (run `gh auth login`), so the site is hosted on this computer only') : err
+  })
   onStage('repo')
   const claims = dataDir ? siteRepos(dataDir) : {}
-  const taken = new Set(Object.entries(claims).filter(([k, r]) => k !== key && r.split('/')[0].toLowerCase() === login.toLowerCase()).map(([, r]) => r.split('/')[1].toLowerCase()))
-  const { repo, fresh } = await pickRepo(login, name, { mine: claims[key] || '', taken })
-  const full = `${login}/${repo}`
+  const taken = new Set(Object.entries(claims).filter(([k, r]) => k !== key && r.split('/')[0].toLowerCase() === owner.toLowerCase()).map(([, r]) => r.split('/')[1].toLowerCase()))
+  const shared = owner !== login
+  const { repo, fresh } = await pickRepo(owner, name, { mine: claims[key] || '', taken, shared, check: r => gh(['api', `repos/${owner}/${r}`, '--jq', '.description // ""'], { timeout: 15000 }) })
+  const full = `${owner}/${repo}`
   if (dataDir && key) claimRepo(dataDir, key, full)
-  if (fresh) await gh(['repo', 'create', full, '--public', '--description', `${title} · ${MARK}`.slice(0, 340)])
-  // a project site lives at <login>.github.io/<repo>/ unless the account has its own domain
-  const guess = repo.toLowerCase() === `${login.toLowerCase()}.github.io` ? `https://${repo.toLowerCase()}/` : `https://${login.toLowerCase()}.github.io/${repo}/`
+  if (fresh) await gh(['repo', 'create', full, '--public', '--description', `${title} · ${MARK}`.slice(0, 340)]).catch(err => { throw new Error(`GitHub would not make ${full}: ${err.message.replace(/^gh repo: /, '')}`) })
+  // a project site lives at <owner>.github.io/<repo>/ unless the account has its own domain
+  const guess = repo.toLowerCase() === `${owner.toLowerCase()}.github.io` ? `https://${repo.toLowerCase()}/` : `https://${owner.toLowerCase()}.github.io/${repo}/`
   if (rebase) rebase(guess)
 
   onStage('push')
@@ -81,12 +102,13 @@ export async function publishGitHub({ dir, name, title, key = '', dataDir = '', 
     try {
       cpSync(dir, work, { recursive: true })
       writeFileSync(join(work, '.nojekyll'), '')
-      const git = args => run('git', ['-c', `user.name=${login}`, '-c', `user.email=${login}@users.noreply.github.com`, '-c', 'credential.helper=', '-c', 'credential.helper=!gh auth git-credential', ...args], { cwd: work, timeout: 120000 })
+      const git = args => run('git', ['-c', `user.name=${login}`, '-c', `user.email=${login}@users.noreply.github.com`, '-c', 'credential.helper=', '-c', 'credential.helper=!gh auth git-credential', '-c', `protocol.file.allow=${hub.file ? 'always' : 'never'}`, ...args], { cwd: work, timeout: 120000 })
       await git(['init', '-q', '-b', 'main'])
       await git(['add', '-A'])
       await git(['commit', '-q', '-m', `Publish ${title} from Swarm Studio`])
-      // the repo holds only the published site, so each publish replaces it
-      await git(['push', '-q', '-f', `https://github.com/${full}.git`, 'main'])
+      // the repo holds only the published site, so each publish replaces it: the one force push the Studio
+      // makes, only ever to a site repo this studio made for this build (pickRepo; docs/specs/45-intake.md)
+      await git(['push', '-q', '-f', hub.url(full), 'main'])
     } finally {
       rmSync(work, { recursive: true, force: true })
     }
@@ -113,8 +135,7 @@ export async function publishGitHub({ dir, name, title, key = '', dataDir = '', 
     status = Date.parse(at) >= pushed - 10000 ? st : ''
     if (status === 'errored') throw new Error(`GitHub Pages could not build ${full}`)
     if (status === 'built') {
-      const live = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(10000) }).then(r => r.ok).catch(() => false)
-      if (live) return { url, repo: full, fresh }
+      if (await probe(url)) return { url, repo: full, fresh }
     }
     await wait(3000)
   }

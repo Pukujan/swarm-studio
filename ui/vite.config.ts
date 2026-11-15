@@ -42,6 +42,8 @@ export const alias: AliasOptions = [
   { find: '@studio/edit', replacement: fileURLToPath(new URL('../web/edit/patches.js', import.meta.url)) },
   // where a message typed into a build's chat goes (web/route.js): the Design deck routes the same way
   { find: '@studio/route', replacement: fileURLToPath(new URL('../web/route.js', import.meta.url)) },
+  // where builds go on GitHub, typed in the chat ("publish to <organization>"): the same words in both apps (web/github.js)
+  { find: '@studio/github', replacement: fileURLToPath(new URL('../web/github.js', import.meta.url)) },
   // a page's picture, taken inside its frame and sized in a worker (web/capture.js, spec 36): the Overview photographs
   // a changed page the same way in both apps (src/screens/overview/Snapper.tsx)
   { find: '@studio/capture', replacement: fileURLToPath(new URL('../web/capture.js', import.meta.url)) }

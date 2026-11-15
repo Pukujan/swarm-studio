@@ -3,7 +3,7 @@
 import { routeMessage } from '../route.js'
 import { modeSend, mountChatMode, MODE_LINE } from '../chatmode.js'
 import { mountAgentsChip } from '../composer.js'
-import { githubDoor } from '../github.js'
+import { githubDoor, ownerSay } from '../github.js'
 import { zoomToSection } from './zoom.js'
 import { cam, S, els, setLabel, FRAME_W, commandOps, api, $, BOOT } from './core.js'
 import { syncSlots, bboxActive, fit, startGesture, gestureStep, toScreen, dockCell, agentTarget, DOCK, runBanter, drawWires, doing, setAuto, focusPage, slotFor } from './deck.js'
@@ -415,6 +415,14 @@ async function sendDock() {
   if (!nextRoute && await replaySay(els.brief.value)) return
   // a typed GitHub move is never a brief, in any mode and from any dock
   if (!nextRoute?.fresh && github.say(els.brief.value)) { nextRoute?.done?.(null); nextRoute = null; els.brief.value = ''; return }
+  // where builds go on GitHub ("publish to <organization>", "where do builds go"): taken only when the name is the
+  // person's account or one of their organizations, with or without a project open
+  const typed = els.brief.value
+  if (!nextRoute?.fresh && !BOOT.hosted && await ownerSay(typed, { api, said: t => feed(null, t, 'you'), answer: t => { botMsg(t) } })) {
+    nextRoute?.done?.(null); nextRoute = null
+    if (els.brief.value === typed) els.brief.value = ''
+    return
+  }
   // the Map, asked for in any mode ("show the map", "what's going on?", "show the enemy AI as a state chart"): shown
   // at once, before a mode or the room could take the words as a change for the builder
   if (!nextRoute && !talk.on && mapSay(els.brief.value.trim())) { els.brief.value = ''; return }

@@ -6,12 +6,17 @@
 //               `repo` as a name, or links `repo` as owner/name when that one is empty or already this project's
 //        pull   what is new in the linked repository (or the one it was brought in from), as the next version
 //        bring  a repository into this project, when it has no app or game source yet
+//   GET  /api/github/owner             -> where builds go on GitHub: { login, owner (null: the person's account),
+//        orgs: [{ login, can, why }], error } (engine/ghowner.mjs; Settings › You › GitHub, "publish to <org>")
+//   POST /api/github/owner { owner }   -> choose it: null or the login is the person's account; an organization must
+//        be one of theirs where they may make repositories. Answers the same view, or the reason in words
 // The answer comes at once with the job working; the sheet and the chat ask again until it is done. The person's
 // own gh login does it; no token is read or kept. The hosted studio has no such door (server/hosted.mjs: 403).
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { GITHUB, ghCli, ghLogin, pushSource, remoteHead, localHead, hasCommit, isBehind, changedUnder, repoName, readTarget, sourceLinks, rememberLink } from '../engine/sourcehub.mjs'
 import { parseRepo, cleanSub, KINDS } from '../engine/bringin.mjs'
+import { chooseOwner, ownerFor, ownerView, savedOwner } from '../engine/ghowner.mjs'
 
 const fail = (message, status = 400, more = {}) => Object.assign(new Error(message), { status, ...more })
 
@@ -77,6 +82,8 @@ export function sourceRoutes({ runsDir, dataDir, projects, readEvents, record, b
     }
     return {
       project: p.id, name: p.name, piece, pieces: [...srcs.keys()], run: src?.run || null, source: !!src, login: await login(),
+      // where a new repository would be made: the organization builds go to (Settings › You › GitHub), else null
+      owner: savedOwner(dataDir),
       suggest: repoName(src?.title || p.name),
       link: link ? { repo: link.repo, url: hub.page(link.repo), private: link.private !== false, pushed: link.pushed || null, pulled: link.pulled || null, fits } : null,
       origin: origin ? { repo: origin.repo, path: origin.path, url: hub.page(origin.repo), pulled: seen?.pulled || null } : null,
@@ -126,7 +133,8 @@ export function sourceRoutes({ runsDir, dataDir, projects, readEvents, record, b
       const fits = !link?.sha || await hasCommit(dir, link.sha, hub)
       if (link && !fits && !want.repo && !want.name) throw fail(`This version does not continue ${link.repo}, so it cannot go there. Give it a repository of its own.`, 409)
       start(key, 'push', async step => {
-        const out = await pushSource({ dir, link, want, title: src.title, hub, gh, step, onLink: l => rememberLink(dataDir, key, { repo: l.repo, private: l.private, branch: l.branch, made: l.made }) })
+        const out = await pushSource({ dir, link, want, title: src.title, hub, gh, step, ownerOf: async () => (await ownerFor(dataDir, gh)).owner,
+          onLink: l => rememberLink(dataDir, key, { repo: l.repo, private: l.private, branch: l.branch, made: l.made }) })
         rememberLink(dataDir, key, { repo: out.repo, sha: out.sha, pushed: now() })
         if (!out.same) record(src.run, { type: 'source:push', t: now(), run: src.run, repo: out.repo, sha: out.sha, private: out.private })
         return { repo: out.repo, url: out.url, private: out.private, message: out.same ? `Nothing new to push: ${out.repo} has it all` : `Pushed to ${out.repo}` }
@@ -168,6 +176,7 @@ export function sourceRoutes({ runsDir, dataDir, projects, readEvents, record, b
   }
 
   function handle(req, res, url) {
+    if (url.pathname === '/api/github/owner') return ownerRoute(req, res)
     const m = url.pathname.match(/^\/api\/projects\/([^/]+)\/github$/)
     if (!m) return false
     const say = err => json(res, err.status || 400, { error: String(err.message || err), ...(err.pull ? { pull: true } : {}), ...(err.keys ? { keys: err.keys } : {}) })
@@ -183,6 +192,19 @@ export function sourceRoutes({ runsDir, dataDir, projects, readEvents, record, b
       let input = {}
       try { input = JSON.parse(body || '{}') } catch {}
       act(decodeURIComponent(m[1]), input && typeof input === 'object' ? input : {}).then(st => json(res, 200, view(st)), say)
+    })
+    return true
+  }
+  // where builds go on GitHub: the person's account or one of their organizations
+  function ownerRoute(req, res) {
+    if (req.method === 'GET') { ownerView(dataDir, gh).then(v => json(res, 200, v)); return true }
+    if (req.method !== 'POST') return false
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 1e3) req.destroy() })
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      chooseOwner(dataDir, input?.owner ?? null, gh).then(() => ownerView(dataDir, gh)).then(v => json(res, 200, v), err => json(res, err.status || 400, { error: String(err.message || err) }))
     })
     return true
   }

@@ -305,6 +305,7 @@ flowchart LR
   LA1 --> LA4["Stats: views, plays, remixes"]
   SE --> SE1["Sound: mute, volume, voices"]
   SE --> SE11["You: the Feed account and its Goes to line"]
+  SE --> SE111["You › GitHub: where builds go (your account or an organization); one that can't be used says why"]
   SE --> SE12["Setup → the Setup sheet on Parts (models, tools, connectors, keys, programs)"]
   SE --> SE13["Lite mode: Auto, On, Off; what it does, what stops, when Auto turns it on"]
   SE --> SE14["Background: stop an app nobody is looking at (1, 2, 5, 15 min); close the studio when nothing runs (10, 20, 60 min, Never)"]
