@@ -231,5 +231,20 @@
    "why": "the next UI's Plan board shows no cards, waiting or named, for a talk that has answered nothing",
    "match": "the board shows no cards"
   }
+ },
+ "publish › One place to publish › Nothing to publish yet": {
+  "current": {
+   "why": "Publish is not disabled while the build is not done, and its page says nothing about why",
+   "match": [
+    "Publish is not disabled",
+    "its menu says nothing"
+   ]
+  }
+ },
+ "publish › Website › Checking hosts": {
+  "current": {
+   "why": "Website never reads Checking…: the current Studio does not ask the hosts' states (/api/publish) before showing it",
+   "match": "nothing reads Checking"
+  }
  }
 }

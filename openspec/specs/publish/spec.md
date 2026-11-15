@@ -83,6 +83,7 @@ person's Send.
 - **WHEN** the person presses Post on the X card
 - **THEN** X's own share page opens with the text filled in; nothing is posted until the person posts it there
 - Gate: `manual`
+- Manual: the X card is part of the launch kit, which is offered only for a live link, and the test Studio never deploys
 
 #### Scenario: A Discord message
 - **WHEN** the person presses Post on the Discord card
@@ -94,6 +95,7 @@ person's Send.
 - **WHEN** Hermes has no Discord gateway
 - **THEN** the card's Post is disabled and reads `Connect Discord in Hermes to send`
 - Gate: `manual`
+- Manual: the Discord card is part of the launch kit, which is offered only for a live link, and the test Studio never deploys; its gateway is Hermes's, which the test Studio runs without
 
 ### Requirement: The launch kit only for what is there
 
