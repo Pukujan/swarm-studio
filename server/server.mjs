@@ -27,7 +27,7 @@ import { reviewPage, fixSection, routeComment, reviewAgain, REVIEW_PASS, REVIEW_
 import { lintSection } from '../engine/lint/index.mjs'
 import { cleanMarks, openMarks, nextMarkId, readMarksMessages, parseReads, fixText, markLine } from '../engine/marks.mjs'
 import { handChanges, keepHand } from '../engine/handedit.mjs'
-import { exportRun, snapshot } from '../engine/export.mjs'
+import { exportRun, exportPages, snapshot } from '../engine/export.mjs'
 import { seoPass, currentSeo, cleanSeo, thumbOf } from '../engine/seo.mjs'
 import { seoAsk, lookAsk } from '../web/route.js'
 import { lookEdits, themeNow } from '../engine/lookask.mjs'
@@ -1944,19 +1944,28 @@ const storyRoute = storyRoutes({
     trace: { kind: 'story' }, model: modelFor('planner'), maxTokens: 1400, temperature: 0.5, signal: AbortSignal.timeout(60000),
     extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
   })).text : null,
-  // the page shots a beat's screen uses: a fresh export, every page at desktop and phone size
-  shots: async id => {
+  // the page shots a beat's screen uses: the pages asked for (a story's few), at desktop and phone size. Run after
+  // the story's answer (server/story.mjs later), never on a request (issue #565)
+  shots: async (id, want = null) => {
     const events = readEvents(id)
     if (!events) return []
-    // the newest export on disk when there is one (Post to Feed and ⬇ Export leave one); else a fresh one
+    const name = nameFor(id)?.name, pages = snapshot(events, [], { name }).pages
+    // the newest export on disk when there is one (Post to Feed and ⬇ Export leave one); else the pages alone, in the
+    // story's own folder: no search pass, no zip, and never the export Publish reads
     const changed = events.findLast(e => e.type === 'layer:done' || e.type === 'theme' || e.type === 'image')?.t || 0
     const last = events.findLast(e => e.type === 'export' && e.t >= changed && e.dir && Array.isArray(e.html) && existsSync(join(e.dir, 'html', e.html[0] || '')))
-    const out = last ? { dir: last.dir, html: last.html } : await exportRun({ events, runId: id, runDir: join(runsDir, id), sections: [], name: nameFor(id)?.name, fill: fillExport(id) })
+    const out = last ? { dir: last.dir, html: last.html } : await exportPages({ events, runId: id, runDir: join(runsDir, id), outDir: join(runsDir, id, 'story', 'site'), name, fill: fillExport(id) })
+    const files = out.html.filter((f, i) => !want || want.includes(pages[i]?.id))
     const { pageShots } = await import('../engine/pageshots.mjs')
-    const got = await pageShots({ htmlDir: join(out.dir, 'html'), files: out.html, dataDir })
-    const pages = snapshot(events, [], { name: nameFor(id)?.name }).pages
-    return out.html.map((file, i) => { const s = got.shots.find(x => x.file === file) || {}; return { page: pages[i]?.id, desktop: s.shot, phone: s.phoneShot } }).filter(s => s.page)
-  }
+    const got = await pageShots({ htmlDir: join(out.dir, 'html'), files, dataDir })
+    return out.html.map((file, i) => { const s = got.shots.find(x => x.file === file) || {}; return { page: pages[i]?.id, desktop: s.shot, phone: s.phoneShot } }).filter(s => s.page && (s.desktop || s.phone))
+  },
+  // a page's saved picture of how it looks now (spec 36's snapshots, taken by the browser that showed it)
+  savedShot: id => {
+    const now = snapsOf().list(id, readEvents(id) || [])
+    return page => { const u = now.pages[page]?.f || now.pages[page]?.s; return u ? snapsOf().file(id, u.split('/').pop()) : null }
+  },
+  notify: (id, type, data) => broadcast({ type, run: id, t: Date.now(), ...data })
 })
 // the Deck kit (docs/specs/35-open-design.md section 7): its slides written by the planner, through Hermes
 const decks = deckRoutes({
