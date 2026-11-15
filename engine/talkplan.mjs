@@ -9,6 +9,7 @@
 import { familyOf, sizeOf, titleFrom, FAMILIES, FAMILY_IDS, SIZES, planSummary } from './planshape.mjs'
 import { planFromAnswers, planPrice } from './plan.mjs'
 import { askedOf, askOptions, pickOptions, readAnswer, recommend, ASK_TEXT, PICK_TEXT, GO_TEXT, SKIPS } from './askfirst.mjs'
+import { planFacts, nextStep, checkClaims, lockLabel } from './gamestep.mjs'
 
 // Talk first: a person who says "don't build yet", "let's talk", "grill me first" or asks the crew a
 // question gets a conversation with the planner (Hermia) in the Design deck's chat, on a project
@@ -271,12 +272,21 @@ const TURN_PROMPT = `You are Hermia, the planner of a crew of AI agents that mak
 {"say": one or two short plain sentences (answer their question first if they asked one),
  "decide": {key: value} only for what their words clearly decided (keys: ${GAME_KEYS.join(', ')}; family is one of ${JSON.stringify(FAMILY_IDS)}, size one of ${JSON.stringify(SIZES)}, art "2d" or "3d", engine one of ${JSON.stringify(ENGINE_IDS)}),
  "ask": the one question that matters most now, or null when nothing important is open: {"key", "text", "options": [{"value", "label", "why"}]} with 2 to 4 options, the one you recommend first; "why" is what you get, what it costs and how long it takes, in one short clause}
-Never ask what the idea or the decisions already answer. Art is 2D unless the person wants 3D; 3D means Meshy credits. No markdown.`
+Never ask what the idea or the decisions already answer. Art is 2D unless the person wants 3D; 3D means Meshy credits. No markdown.
+Never say that anything is locked, painted, picked, started or underway unless "What has really happened" says so: you cannot paint, lock or pick yourself; the person's buttons do. Never offer an action as an option (paint, lock, install, build): those are the person's buttons, given separately.`
 
-async function plannerTurn(chat, env, model, fallback) {
+// what has really happened to a game chat's plan, for the planner (engine/gamestep.mjs planFacts)
+export function factsText(f) {
+  if (!f) return 'What has really happened: no plan yet. Nothing is locked, painted or picked.'
+  const sheets = f.sheets.map(s => `${s.name} sketch sheet: ${s.state === 'none' ? 'not painted' : s.state}${s.state === 'done' ? `, picks ${s.picks.length ? s.picks.map(c => c + 1).join(', ') : 'none yet'}` : ''}`).join('; ')
+  return `What has really happened: the plan is ${f.locked ? 'locked' : 'NOT locked'}. ${sheets}. ${f.pieces.what}: ${f.pieces.done} of ${f.pieces.total} painted. Painting now: ${f.painting.length ? f.painting.join(', ') : 'nothing'}.`
+}
+
+async function plannerTurn(chat, env, model, fallback, facts = null) {
   if (!model) return null
   const draft = draftOf(chat, env)
   const messages = [{ role: 'system', content: TURN_PROMPT }, { role: 'user', content: [
+    factsText(facts),
     `Idea: ${planInput(chat).idea}`,
     `Decided: ${JSON.stringify(Object.fromEntries(Object.entries(chat.decisions).map(([k, v]) => [k, v.value])))}`,
     `The plan so far: ${planSummary(draft)}`,
@@ -289,7 +299,8 @@ async function plannerTurn(chat, env, model, fallback) {
 
 // say(chat, { said, pick }, { model, env }): the person's turn (typed, or a chip picked), then the planner's.
 // Changes the chat in place and returns the planner's turn. model(messages) -> text, or null offline.
-export async function say(chat, { said = '', pick = '' } = {}, { model = null, env = {}, now = Date.now() } = {}) {
+// plan: the game chat's plan as the server has it (once there is one): the turn ends with its real next step
+export async function say(chat, { said = '', pick = '' } = {}, { model = null, env = {}, now = Date.now(), plan = null } = {}) {
   chat.decisions ||= {}
   chat.turns ||= []
   const last = [...chat.turns].reverse().find(t => t.who === 'planner')
@@ -316,9 +327,27 @@ export async function say(chat, { said = '', pick = '' } = {}, { model = null, e
   }
   if (YOU_DECIDE.test(text)) chat.lead = 'planner'
   else if (chat.turns.filter(t => t.who === 'person').length > 1) chat.lead = 'person'
-  // any change to a decision reopens a locked spec
+  // any change to a decision reopens a locked spec, and the next lock re-plans
   if (changed && chat.state === 'locked') { chat.state = 'open'; if (chat.spec) chat.spec.lockedAt = null }
+  if (changed && chat.plan) chat.stale = true
+  if (plan && !chat.stale) return planTalk(chat, { model, env, now, plan })
   return plannerSays(chat, { model, env, now, changed, asked: /\?\s*$/.test(text) && !option, first: chat.turns.filter(t => t.who === 'person').length === 1 })
+}
+
+const NO_PLAN = { locked: false, sheets: [], pieces: { done: 0, total: 0 }, mocks: { done: 0 }, backdrops: { done: 0 }, painting: [] }
+
+// A chat with its plan: the planner answers, without the sentences that claim what the plan file denies, and the
+// turn ends with the one real next step and its buttons (engine/gamestep.mjs). Its own questions and options are
+// dropped: what is open now is what the plan waits on.
+async function planTalk(chat, { model, env, now, plan }) {
+  const facts = planFacts(plan, { ...env, skip: chat.skip || [] })
+  const step = nextStep(chat, plan, env)
+  const ai = await plannerTurn(chat, env, model, null, facts)
+  const { text: said } = checkClaims(ai?.say || '', facts)
+  const turn = { id: nextId(chat), who: 'planner', at: now, text: clean(`${said ? `${said} ` : ''}${step.text}`, 1500), options: step.options, step: true, plan: plan.id, refs: [], marks: [], layers: [], made: [], reads: [],
+    ...(step.wait ? { wait: true } : {}), ...(step.sheet ? { sheet: step.sheet } : {}), ...(step.price ? { price: step.price } : {}) }
+  chat.turns.push(turn)
+  return turn
 }
 
 async function plannerSays(chat, { model, env, now, first, changed = true, asked: question = false }) {
@@ -330,7 +359,9 @@ async function plannerSays(chat, { model, env, now, first, changed = true, asked
   open = openQuestions(chat, env)
   const draft = draftOf(chat, env)
   const lead = first ? `${firstSentence(planSummary(draft))} ` : ''
-  const said = ai?.say ? `${ai.say} ` : ''
+  // before the plan exists nothing is locked, painted or picked: a sentence that says so is cut
+  const kept = ai?.say ? checkClaims(ai.say, NO_PLAN).text : ''
+  const said = kept ? `${kept} ` : ''
   let q = null
   if (ai?.ask && !chat.decisions[ai.ask.key] && asked(chat).size < MAX_ASKS) q = { key: ai.ask.key, text: ai.ask.text, options: ai.ask.options.map(o => opt(ai.ask.key, o.value, o.label, o.why)) }
   else if (open[0] && chat.lead !== 'planner') q = open[0]
@@ -345,7 +376,8 @@ async function plannerSays(chat, { model, env, now, first, changed = true, asked
     chat.title ||= draft.title
     const { pictures, credits } = chat.spec.cost || {}
     const priceLine = pictures == null ? '' : ` Price: about ${pictures} pictures${credits ? ` and ${credits} Meshy credits` : ', no credits'}.`
-    Object.assign(turn, { text: clean(`${said}${chat.spec.brief}${priceLine}`, 1500), options: [{ id: 'lock', label: 'Lock', why: '', made: [] }, { id: 'talk', label: 'Keep talking', why: '', made: [] }] })
+    const price = { images: pictures ?? 0, credits: credits ?? 0 }
+    Object.assign(turn, { text: clean(`${said}${chat.spec.brief}${priceLine} Lock it to start painting, or keep talking.`, 1500), price, options: [{ id: 'lock', label: lockLabel(price), why: '', made: [] }, { id: 'talk', label: 'Keep talking', why: '', made: [] }] })
   }
   chat.turns.push(turn)
   return turn

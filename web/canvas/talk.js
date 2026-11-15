@@ -1,6 +1,6 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): talks before a build: talk first, the game talk, Chats.
-import { els, api, $, ico, commandOps } from './core.js'
+import { els, api, $, ico, commandOps, BASE } from './core.js'
 import { viewing, setViewing } from './replay.js'
 import { fresh, links } from './base.js'
 import { botMsg, feed } from './panels.js'
@@ -171,25 +171,63 @@ async function gameSay({ said = '', pick = '', label = '' }) {
     talk.chat = j.chat.id
     talk.said.push({ who: 'hermia', text: j.turn.text })
     gameActs(botMsg(j.turn.text), j.turn)
-    if (j.draft) window.swarmCosmos?.planDraft?.(j.draft)
+    // an action changed the plan (server/talk.mjs): the board opens on it, or shows what changed
+    if (j.plan?.id) { const fresh = talk.plan !== j.plan.id; talk.plan = j.plan.id; if (fresh) window.swarmCosmos?.plan?.(j.plan.id, true); else window.swarmCosmos?.planAt?.(j.plan.id, {}) }
+    else if (j.draft) window.swarmCosmos?.planDraft?.(j.draft)
+    if (j.turn.wait) gameWatch(j.turn.text)
   } catch (err) { if (talk.on) botMsg(err.message || 'Hermia did not answer. Say it again.') } finally { talk.busy = false; wait.remove() }
 }
+// While something paints, ask for the next step every few seconds; when it moves on, Hermia says it with its buttons
+function gameWatch(was) {
+  const chat = talk.chat
+  const tick = async () => {
+    if (!talk.on || talk.chat !== chat) return
+    const j = await api(`/api/talk/${encodeURIComponent(chat)}`).then(r => r.ok ? r.json() : null).catch(() => null)
+    if (!talk.on || talk.chat !== chat || !j?.step) return
+    if (j.step.wait) return void setTimeout(tick, 3000)
+    if (j.step.text === was) return
+    els.feed.querySelectorAll('.talk-acts, .talk-sheet').forEach(x => x.remove())
+    talk.said.push({ who: 'hermia', text: j.step.text })
+    gameActs(botMsg(j.step.text), j.step)
+    if (talk.plan) window.swarmCosmos?.planAt?.(talk.plan, {})
+  }
+  setTimeout(tick, 3000)
+}
+// the sketch sheet that waits on picks, in the turn: a click on a design picks it (its number's button)
+function sheetIn(item, sheet, opts, pick) {
+  if (!sheet?.src) return
+  const [cols, rows] = sheet.grid || [5, 4]
+  const box = document.createElement('div')
+  box.className = 'talk-sheet'
+  box.setAttribute('role', 'img')
+  box.setAttribute('aria-label', 'Sketch sheet')
+  box.innerHTML = `<img src="${esc(BASE + sheet.src)}" alt="" draggable="false">${(sheet.picks || []).map(c => `<i style="left:${(c % cols) / cols * 100}%;top:${Math.floor(c / cols) / rows * 100}%;width:${100 / cols}%;height:${100 / rows}%"></i>`).join('')}`
+  box.onclick = e => {
+    const r = box.getBoundingClientRect()
+    const cell = Math.min(rows - 1, Math.floor((e.clientY - r.top) / r.height * rows)) * cols + Math.min(cols - 1, Math.floor((e.clientX - r.left) / r.width * cols))
+    const o = opts.find(x => x.id.startsWith(`do:cell:${sheet.id}:${cell}:`) || x.id === `do:cell:${sheet.id}:${cell}`)
+    if (o) pick(o)
+  }
+  item.append(box)
+}
 // the open question's options, or Lock and Keep talking under the spec
+// a plan's next step (server/talk.mjs): Lock and every action are buttons in the turn, and run on the server
 function gameActs(item, turn) {
   const opts = turn?.options || []
   if (!item || !opts.length) return
-  const spec = opts.some(o => o.id === 'lock')
+  const spec = opts.some(o => o.id === 'lock' || o.id.startsWith('do:'))
+  const pick = o => { if (!talk.busy) gameSay({ pick: o.id, label: o.label }) }
+  sheetIn(item, turn.sheet, opts, pick)
   const acts = document.createElement('div')
   acts.className = spec ? 'chips talk-acts' : 'talk-acts talk-opts'
-  acts.innerHTML = opts.map((o, i) => `<button type="button" data-pick="${esc(o.id)}"${spec && !i ? ' class="primary"' : ''}>${esc(o.label)}${!spec && o.why ? `<small>${esc(o.why)}</small>` : ''}</button>`).join('')
+  acts.innerHTML = opts.map((o, i) => `<button type="button" data-pick="${esc(o.id)}"${spec && !i && !o.id.startsWith('do:cell:') ? ' class="primary"' : ''}>${esc(o.label)}${!spec && o.why ? `<small>${esc(o.why)}</small>` : ''}</button>`).join('')
   acts.onclick = e => {
     // @ts-ignore
     const b = e.target.closest('[data-pick]')
     const o = b && opts.find(x => x.id === b.dataset.pick)
     if (!o || talk.busy) return
-    if (o.id === 'lock') return gameLock()
     if (o.id.startsWith('start:')) return gameStart(o, acts, b)
-    gameSay({ pick: o.id, label: o.label })
+    pick(o)
   }
   item.append(acts)
 }
@@ -198,9 +236,11 @@ async function gameResume(last) {
   if (!j?.chat || !talk.on) return
   const turn = j.chat.turns.at(-1)
   talk.plan = j.chat.plan || null
-  if (turn?.who === 'planner' && j.chat.state !== 'locked') gameActs(last, turn)
-  // locked: where to go next, from what is painted so far
-  else if (j.chat.state === 'locked' && j.starts?.length) gameActs(last, { options: j.starts })
+  // a chat with its plan: the real next step from the plan file, said again if her last words were not it
+  if (j.step) {
+    gameActs(turn?.who === 'planner' && turn.text === j.step.text && last ? last : botMsg(j.step.text), j.step)
+    if (j.step.wait) gameWatch(j.step.text)
+  } else if (turn?.who === 'planner') gameActs(last, turn)
   if (j.draft && !j.chat.plan) window.swarmCosmos?.planDraft?.(j.draft)
   els.brief.focus({ preventScroll: true })
 }
@@ -211,17 +251,11 @@ function gameStart(o, acts, b) {
   acts.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b))
   window.swarmCosmos?.planAt?.(talk.plan, { focus: o.focus, select: o.select })
 }
-// only a locked spec builds: the plan is made (or re-planned, the same plan) and the board opens on it
-export async function gameLock() {
+// the plan's Lock, from the board's button while the chat talks: the same lock as the chat's (server/talk.mjs), its
+// price and what comes next said in the chat
+export function gameLock() {
   if (talk.busy || !talk.chat) return
-  els.feed.querySelectorAll('.talk-acts').forEach(x => x.remove())
-  talk.busy = true
-  try {
-    const j = await talkPost(`/api/talk/${encodeURIComponent(talk.chat)}/lock`)
-    botMsg('Locked')
-    if (j.plan?.id) { talk.plan = j.plan.id; window.swarmCosmos?.plan?.(j.plan.id, true) }
-    if (j.turn?.text) { talk.said.push({ who: 'hermia', text: j.turn.text }); gameActs(botMsg(j.turn.text), j.turn) }
-  } catch (err) { botMsg(err.message) } finally { talk.busy = false }
+  return gameSay({ pick: 'lock', label: 'Lock' })
 }
 // under Hermia's latest answer: Build, which writes the brief first (nothing starts yet)
 function talkActs(item) {

@@ -193,6 +193,7 @@ export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onP
   handle.fromTalk = fromTalk
   // a plan as the board shows it, or null
   handle.get = id => { const p = store.get(id); return p ? view(p) : null }
+  handle.act = (id, sub, input) => act(id, sub, input)
   return handle
   function handle(req, res, url) {
     if (servePicture(req, res, url)) return true
@@ -229,45 +230,49 @@ export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onP
     if (req.method === 'GET' && sub === 'build') { json(res, 200, { gate: plan.gate, build: plan.build }); return true }
     if (req.method !== 'POST') { json(res, 405, { error: 'POST' }); return true }
     body(req).then(async input => {
-      try {
-        const ready = PAINTS.has(sub) ? !!(paint && await paint.ready()) : true
-        // "this is not what I asked for": the planner reads the idea again with the note, then the plan is re-shaped in place
-        const hint = sub === 'replan' ? await hintFor(`${store.get(id)?.idea || ''}. ${String(input.note || '').slice(0, 300)}`, store.get(id)?.given || {}) : null
-        const noPainter = () => Object.assign(new Error('sign in an image model first'), { status: 503 })
-        if (!ready && sub !== 'build') throw noPainter()
-        // read again after every wait: a picture may have landed meanwhile; nothing below awaits
-        const plan = store.get(id)
-        let after = null
-        if (sub === 'card') editCard(plan, String(input.card || ''), input.body || {})
-        else if (sub === 'systems') setSystems(plan, input || {})
-        else if (sub === 'starter') editStarter(plan, { key: input.key, value: input.value, system: input.system, on: input.on })
-        else if (sub === 'title') { const t = String(input.title || '').trim().slice(0, 80); if (t) { plan.title = t; plan.titleSet = true } }
-        else if (sub === 'replan') {
-          if (building.has(plan.id)) throw Object.assign(new Error('the build is running'), { status: 409 })
-          queues.delete(plan.id)
-          replan(plan, { note: String(input.note || '') }, env(), hint)
-        }
-        else if (sub === 'pick') pickCell(plan, input)
-        else if (sub === 'template') {
-          const t = templates.save(planTemplate(plan, { name: input.name }), files(plan.id))
-          return json(res, 200, { template: { id: t.id, name: t.name, parts: t.parts.length } })
-        }
-        else if (sub === 'lock') lockPlan(plan, { credits: input.credits, testFirst: input.testFirst === true })
-        else if (sub === 'build') {
-          assertLocked(plan)
-          if (!ready) throw noPainter()
-          if (building.has(plan.id)) throw Object.assign(new Error('the build is running'), { status: 409 })
-          plan.build ||= { characters: [], props: [], animations: null }
-          plan.build.state = 'building'
-          after = () => setImmediate(() => runBuild(plan.id))
-        } else if (art[sub]) after = art[sub](plan, input)
-        else if (hooks[sub]) await hooks[sub](plan, input, store)
-        else return json(res, 404, { error: 'no such action' })
-        store.save(plan)
-        if (typeof after === 'function') after()
-        json(res, 200, view(plan))
-      } catch (err) { fail(res, err) }
+      try { json(res, 200, await act(id, sub, input)) } catch (err) { fail(res, err) }
     })
     return true
+  }
+  // One action on a plan, as its POST route runs it: the board's buttons and the planner chat's options
+  // (server/talk.mjs) both come here, so a button in the chat does exactly what the board's does.
+  async function act(id, sub, input = {}) {
+    if (!store.get(id)) throw Object.assign(new Error('no such plan'), { status: 404 })
+    const ready = PAINTS.has(sub) ? !!(paint && await paint.ready()) : true
+    // "this is not what I asked for": the planner reads the idea again with the note, then the plan is re-shaped in place
+    const hint = sub === 'replan' ? await hintFor(`${store.get(id)?.idea || ''}. ${String(input.note || '').slice(0, 300)}`, store.get(id)?.given || {}) : null
+    const noPainter = () => Object.assign(new Error('sign in an image model first'), { status: 503 })
+    if (!ready && sub !== 'build') throw noPainter()
+    // read again after every wait: a picture may have landed meanwhile; nothing below awaits
+    const plan = store.get(id)
+    let after = null
+    if (sub === 'card') editCard(plan, String(input.card || ''), input.body || {})
+    else if (sub === 'systems') setSystems(plan, input || {})
+    else if (sub === 'starter') editStarter(plan, { key: input.key, value: input.value, system: input.system, on: input.on })
+    else if (sub === 'title') { const t = String(input.title || '').trim().slice(0, 80); if (t) { plan.title = t; plan.titleSet = true } }
+    else if (sub === 'replan') {
+      if (building.has(plan.id)) throw Object.assign(new Error('the build is running'), { status: 409 })
+      queues.delete(plan.id)
+      replan(plan, { note: String(input.note || '') }, env(), hint)
+    }
+    else if (sub === 'pick') pickCell(plan, input)
+    else if (sub === 'template') {
+      const t = templates.save(planTemplate(plan, { name: input.name }), files(plan.id))
+      return { template: { id: t.id, name: t.name, parts: t.parts.length } }
+    }
+    else if (sub === 'lock') lockPlan(plan, { credits: input.credits, testFirst: input.testFirst === true })
+    else if (sub === 'build') {
+      assertLocked(plan)
+      if (!ready) throw noPainter()
+      if (building.has(plan.id)) throw Object.assign(new Error('the build is running'), { status: 409 })
+      plan.build ||= { characters: [], props: [], animations: null }
+      plan.build.state = 'building'
+      after = () => setImmediate(() => runBuild(plan.id))
+    } else if (art[sub]) after = art[sub](plan, input)
+    else if (hooks[sub]) await hooks[sub](plan, input, store)
+    else throw Object.assign(new Error('no such action'), { status: 404 })
+    store.save(plan)
+    if (typeof after === 'function') after()
+    return view(plan)
   }
 }

@@ -214,6 +214,8 @@ C.plan = (id, fresh = false) => { C.planFresh = fresh; C.go('plan', id) }
 // a part of a plan, from the chat's "where to start" (spec 27): the board on that plan, the part in view and selected
 C.planAt = async (id, { focus, select } = {}) => {
   if (C.mode !== 'plan' || C.planView.id !== id || C.planView.drafting) C.go('plan', id)
+  // the same plan: read it again, the chat may just have changed it (a lock, a pick, a picture started)
+  else await C.planView.reload()
   await C.planView.ready
   if (select) C.planView.select(select)
   if (focus) C.planView.focus(focus)

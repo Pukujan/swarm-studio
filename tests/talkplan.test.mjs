@@ -277,7 +277,11 @@ test('/api/talk: the ants talk over HTTP, locked into a plan; locking again re-p
     const first = await post('/api/talk', { kind: 'game', said: ANTS })
     const id = first.data.chat.id
     assert.match(first.data.turn.text, /Godot 4 is not installed/)
-    assert.equal((await post(`/api/talk/${id}/lock`)).status, 409)
+    // Lock with a question still open: no plan, and the question is asked with its options
+    const early = await post(`/api/talk/${id}/lock`)
+    assert.equal(early.status, 200)
+    assert.equal(early.data.chat.plan, null)
+    assert.ok(early.data.turn.options.length >= 2)
     for (const said of ANTS_TALK) assert.equal((await post(`/api/talk/${id}`, { said })).status, 200)
     const locked = await post(`/api/talk/${id}/lock`)
     assert.equal(locked.status, 200)
@@ -285,14 +289,16 @@ test('/api/talk: the ants talk over HTTP, locked into a plan; locking again re-p
     assert.deepEqual([plan.title, plan.shape.family, plan.shape.art, plan.price.credits], ['Army of Ants', 'rts', '2d', 0])
     assert.equal(locked.data.chat.plan, plan.id)
     assert.equal(locked.data.chat.state, 'locked')
-    // the planner says where to start: the ants' units or map, never character creation
-    assert.match(locked.data.turn.text, /begin with the units/)
-    // (tiny: the board has two sheets, units and buildings, so no map sheet to open)
-    assert.deepEqual(locked.data.starts.map(o => o.id), ['start:units', 'start:design', 'start:slice'])
+    // the chat's Lock is the board's: the gate is locked at the price, and the answer ends with the next real step,
+    // the ants' units first, never character creation
+    assert.equal(locked.data.plan.gate.locked, true)
+    assert.match(locked.data.turn.text, /^Locked at about \d+ pictures, no credits\. Next: the Units sketch sheet/)
+    assert.deepEqual(locked.data.turn.options.map(o => o.id), ['do:sheet:units'])
     // the chat survives: read back from disk, with the parts to work on next
     const back = await fetch(`${base}/api/talk/${id}`).then(r => r.json())
-    assert.equal(back.chat.turns.length, 9)
+    assert.equal(back.chat.turns.length, 12)
     assert.deepEqual(back.starts.map(o => o.focus), ['sheet:units', 'cards', 'mock:battle'])
+    assert.deepEqual(back.step.options.map(o => o.id), ['do:sheet:units'])
     // change a decision, lock again: the same plan id, re-planned
     await post(`/api/talk/${id}`, { said: 'make it 3d' })
     const again = await post(`/api/talk/${id}/lock`)

@@ -32,6 +32,11 @@ job installs the cask and checks that the app is found with `PATH=/usr/bin:/bin`
 **Not installed.** If the plan names Godot and none is found, the chat offers "Godot (install it first)" or "The
 browser for now" (engine/talkplan.mjs:207-208); the plan says to install Godot 4 (engine/planshape.mjs:365). At build
 time it falls back to the browser and says so in a step (engine/appjob.mjs:409-412). Swarm never downloads Godot (README.md:219).
+Once a game plan is locked, the chat's next step asks the same thing with two buttons, **Install Godot 4** and
+**Browser is fine** (engine/gamestep.mjs `nextStep`). Install Godot 4 checks the computer again (`godotCheck` in
+server/server.mjs, passed to server/talk.mjs); if Godot is still missing it says where to get it and offers
+**Check again**. Browser is fine sets the plan's engine to the browser, by the person, and keeps the plan locked
+when that costs no credits.
 
 **Two paths.**
 1. **Godot-first** (the big game): `godotFirst(spec)` is true when the spec's target, answers or `starter.engine`

@@ -114,7 +114,9 @@ export function PlanSections({ plan: p, sel, cell, writing, onSelect, onPick }: 
           <Section name="sheets" label="Sketches" className="max-w-[700px] gap-x-4 gap-y-[30px]">
             {sheetsOf(p).map(([k, n]) => {
               const s = (p.sheets ?? []).find(x => x.kind === k)
-              return slot(`sheet:${k}`, 'sheet', n, s, s?.state === 'done' ? <Rings sheet={s} on={sel === `sheet:${k}` ? cell : null} /> : null, sheetPress(s))
+              // an empty sheet says what it waits on: the crew's cursor is only on a slot that really paints
+              const wait = !s || s.state === 'failed' ? <span className="pointer-events-none absolute inset-0 grid place-items-center font-body text-xs text-muted">Not painted</span> : null
+              return slot(`sheet:${k}`, 'sheet', n, s, s?.state === 'done' ? <Rings sheet={s} on={sel === `sheet:${k}` ? cell : null} /> : wait, sheetPress(s))
             })}
           </Section>
         )}

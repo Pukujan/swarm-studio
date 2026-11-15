@@ -76,6 +76,7 @@ body.cosmos-plan .crew-layer, body.cosmos-plan .cbox { display: none; }
 @keyframes pl-sheen { from { background-position: 130% 0; } to { background-position: -130% 0; } }
 @media (prefers-reduced-motion: reduce) { .pl-work { animation: none; } }
 /* a picked cell on a sheet: a ring, the noted one solid */
+.pl-wait { position: absolute; inset: 0; display: grid; place-items: center; font: 500 12px var(--body); color: var(--muted); pointer-events: none; }
 .pl-ring { position: absolute; box-sizing: border-box; border: 2px solid var(--accent); border-radius: 3px; pointer-events: none; }
 .pl-ring.on { box-shadow: 0 0 0 2px var(--void), 0 0 0 4px var(--accent); }
 .pl-picks { display: flex; flex-wrap: wrap; gap: 6px; }

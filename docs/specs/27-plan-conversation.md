@@ -227,6 +227,25 @@ picture of the Ant worker on magenta.
 - A part that is already painted drops out. A locked game chat reopened from Chats shows the parts left
   (`starts` on `GET /api/talk/:id`), so the next suggestion follows from what is done.
 
+### Slice 6, built (2026-11-14): one lock, every step in the chat
+
+Seen in Rank Juggler: the chat said "Locked" and "keep painting" while the plan gate was open and nothing had
+been painted, and a crew cursor sat on an empty slot.
+- The chat's lock and the plan gate are one state. In a game plan, Lock, "lock", "do it" and "go" lock the
+  real plan at its real price (server/talk.mjs `lockAll`, `plans.act`). A plan is made again only when the
+  decisions changed after it was made (`chat.stale`).
+- After every action the server works out the one next step (engine/gamestep.mjs `nextStep`): lock, Godot
+  or browser, each sketch sheet (paint it, then pick), the close-ups or sprites, the mocks, the backdrops.
+  It ends Hermia's turn as one line plus buttons, and every button runs its action
+  (`lock`, `do:sheet:<kind>`, `do:cell:<sheet>:<i>:<hero>`, `do:skip:<kind>`, `do:paint`, `do:mocks`,
+  `do:backdrops`, `do:godot`, `do:browser`). A sheet waiting on picks is shown in the chat; a click on it, a
+  number button, or typed picks ("hero 1 is 4, hero 2 is 7") pick on the real sheet. A failed action says
+  "Nothing happened: …".
+- The planner is told what has really happened (`factsText`), and sentences that claim a lock, a pick, or
+  painting that did not happen are cut (`checkClaims`). Tests: tests/rankjuggler.test.mjs replays the
+  Rank Juggler transcript.
+- The pet never rests on a picture slot (web/pet.js); an empty slot says Not painted.
+
 ## Slices
 
 1. `engine/talkplan.mjs` and the routes, with the game ending into `planStore.create`. Tests: the ants talk

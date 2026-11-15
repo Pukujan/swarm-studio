@@ -1700,7 +1700,10 @@ planPaint.ready = async () => !!ckffCreds() || !!(await imageChoice())
 // The build (spec 21) spends Meshy credits only on a locked plan, inside the price it was locked at.
 // whether Godot 4 is on this machine (engine/port.mjs loads the game modules, so it is read once, late)
 let godotHere
-import('../engine/port.mjs').then(m => { godotHere = !!m.godotBin() }).catch(() => {})
+let godotBinOf = null
+import('../engine/port.mjs').then(m => { godotBinOf = m.godotBin; godotHere = !!m.godotBin() }).catch(() => {})
+// "Install Godot 4" in the planner chat looks again (the person may have just installed it); Swarm never downloads it
+const godotCheck = () => { if (godotBinOf) godotHere = !!godotBinOf(); return !!godotHere }
 const plans = planRoutes({
   dataDir, builtInTemplates: [join(root, 'games', 'ares', 'plan.json')], paint: planPaint, make: { character: planMakeCharacter, key: () => planMeshyKey() },
   // the planner reads the idea's genre family; Godot asked for is said in the plan, and so is a missing Godot
@@ -1710,7 +1713,7 @@ const plans = planRoutes({
 // The planner conversation (docs/specs/27-plan-conversation.md): decide together in the left chat, then lock.
 // A locked game chat makes its plan through the Plan board's routes above.
 const talks = talkRoutes({
-  dataDir, plans, env: () => ({ godot: godotHere }),
+  dataDir, plans, env: () => ({ godot: godotHere }), godotCheck,
   model: () => models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
     trace: { kind: 'talk' }, model: modelFor('planner'), maxTokens: 700, temperature: 0.3, signal: AbortSignal.timeout(60000),
     extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages

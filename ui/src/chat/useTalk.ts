@@ -9,7 +9,7 @@
 // the start chips after a lock stay, so another part of the plan is one click away.
 import { useCallback, useReducer, useRef, useState } from 'react'
 import { base, chatApi, getJson, postJson } from './api'
-import type { BuildRoute, ChatApi, ChatChip, ChatGo, ChatKind, ChatLine, ChatOption, ChatProps, ChatTalk } from './types'
+import type { BuildRoute, ChatApi, ChatChip, ChatGo, ChatKind, ChatLine, ChatOption, ChatProps, ChatTalk, SheetPick } from './types'
 
 // the chips under one of Hermia's turns
 export type Acts =
@@ -19,8 +19,12 @@ export type Acts =
 
 export interface Turn extends ChatLine { acts?: Acts }
 
+// a game chat's next step, from the plan file (engine/gamestep.mjs nextStep): its options run on the server; wait is
+// true while something paints; sheet is the sketch sheet that waits on picks, drawn in the turn to click
+export type Step = { text: string, options: ChatOption[], wait?: boolean, sheet?: SheetPick }
+
 type Said = { who: 'you' | 'hermia', text: string }
-type Turnish = { text: string, options?: ChatOption[], go?: Omit<ChatGo, 'chat'> }
+type Turnish = { text: string, options?: ChatOption[], go?: Omit<ChatGo, 'chat'>, step?: boolean, wait?: boolean, sheet?: SheetPick }
 type Events = Pick<ChatProps, 'onBuild' | 'onBrandSheet' | 'onPlanDraft' | 'onPlan' | 'onPlanAt' | 'onOpenChat' | 'onHeard' | 'onTalk' | 'onGo'>
 
 let seq = 0
@@ -37,8 +41,10 @@ export const saidOf = (chat: { turns?: { who: string, text: string }[] } | null)
 // a game turn's chips: Lock and Keep talking under the spec, else the open question's options
 const gameActs = (turn?: Turnish | null): Acts | undefined => {
   const options = turn?.options || []
-  return options.length ? { type: 'options', spec: options.some(o => o.id === 'lock'), options } : undefined
+  return options.length ? { type: 'options', spec: options.some(o => o.id === 'lock' || o.id.startsWith('do:')), options } : undefined
 }
+// a step's turn: its buttons in the turn itself, and the sheet to pick on (owner, 2026-11-14: everything in the chat)
+const stepOf = (turn?: Turnish | null): Partial<Turn> => turn?.step || turn?.sheet || turn?.wait ? { step: true, sheet: turn.sheet, waiting: !!turn.wait } : {}
 // the question before a website's build (decision 0020): its answers have go: ids
 const isAsk = (turn?: Turnish | null) => !!turn?.options?.some(o => o.id.startsWith('go:'))
 
@@ -155,13 +161,16 @@ export function useTalk({ api = chatApi, from = null, project = null, events, ad
     const wait = add({ who: 'hermia', text: '…', working: true })
     setBusy(true, g)
     try {
-      type Ans = { chat: { id: string }, turn: Turnish, draft?: unknown }
+      type Ans = { chat: { id: string }, turn: Turnish, draft?: unknown, plan?: { id: string } }
       const j = s.chat ? await postJson<Ans>(api, `/api/talk/${enc(s.chat)}`, { said, pick }) : await postJson<Ans>(api, '/api/talk', { kind: 'game', said })
       if (!alive(g)) return
       s.chat = j.chat.id
       s.said.push({ who: 'hermia', text: j.turn.text })
-      add({ who: 'hermia', text: j.turn.text, acts: gameActs(j.turn) })
-      if (j.draft) ev.current.onPlanDraft?.(j.draft)
+      add({ who: 'hermia', text: j.turn.text, acts: gameActs(j.turn), ...stepOf(j.turn) })
+      // an action changed the plan: the board shows it (the lock made it, a sheet is painting, a pick landed)
+      if (j.plan?.id) { const fresh = s.plan !== j.plan.id; s.plan = j.plan.id; if (fresh) ev.current.onPlan?.(j.plan.id); else ev.current.onPlanAt?.(j.plan.id, {}) }
+      else if (j.draft) ev.current.onPlanDraft?.(j.draft)
+      if (j.turn.wait) watch(g, j.turn.text)
     } catch (err) {
       if (alive(g)) add({ who: 'hermia', text: (err as Error).message || 'Hermia did not answer. Say it again.' })
     } finally { setBusy(false, g); drop(wait) }
@@ -169,34 +178,36 @@ export function useTalk({ api = chatApi, from = null, project = null, events, ad
 
   async function gameResume(last: string | null) {
     const s = T.current, g = s.gen
-    type Ans = { chat: { turns: { who: string, text: string, options?: ChatOption[] }[], plan?: string, state?: string }, draft?: unknown, starts?: ChatOption[] }
+    type Ans = { chat: { turns: { who: string, text: string, options?: ChatOption[] }[], plan?: string, state?: string }, draft?: unknown, step?: Step }
     const j = await getJson<Ans>(api, `/api/talk/${enc(s.chat || '')}`)
     if (!j?.chat || !alive(g)) return
     const turn = j.chat.turns.at(-1)
     s.plan = j.chat.plan || null
-    if (last) {
-      if (turn?.who === 'planner' && j.chat.state !== 'locked') patch(last, { acts: gameActs(turn) })
-      // locked: where to go next, from what is painted so far
-      else if (j.chat.state === 'locked' && j.starts?.length) patch(last, { acts: gameActs({ text: '', options: j.starts }) })
-    }
+    // a chat with its plan: the real next step from the plan file, said again if her last words were not it
+    if (j.step) {
+      if (last && turn?.who === 'planner' && turn.text === j.step.text) patch(last, { acts: gameActs(j.step), ...stepOf({ ...j.step, step: true }) })
+      else add({ who: 'hermia', text: j.step.text, acts: gameActs(j.step), ...stepOf({ ...j.step, step: true }) })
+      if (j.step.wait) watch(g, j.step.text)
+    } else if (last && turn?.who === 'planner') patch(last, { acts: gameActs(turn) })
     if (j.draft && !j.chat.plan) ev.current.onPlanDraft?.(j.draft)
   }
 
-  // only a locked spec builds: the plan is made (or re-planned, the same plan) and the board opens on it
-  async function gameLock() {
-    const s = T.current, g = s.gen
-    if (s.busy || !s.chat) return
-    clearActs()
-    setBusy(true, g)
-    try {
-      const j = await postJson<{ plan?: { id: string }, turn?: Turnish }>(api, `/api/talk/${enc(s.chat)}/lock`)
+  // While something paints, the chat asks the server for the next step every few seconds; when it has moved on
+  // (the picture landed, or failed), Hermia says the new step with its buttons.
+  function watch(g: number, was: string) {
+    const tick = async () => {
       if (!alive(g)) return
-      add({ who: 'hermia', text: 'Locked' })
-      if (j.plan?.id) { s.plan = j.plan.id; ev.current.onPlan?.(j.plan.id) }
-      if (j.turn?.text) { s.said.push({ who: 'hermia', text: j.turn.text }); add({ who: 'hermia', text: j.turn.text, acts: gameActs(j.turn) }) }
-    } catch (err) {
-      if (alive(g)) add({ who: 'hermia', text: (err as Error).message })
-    } finally { setBusy(false, g) }
+      const s = T.current
+      const j = s.chat ? await getJson<{ step?: Step }>(api, `/api/talk/${enc(s.chat)}`).catch(() => null) : null
+      if (!alive(g) || !j?.step) return
+      if (j.step.wait) { setTimeout(tick, 3000); return }
+      if (j.step.text === was) return
+      clearActs()
+      s.said.push({ who: 'hermia', text: j.step.text })
+      add({ who: 'hermia', text: j.step.text, acts: gameActs(j.step), ...stepOf({ ...j.step, step: true }) })
+      if (s.plan) ev.current.onPlanAt?.(s.plan, {})
+    }
+    setTimeout(tick, 3000)
   }
 
   // ---------- starting and ending
@@ -232,7 +243,7 @@ export function useTalk({ api = chatApi, from = null, project = null, events, ad
     const s = T.current
     if (s.busy) return
     if (o.id.startsWith('go:')) return void goSay({ pick: o.id, label: o.label })
-    if (o.id === 'lock') return void gameLock()
+    // Lock and every action run on the server, as the plan board's buttons do (server/talk.mjs)
     // where to start (after the lock): the pick opens that part of the Plan board; the chips stay
     if (o.id.startsWith('start:')) {
       if (!s.plan) return

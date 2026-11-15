@@ -206,10 +206,12 @@ export function makePet({ sw, C, doc = document }) {
     }
     return [x, y]
   }
+  // a card she rests by; never a picture slot: beside a sketch sheet she sat on the next, empty slot as if she were
+  // painting it (owner, 2026-11-14). A cursor on a picture means it is really painting (the crew's, .pl-work).
   function cardEl() {
     if (!P.card) return null
     const n = doc.querySelector(`.ab[data-key="${CSS.escape(P.card)}"]`)
-    return n && n.getClientRects().length ? n : null
+    return n && !n.classList.contains('ppic') && n.getClientRects().length ? n : null
   }
   function aim() {
     // something is on its way: she works on it while the screen loads or the pointer rests

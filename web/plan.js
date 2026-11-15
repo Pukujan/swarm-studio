@@ -108,7 +108,8 @@ export function makePlan({ sw, C, root }) {
     const cards = p.cards.map((c, i) => `<div class="ab pcard${P.writing != null && i >= P.writing ? ' wait' : ''}" data-key="card:${esc(c.id)}" tabindex="0" role="button" aria-label="${esc(c.name)}">
       <b>${esc(c.name)}</b><span>${esc(cardValue(c))}</span>${sel(`card:${c.id}`)}${P.writing != null && i === P.writing - 1 ? cursor(CREW[i % CREW.length]) : ''}</div>`).join('')
     const writing = P.writing != null
-    const sheets = sheetsOf(p).map(([k, n]) => { const s = (p.sheets || []).find(x => x.kind === k); return slot(`sheet:${k}`, 'sheet', n, s, s?.state === 'done' ? rings(s) : '') }).join('')
+    // an empty sheet says what it waits on (owner, 2026-11-14: a slot shows the crew only while it really paints)
+    const sheets = sheetsOf(p).map(([k, n]) => { const s = (p.sheets || []).find(x => x.kind === k); return slot(`sheet:${k}`, 'sheet', n, s, s?.state === 'done' ? rings(s) : !s || s.state === 'failed' ? '<span class="pl-wait">Not painted</span>' : '') }).join('')
     const mocks = shotsOf(p).map(([k, n]) => slot(`mock:${k}`, 'mock', n, (p.mocks || []).find(x => x.shot === k))).join('')
     const bds = (p.backdrops || []).slice().sort((a, b) => a.stage - b.stage || a.n - b.n)
     const worldSec = bds.length ? bds.map(b => slot(`bd:${b.id}`, `bd ${b.shape}`, b.n === 1 ? b.name : '', b)).join('') : slot('bd:new', 'bd equirect', 'Backdrops', null)
@@ -419,6 +420,8 @@ export function makePlan({ sw, C, root }) {
       return plan.id
     },
     select,
+    // read the plan again (the chat changed it: server/talk.mjs)
+    reload() { P.ready = load(); return P.ready },
     // a game talk (spec 27): the board is the plan as it stands, read-only, until the chat locks it
     talk() { Object.assign(P, { id: null, plan: null, sel: null, cell: null, framed: false, draft: true }); render() },
     draft(plan) { if (!P.draft || !plan) return; P.plan = plan; if (P.on) render() },
