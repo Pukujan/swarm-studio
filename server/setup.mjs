@@ -21,6 +21,7 @@ import { delimiter, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { godotBin } from '../engine/port.mjs'
 import { findChrome } from '../engine/seo.mjs'
+import { voiceToolsDir } from '../engine/sound.mjs'
 import { pictureState, isPictures, modelTester, paintNote } from '../engine/setup.mjs'
 
 // The keys the Parts list asks about: plugin.yaml's optional_env (passed by launcher.py from Hermes's
@@ -42,7 +43,7 @@ export function partsLocal({ env = process.env, dataDir, root, platform = proces
   return {
     keys, stripe, godot: !!g, chrome: !!c, ffmpeg: ff,
     renderer: existsSync(join(tools, 'hyperframes')),
-    voice: existsSync(join(tools, 'kokoro-js')),
+    voice: existsSync(join(voiceToolsDir(dataDir), 'node_modules', 'kokoro-js')),
     appEngine: existsSync(join(root, 'dyad', '.vite', 'build', 'aba_headless.cjs'))
   }
 }

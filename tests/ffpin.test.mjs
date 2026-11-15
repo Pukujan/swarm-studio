@@ -7,11 +7,18 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { FF_PACKAGES, FF_SHA256, ffBinary, checkFf } from '../engine/video.mjs'
 
-test('the ffmpeg packages are exact versions', () => {
+test('the ffmpeg packages are exact versions, and the renderer\'s lockfile holds the same ones', () => {
   for (const spec of Object.values(FF_PACKAGES)) assert.match(spec, /^@ff(mpeg|probe)-installer\/ff(mpeg|probe)@\d+\.\d+\.\d+$/)
   const src = readFileSync(new URL('../engine/video.mjs', import.meta.url), 'utf8')
   assert.doesNotMatch(src, /'@ff(mpeg|probe)-installer\/ff(mpeg|probe)'/, 'an unpinned ffmpeg package name is installed somewhere')
-  assert.match(src, /'--save-exact'/)
+  // installed from engine/videotools/package-lock.json with npm ci --ignore-scripts, never npm install (catalog review)
+  assert.match(src, /npmCi\(VIDEO_TOOLS/)
+  assert.doesNotMatch(src, /'install'/)
+  const lock = JSON.parse(readFileSync(new URL('../engine/videotools/package-lock.json', import.meta.url), 'utf8'))
+  for (const spec of Object.values(FF_PACKAGES)) {
+    const at = spec.lastIndexOf('@'), name = spec.slice(0, at), version = spec.slice(at + 1)
+    assert.equal(lock.packages[`node_modules/${name}`]?.version, version, `${name} in the lockfile`)
+  }
 })
 
 test('every platform has both checksums', () => {

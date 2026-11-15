@@ -20,6 +20,7 @@ import { layerSheet } from './layers.js'
 import { matchHtml, matchWire, lookBusy } from './lookmatch.js'
 import { storyLane } from './story.js'
 import { REF_FROM, fmtTime, clamp01, ptsPath } from './project-parts.js'
+import { revealLabel } from './reveal.js'
 
 const SECTIONS = [['site', 'Site'], ['story', 'Story'], ['app', 'App'], ['game', 'Game'], ['film', 'Film'], ['art', 'Art'], ['uploads', 'Uploads'], ['refs', 'References'], ['code', 'Code']]
 
@@ -1101,7 +1102,7 @@ export function makeProject({ sw, C, root }) {
       up ? { k: 'rename', icon: 'type', label: 'Rename', run: () => rename(x) } : null,
       up ? { k: 'dup', icon: 'layers', label: 'Duplicate', run: () => fileOp({ op: 'duplicate', name: x.name }) } : null,
       ['art', 'upload', 'film'].includes(x.kind) && x.sending == null ? { k: 'dl', icon: 'download', label: 'Download', run: () => saveFile(x) } : x.kind === 'page' ? { k: 'dl', icon: 'download', label: 'Download', run: () => exportZip() } : null,
-      !hosted() && x.sending == null ? { k: 'show', icon: 'file', label: 'Show in Finder', run: () => post(`/api/projects/${encodeURIComponent(P.pid)}/reveal`, x.kind === 'upload' ? { name: x.name } : { run: P.run }).catch(() => {}) } : null,
+      !hosted() && x.sending == null ? { k: 'show', icon: 'file', label: revealLabel(), run: () => post(`/api/projects/${encodeURIComponent(P.pid)}/reveal`, x.kind === 'upload' ? { name: x.name } : { run: P.run }).catch(() => {}) } : null,
       ...(up ? ['-', { k: 'del', icon: 'trash', label: 'Delete', red: true, run: () => fileOp({ op: 'delete', name: x.name }).then(() => { if (P.sel === x.key) select(null); toast(`${ic('trash', 15)}<span>Deleted</span>`) }) }] : [])
     ].filter(Boolean)
     if (items.length) showMenu(items, anchor, at)

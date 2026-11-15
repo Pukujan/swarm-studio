@@ -12,3 +12,8 @@
 .sc-mb img:first-child { grid-row: span 2; }
 .ab.sc-moodboard > em { position: absolute; left: 0; top: calc(100% + 6px); font: 500 12px var(--body); font-style: normal; color: var(--muted); }
 .ab.sc-colours .br-sw { height: 34px; }
+
+/* the options could not be made: the reason and Try again, at rest (no working skeleton) */
+.ab.sc-take.sc-failed { justify-content: center; align-items: flex-start; gap: 10px; padding: 18px; }
+.ab.sc-take.sc-failed b { font: 600 13px var(--label); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.ab.sc-take.sc-failed span { font: 13px/1.5 var(--body); color: var(--text); }

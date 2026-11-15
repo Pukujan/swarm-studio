@@ -113,7 +113,7 @@ export function SetupSheet({ row = '', group, part, onClose, onModels }: {
             <section id="setup-models"><ModelsRow view={view} test={test} opts={opts} setOpts={setOpts} isExpanded={open('models')} onToggle={toggle('models')} onTest={runTest} onPicked={onPicked} /></section>
             <section id="setup-pictures"><PicturesRow pictures={view.pictures} onPick={pickPictures} isExpanded={open('pictures')} onToggle={toggle('pictures')} /></section>
             <section id="setup-parts">
-              <PartsRow facts={F} group={ctx.group} part={ctx.part} isExpanded={at !== 'index'} onToggle={() => send({ type: 'parts' })}
+              <PartsRow facts={F} settled={Object.keys(FACTS).every(k => k in facts)} group={ctx.group} part={ctx.part} isExpanded={at !== 'index'} onToggle={() => send({ type: 'parts' })}
                 onGroup={k => send({ type: 'group', k })} onPart={k => send({ type: 'part', k })} onGoto={goto} setConn={setConn} />
             </section>
           </div>

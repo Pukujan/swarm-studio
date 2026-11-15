@@ -18,7 +18,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { execFile } from './proc.mjs'
+import { npmCi } from './npmci.mjs'
 
 export const LADDER = [64, 128, 256, 512, 1024, 2048]
 export const CAP = 4096
@@ -59,23 +59,11 @@ export function imageTools(dataDir, { install = true, own = true } = {}) {
     const dir = join(dataDir, 'image-tools')
     const have = from(dir)
     if (have || !install) return have
-    mkdirSync(dir, { recursive: true })
-    for (const f of ['package.json', 'package-lock.json']) copyFileSync(join(TOOLS, f), join(dir, f))
-    const args = ['ci', '--ignore-scripts', '--no-audit', '--no-fund', '--omit=dev']
-    await new Promise((ok, fail) => {
-      const cli = npmCli()
-      const done = err => (err ? fail(err) : ok())
-      // npm's own script, run by this Node: no shell, the same on Windows, macOS and Linux
-      if (cli) execFile(process.execPath, [cli, ...args], { cwd: dir, timeout: 300000, maxBuffer: 1 << 24 }, done)
-      else execFile('npm', args, { cwd: dir, timeout: 300000, maxBuffer: 1 << 24, shell: process.platform === 'win32' }, done)
-    })
+    await npmCi(TOOLS, dir)
     return from(dir)
   })()
 }
 
-// npm's own entry, beside the Node that runs the studio (Windows keeps it next to node.exe, macOS and Linux
-// under lib/)
-const npmCli = (exe = process.execPath) => [join(dirname(exe), 'node_modules', 'npm', 'bin', 'npm-cli.js'), join(dirname(exe), '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js')].find(f => existsSync(f))
 
 export function makeImages({ dataDir, tools = () => imageTools(dataDir), now = Date.now }) {
   const root = join(dataDir, 'images')

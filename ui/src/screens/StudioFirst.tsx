@@ -41,7 +41,7 @@ export function StudioFirst() {
   const pid = view.room === 'studio' ? view.project : null
   const S = useStudio(pid)
   const { fail, reload } = S
-  const { d, error, takes, moods, sel, select, kit, ctx, stateOf, steps, gone, planSections, cards, board, actions, tick } = S
+  const { d, error, takes, moods, moodsFailed, sel, select, kit, ctx, stateOf, steps, gone, planSections, cards, board, actions, tick } = S
   const root = useRef<HTMLDivElement>(null)
   const picker = useRef<HTMLInputElement>(null)
   const pickTo = useRef<'ref' | 'asset'>('ref')
@@ -237,6 +237,11 @@ export function StudioFirst() {
   // the story, colours, type and voice that follow from it; the sheet itself for the detail
   const brandStep = () => {
     if (!d?.studio.idea) return brandCard()
+    // the options could not be made: no skeletons working on nothing, the reason (Hermia says it too) and Try again
+    if (!moods && moodsFailed) return <>
+      <div className="ab sc-take sc-failed" role="status"><b>No options yet</b><span>{moodsFailed}</span><Button onPress={() => void S.reload()}>Try again</Button></div>
+      {brandCard()}
+    </>
     if (!moods) return <>{Array.from({ length: TAKES }, (_, i) => <div key={i} className="ab sc-take wait-in" aria-busy="true" aria-label="An option on its way" />)}{brandCard()}</>
     const b = moods.brand, picked = (moods.packs || []).find(p => p.slug === b?.pack), L = lookOf(b ?? null)
     const photos = (b?.pictures?.photos || picked?.pictures?.photos || []).slice(0, 6)
@@ -335,8 +340,8 @@ export function StudioFirst() {
         <div className="col">{sections}</div>
       </StudioBoard>
 
-      {d && <StepPath steps={steps} gone={gone} current={sel?.startsWith('step:') ? sel.slice(5) : null} stateOf={stateOf}
-        onStep={s => { if (s !== 'proposal') select(`step:${s}`); board.current?.focus(s) }}
+      {d && <StepPath steps={steps} gone={gone} current={sel?.startsWith('step:') ? sel.slice(5) : sel?.startsWith('lock:') ? 'proposal' : null} stateOf={stateOf}
+        onStep={s => { select(s === 'proposal' ? 'lock:look' : `step:${s}`); board.current?.focus(s) }}
         onAdd={s => { actions.setStep(s, 'empty').then(() => requestAnimationFrame(() => board.current?.focus(s))).catch(fail) }} />}
 
       {insp && d && sel && <StudioInspector sel={sel} d={d} card={x} pack={pack} ctx={ctx} version={tick} onClose={() => select(null)} act={{

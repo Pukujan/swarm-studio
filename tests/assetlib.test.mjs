@@ -6,20 +6,21 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { assetLib, searchRows, rowOf, categoryOf, readPicks, setPick, pickedItem, creditsFor, isSlot } from '../engine/assetlib.mjs'
 import { askItem } from '../engine/artask.mjs'
+import { rizzDir } from '../engine/library.mjs'
 
 const rizzRow = (pack, category, subject, description = '') => ({ path: `assets/${pack}/${category}/misc/${subject}.png`, category, subcategory: 'misc', subject, style_pack: pack, tags: [category, subject], description })
 const PNG = Buffer.from('89504e470d0a1a0a', 'hex')
 
 function lib() {
   const dataDir = mkdtempSync(join(tmpdir(), 'assetlib-'))
-  mkdirSync(join(dataDir, 'assetrizz'), { recursive: true })
+  mkdirSync(rizzDir(dataDir), { recursive: true })
   const rows = [
     rizzRow('cel_shaded_anime', 'props', 'water_tower', 'a rusty rooftop water tower'),
     rizzRow('cel_shaded_anime', 'icons', 'spring_boots'),
     rizzRow('lowpoly_render', 'props', 'water_tower'),
     rizzRow('pixel_32', 'ui', 'health_bar', 'a red health bar frame')
   ]
-  writeFileSync(join(dataDir, 'assetrizz', 'manifest.jsonl'), rows.map(r => JSON.stringify(r)).join('\n') + '\n')
+  writeFileSync(join(rizzDir(dataDir), 'manifest.jsonl'), rows.map(r => JSON.stringify(r)).join('\n') + '\n')
   const fetched = []
   const fetchImpl = async url => { fetched.push(url); return { ok: true, arrayBuffer: async () => PNG } }
   return { dataDir, fetched, lib: assetLib({ dataDir, fetchImpl }) }
@@ -46,7 +47,7 @@ test('an assetrizz picture is fetched once, then served from disk', async () => 
   const a = await l.file(id), b = await l.file(id)
   assert.ok(existsSync(a.file) && a.file === b.file)
   assert.equal(fetched.length, 1)
-  assert.match(fetched[0], /mojomast\/assetrizz\/main\/assets\/cel_shaded_anime\/icons/)
+  assert.match(fetched[0], /mojomast\/assetrizz\/[0-9a-f]{40}\/assets\/cel_shaded_anime\/icons/, 'from the pinned commit, never a branch')
   assert.equal(await l.file('../../etc/passwd'), null)
 })
 

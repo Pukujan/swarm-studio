@@ -9,7 +9,7 @@ import { mapWindow } from './mapwin.js'
 import { painterOf, cursor } from '../icons.js'
 import { openWorkshop } from '../workshop.js'
 import { intakeAsk, INTAKE_SAY } from '../intake.js'
-import { $, els, api, ico, BASE, S, BOOT, HERMIA, commandOps, Crew } from './core.js'
+import { $, els, api, ico, BASE, S, BOOT, HERMIA, commandOps, Crew, setLabel } from './core.js'
 import { toggleVideo, video, shownRun, showRun } from './film.js'
 import { cw, CW_CODE, CW_MAP, wallNames, paintv, artPhase } from './auto.js'
 import { setText, botMsg, feed, push } from './panels.js'
@@ -439,6 +439,7 @@ function renderApp() {
   // a build that failed before it ever worked shows the failure, not the empty starter's blank page
   // what fills the stage: it follows the build, or holds the view pinned in the bar's switch (web/canvas/stage.js)
   const now = stageOf(), empty = now.empty, sheet = now.sheet && !!shownRun()
+  if (pickBtn) { pickBtn.hidden = !(now.shown === 'live' && appv.url && !working && appv.kind !== 'game' && !rec.on); if (pickBtn.hidden) picking(false) }
   // a change running over the app on the stage: what is asked, and where the crew is (issue #542)
   const changing = /** @type {HTMLElement | null} */ ($('#app-changing'))
   if (changing) {
@@ -722,6 +723,37 @@ for (const b of document.querySelectorAll('#app-device button')) b.onclick = () 
   renderApp()
 }
 $('#app-reload').onclick = () => { if (appv.url) loadFrame() }
+
+// Pick (issue #542, "pointing"): the app's pages, as Swarm serves a finished app, carry a picker
+// (engine/apppick.mjs). Pick asks it to start; a click in the app comes back as what it is, and goes into the chat
+// as a reference to say what to change about it. The frame's sandbox is unchanged: only postMessage crosses.
+const pickBtn = /** @type {HTMLButtonElement | null} */ ($('#app-pick'))
+const picking = on => {
+  if (!pickBtn) return
+  pickBtn.setAttribute('aria-pressed', String(on))
+  setLabel(pickBtn, on ? 'Picking… Esc stops' : 'Pick')
+}
+const frameOrigin = () => { try { return new URL(appEls.frame.src).origin } catch { return '' } }
+if (pickBtn) pickBtn.onclick = () => {
+  const on = pickBtn.getAttribute('aria-pressed') !== 'true', to = frameOrigin()
+  if (!to) return
+  appEls.frame.contentWindow?.postMessage({ swarmPick: on ? 'start' : 'stop' }, to)
+  picking(on)
+  if (on) appEls.frame.focus()
+}
+addEventListener('message', e => {
+  if (e.source !== appEls.frame.contentWindow || !e.data || typeof e.data !== 'object' || !('swarmPick' in e.data)) return
+  picking(false)
+  const p = e.data.swarmPick
+  if (!p || typeof p !== 'object') return
+  const role = String(p.role || 'part').slice(0, 20), text = String(p.text || '').slice(0, 80), route = String(p.route || '').slice(0, 80)
+  // the reference, then the person's words: "the button "Add" on /tasks: make it…"
+  const ref = `the ${role}${text ? ` "${text}"` : ''}${route && route !== '/' ? ` on ${route}` : ''}: `
+  window.swarmCosmos?.chat?.(true)
+  els.brief.value = ref + els.brief.value.replace(/^the [^:]{1,140}: /, '')
+  els.brief.focus()
+  els.brief.setSelectionRange(els.brief.value.length, els.brief.value.length)
+})
 // the steps column folds away, and stays folded the next time (this browser only)
 const stepsMin = on => {
   appEls.view.classList.toggle('steps-min', on)

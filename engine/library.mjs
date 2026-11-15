@@ -5,14 +5,35 @@
 // picture never sits in a look it doesn't belong to. Characters are always our own, and a
 // style with no close pack (Film photo, Toy 3D) gets nothing from the library.
 //
-// The catalog (assets/manifest.jsonl, about 12 MB) is fetched once into dataDir/assetrizz;
+// The catalog (assets/manifest.jsonl, about 12 MB) is fetched once into dataDir/assetrizz/<pin>;
 // each picture used is fetched on its own and kept there, so nothing else is downloaded.
+// Both come from one pinned commit of assetrizz (RIZZ_SHA), never a moving branch, and a path the
+// catalog names is used only when it stays inside that folder (safeRel, inside): a row that
+// points anywhere else is dropped, so the remote catalog can never choose where a file is written.
 // A library picture is not kept as the run's painted picture: a Try again paints it for real.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { words } from './standins.mjs'
 
-export const RAW = 'https://raw.githubusercontent.com/mojomast/assetrizz/main/'
+// the assetrizz commit everything is fetched from (main on 2026-11-10); a new one is a reviewed change here
+export const RIZZ_SHA = '79c63c81ff9b7a92c07d640ab4a30a6956f91f8a'
+export const RAW = `https://raw.githubusercontent.com/mojomast/assetrizz/${RIZZ_SHA}/`
+// where that commit's catalog and pictures are kept: a folder per pin, so files from another commit are never mixed in
+export const rizzDir = dataDir => join(dataDir, 'assetrizz', RIZZ_SHA.slice(0, 12))
+
+// A path from the remote catalog, as text: relative, forward slashes only, every segment a name (no empty, "." or
+// ".." segment), no drive or UNC prefix, no NUL. Anything else is not a path this library writes.
+export function safeRel(p) {
+  const s = typeof p === 'string' ? p : ''
+  if (!s || s.length > 400 || /[\\\u0000:]/.test(s) || isAbsolute(s) || s.startsWith('/')) return false
+  return s.split('/').every(seg => seg !== '' && seg !== '.' && seg !== '..')
+}
+// the file a catalog path names inside `dir`, or null when it would land anywhere else
+export function inside(dir, p) {
+  if (!safeRel(p)) return null
+  const root = resolve(dir), f = resolve(root, p)
+  return f.startsWith(root + sep) ? f : null
+}
 export const CREDIT = 'assetrizz by mojomast'
 
 // the build's style (engine/artdirect.mjs STYLES) → the closest packs, nearest first; none that
@@ -38,7 +59,7 @@ export const terms = s => [...new Set(words(String(s || '').replace(/_/g, ' ')).
 
 // rows: the catalog's lines, parsed; → the few fields a pick needs
 export function indexRows(rows) {
-  return rows.filter(r => r && r.path && CATEGORY_SET.has(r.category)).map(r => ({
+  return rows.filter(r => r && safeRel(r.path) && CATEGORY_SET.has(r.category)).map(r => ({
     path: r.path, slug: String(r.subject || ''), cat: r.category, sub: r.subcategory || '', pack: r.style_pack,
     subject: new Set(terms(r.subject)), more: new Set(terms(`${(r.tags || []).join(' ')} ${r.description || ''}`))
   }))
@@ -70,7 +91,7 @@ export function pickRow(index, it, style, used = new Set()) {
 }
 
 export function library({ dataDir, fetchImpl = fetch }) {
-  const dir = join(dataDir, 'assetrizz')
+  const dir = rizzDir(dataDir)
   let index = null, loading = null
   const load = async () => {
     if (index) return index
@@ -92,7 +113,9 @@ export function library({ dataDir, fetchImpl = fetch }) {
     try {
       const row = pickRow(await load(), it, style, used)
       if (!row) return null
-      const local = join(dir, row.path)
+      // checked again where it is written, whatever the index let through
+      const local = inside(dir, row.path)
+      if (!local) return null
       if (!existsSync(local)) {
         const res = await fetchImpl(RAW + row.path.split('/').map(encodeURIComponent).join('/'), { signal: AbortSignal.timeout(30000) })
         if (!res.ok) return null

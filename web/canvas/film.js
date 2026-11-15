@@ -9,6 +9,7 @@ import { esc } from './design.js'
 import { fitLive } from './start.js'
 import { shortReason } from './publish.js'
 import { boardVideo, dropVideo, playVideo, setVideoHtml } from '../video.js'
+import { revealLabel } from '../reveal.js'
 
 // ---------- promo video
 // The planner storyboards the build into a few scenes, each handed to an agent,
@@ -121,7 +122,7 @@ function renderVideo() {
   const src = latest ? video.src : `/video/${video.run}/cut/${cut.name}`, file = cut?.file || video.file
   const cuts = video.cuts.length > 1 ? `<div class="vcuts">${video.cuts.map((c, i) => `<button class="${i === video.pick ? 'on' : ''}" data-cut="${i}" aria-label="${esc(c.idea || '')}"><b>v${c.name.match(/-v(\d+)\.mp4$/)[1]}</b> ${esc(VIDEO_STYLES.find(([k]) => k === c.style)?.[1] || '')}${c.idea ? ` · ${esc(c.idea.length > 28 ? `${c.idea.slice(0, 28)}…` : c.idea)}` : ''}${c.seconds ? ` <small>${Math.round(c.seconds)}s</small>` : ''}</button>`).join('')}</div>` : ''
   const body = video.src && !video.busy
-    ? `${cuts}<video data-src="${esc(src)}" controls playsinline></video><div class="vfoot"><span>Saved to ${esc(String(file || 'video/promo.mp4').replace(/^\/(Users|home)\/[^/]+/, '~'))}</span><span class="vacts"><a class="vdl" href="${esc(src)}" download="${esc(cut?.name || 'promo.mp4')}">Download</a><button class="vreveal">Show in Finder</button><button class="vbig">⛶ Big screen</button></span></div>${opts}<div class="vfoot"><span></span><button class="vagain">Make a new cut</button></div>`
+    ? `${cuts}<video data-src="${esc(src)}" controls playsinline></video><div class="vfoot"><span>Saved to ${esc(String(file || 'video/promo.mp4').replace(/^\/(Users|home)\/[^/]+/, '~'))}</span><span class="vacts"><a class="vdl" href="${esc(src)}" download="${esc(cut?.name || 'promo.mp4')}">Download</a><button class="vreveal">${revealLabel()}</button><button class="vbig">⛶ Big screen</button></span></div>${opts}<div class="vfoot"><span></span><button class="vagain">Make a new cut</button></div>`
     : video.busy
       // before the live cut plays, a skeleton in the film's shape, marked busy: Hermia works on it (web/pet.js, #392)
       ? `${liveOn ? `<div class="vlive"><iframe sandbox="allow-scripts" src="/video/${encodeURIComponent(video.run)}/live/index.html?v=${video.liveAt}" aria-label="The video, playing while it renders" scrolling="no"></iframe><span class="vlive-tag">● live: the agents' cut, rendering</span></div>` : '<div class="vskel wait-in" role="status" aria-busy="true" aria-label="The film, on its way"></div>'}<div class="vbar"><i style="width:${Math.max(3, video.pct)}%"></i></div><div class="vstage">${esc(stage)}${video.pct ? ` ${video.pct | 0}%` : ''}</div>`

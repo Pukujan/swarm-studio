@@ -23,10 +23,12 @@ export type Said = { at: number, who: string, text: string } | null
 const quiet = (text: string) => <p className="p-4 font-monospace text-sm text-muted">{text}</p>
 const time = (t?: number) => (t ? new Date(t).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '')
 
-export function AppWallView({ model, said, onAsk, onOpen, onFile, onBack, going = '' }: {
+export function AppWallView({ model, said, onAsk, onOpen, onFile, onBack, going = '', docked = false }: {
   model: AppModel
   // the last answer: over window `at` (0–3), or over the wall (-1) when it was Hermia's
   said: Said
+  // the room's chat is docked along the bottom (issue #542, one box): the wall's own ask field steps aside
+  docked?: boolean
   onAsk: (text: string) => void
   onOpen: () => void
   // a file to read, or null to go back to the list (a narrow wall shows one or the other)
@@ -160,12 +162,12 @@ export function AppWallView({ model, said, onAsk, onOpen, onFile, onBack, going 
 
   return (
     // the wall fills the screen under the top bar (h-14), as the boards do; its windows scroll inside
-    <div className="flex h-[calc(100dvh-3.5rem)] min-h-0 flex-col">
-      <form className="flex items-end gap-2 px-3 pt-3" onSubmit={e => { e.preventDefault(); const t = ask.trim(); if (t) { onAsk(t); setAsk('') } }}>
+    <div className={`flex min-h-0 flex-col ${docked ? 'h-[calc(100dvh-3.5rem-var(--chat-h,0px))]' : 'h-[calc(100dvh-3.5rem)]'}`}>
+      {!docked && <form className="flex items-end gap-2 px-3 pt-3" onSubmit={e => { e.preventDefault(); const t = ask.trim(); if (t) { onAsk(t); setAsk('') } }}>
         <div className="max-w-[520px] flex-1"><TextField label="Ask the crew" placeholder="Pip, what are you on?" value={ask} onChange={setAsk} /></div>
         <Button role="secondary" type="submit" isDisabled={!ask.trim()}>Ask</Button>
-      </form>
-      {said && said.at < 0 && <p role="status" className="mx-3 mt-2 max-w-[640px] rounded-[4px_12px_12px_12px] border border-line bg-deep px-3 py-2 font-monospace text-xs"><b className="mr-1.5">{said.who}</b>{said.text}</p>}
+      </form>}
+      {!docked && said && said.at < 0 && <p role="status" className="mx-3 mt-2 max-w-[640px] rounded-[4px_12px_12px_12px] border border-line bg-deep px-3 py-2 font-monospace text-xs"><b className="mr-1.5">{said.who}</b>{said.text}</p>}
       <Wall label="App build" windows={[map, liveWin, code, shipped]} start={building ? 1 : 3} />
     </div>
   )

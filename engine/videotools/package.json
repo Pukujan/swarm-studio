@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "description": "The film renderer (engine/video.mjs): HyperFrames and the checked ffmpeg and ffprobe builds, installed into the data folder on first use from this lockfile: npm ci --ignore-scripts. Nothing is compiled; the ffmpeg packages' only script sets the execute bit, which engine/video.mjs does itself, and each binary is checked against FF_SHA256 before it runs.",
+  "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "1.1.0",
+    "@ffprobe-installer/ffprobe": "2.1.2",
+    "hyperframes": "0.9.26"
+  }
+}

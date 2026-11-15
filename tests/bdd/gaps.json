@@ -101,5 +101,56 @@
    "why": "after a page is clicked on the stage, the first Esc goes to Projects instead of closing the inspector (from the Files list it closes the inspector)",
    "match": "the first Esc left the Overview"
   }
+ },
+ "studio › Breadcrumb › Esc goes up one step": {
+  "current": {
+   "why": "Esc leaves the Studio for Projects at once: it does not go up one step first",
+   "match": "the first Esc"
+  }
+ },
+ "studio › Step path › Removing and bringing back a step": {
+  "next": {
+   "why": "the next UI's step path has What you have where the current Studio has References: there is no References step to remove or bring back",
+   "match": "no References chip"
+  }
+ },
+ "studio › Step path › A project with only its Plan step": {
+  "next": {
+   "why": "the next UI's step path has What you have where the current Studio has References: there is no References step to remove or bring back (its path starts with What you have, which stays)",
+   "match": [
+    "no References chip",
+    "the path shows",
+    "the + chips"
+   ]
+  }
+ },
+ "studio › Empty steps › A new project": {
+  "next": {
+   "why": "the next UI's step path has What you have where the current Studio has References: there is no References step to remove or bring back",
+   "match": [
+    "References's dot",
+    "References does not show"
+   ]
+  }
+ },
+ "studio › The chat leads a website's Studio › Build with nothing said": {
+  "current": {
+   "why": "pressing Build leaves the focus on the Build button; typing \"build\" puts it in the chat box",
+   "match": "pressed Build: the focus"
+  },
+  "next": {
+   "why": "Build, pressed or typed, goes on to the deck and the planner (which answers with the model error in the test Studio), or does nothing, and does not ask which pages first; the focus stays off the chat box",
+   "match": [
+    "the chat does not ask which pages",
+    "the focus is on",
+    "the Studio moved on"
+   ]
+  }
+ },
+ "studio › 390 px › Layers as a sheet": {
+  "current": {
+   "why": "the Layers sheet has no × button to close it",
+   "match": "×"
+  }
  }
 }

@@ -9,6 +9,8 @@
 
 import { execFile, start as startProc, stopTree } from './proc.mjs'
 import { serialQueue } from './lifecycle.mjs'
+import { npmCi } from './npmci.mjs'
+import { fileURLToPath } from 'node:url'
 import { CAST, MOODS } from './sound.mjs'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, copyFileSync, symlinkSync, chmodSync, rmSync } from 'node:fs'
@@ -16,7 +18,8 @@ import { dirname, join, extname, basename } from 'node:path'
 import { streamChat } from './llm.mjs'
 import { checkLook, lookPrompt, lookCss, paletteVars, paletteCss, textureLayer, revealTween, cutTween, cutLayer, cutCss, rng, hash, MOTIONS, CUTS } from './look.mjs'
 
-const HYPERFRAMES = 'hyperframes@0.9.26'
+// the renderer and the checked ffmpeg builds, pinned with every dependency in engine/videotools/package-lock.json
+const VIDEO_TOOLS = join(dirname(fileURLToPath(import.meta.url)), 'videotools')
 const FPS = 30
 // The film's shapes: the wide one for desktop, the tall one for phones and the square one for feeds,
 // from the same storyboard. The tall one is laid out again for its frame (stacked pictures and words),
@@ -633,18 +636,17 @@ export function videoTools(dataDir, onStage = () => {}) {
     const hf = join(dir, 'node_modules', '.bin', 'hyperframes')
     const ffmpeg = await which('ffmpeg'), ffprobe = await which('ffprobe')
     const system = !!(ffmpeg && ffprobe) // both on PATH: those are used, nothing is fetched for them
-    const npm = [join(dirname(process.execPath), 'npm'), 'npm'].find(p => p === 'npm' || existsSync(p))
-    const install = pkgs => {
+    // from the committed lockfile, no install script run (engine/npmci.mjs); ffmpeg and ffprobe come with it, used
+    // only when the system has none
+    const install = () => {
       onStage('setting up the video renderer (first time only)')
-      mkdirSync(dir, { recursive: true })
-      if (!existsSync(join(dir, 'package.json'))) writeFileSync(join(dir, 'package.json'), '{"private":true}\n')
-      return run(npm, ['install', '--no-audit', '--no-fund', '--save-exact', ...pkgs], { cwd: dir, timeout: 600000 })
+      return npmCi(VIDEO_TOOLS, dir, { timeout: 600000 })
     }
     const checked = () => { try { for (const name of ['ffmpeg', 'ffprobe']) checkFf(ffBinary(dir, name), name); return true } catch { return false } }
-    if (!existsSync(hf)) await install(system ? [HYPERFRAMES] : [HYPERFRAMES, FF_PACKAGES.ffmpeg, FF_PACKAGES.ffprobe])
+    if (!existsSync(hf)) await install()
     if (!system) {
       // an earlier, unpinned copy (or a changed one) is replaced by the pinned packages, then checked again
-      if (!checked()) await install([FF_PACKAGES.ffmpeg, FF_PACKAGES.ffprobe])
+      if (!checked()) await install()
       mkdirSync(bin, { recursive: true })
       for (const name of ['ffmpeg', 'ffprobe']) {
         const target = checkFf(ffBinary(dir, name), name), link = join(bin, name)

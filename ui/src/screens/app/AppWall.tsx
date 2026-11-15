@@ -4,7 +4,7 @@
 // it tells the server a viewer is here every 30 s, so the app is not stopped under them (decision 0017).
 // A game's App room has not moved: it stays the stand-in.
 import { classicHref } from '../../shell/classic'
-import { useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { search } from '../../nav/address'
 import { useNav } from '../../nav/NavProvider'
 import { LinkButton } from '../../primitives/Button'
@@ -12,6 +12,10 @@ import { useTrail } from '../../shell/Trail'
 import { AppWallView, WINDOWS, type Said } from './AppWallView'
 import { doneScreens, type AppModel, type RunEvent } from './model'
 import { AppSourceContext } from './source'
+import { Chat, type ChatLine } from '../../chat'
+import { doneSections } from '../deck/model'
+import { useDeckRun } from '../deck/source'
+import { crew } from '../deck/crew'
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 
@@ -21,6 +25,16 @@ export function AppWall() {
   const source = useContext(AppSourceContext)
   const [model, setModel] = useState<AppModel | null>(null)
   const [said, setSaid] = useState<Said>(null)
+  // the room's chat (issue #542, one box): what was said in it here, the person's words and the answers
+  const [lines, setLines] = useState<ChatLine[]>([])
+  const line = useCallback((who: ChatLine['who'], text: string) => setLines(ls => [...ls, { id: `${Date.now()}:${ls.length}`, at: Date.now(), who, text }]), [])
+  // the design the app is made from: a change sends its finished sections, as the current Studio's appAsk does
+  const { model: deck } = useDeckRun(run ?? null)
+  // the chat shows the build's own lines too, as the deck's chat does (the crew in its shade; the build's news in the Log)
+  const feed = useMemo(() => {
+    const all = [...deck.lines.map(l => ({ ...l, ...(l.who === 'crew' && l.name ? { color: crew().color(l.name) } : {}) }) as ChatLine), ...lines].sort((a, b) => a.at - b.at)
+    return { lines: all.filter(l => l.who !== 'sys'), log: all.filter(l => l.who === 'sys' || l.who === 'err') }
+  }, [deck.lines, lines])
   const filePath = useRef<string | null>(null)
 
   const readFile = useCallback((path: string | null) => {
@@ -76,6 +90,29 @@ export function AppWall() {
     source.tell?.(run, text, who, on).then(r => setSaid({ at: k, who: who || 'Hermia', text: r.answer || 'The crew is working.' })).catch(err => setSaid({ at: k, who: who || 'Hermia', text: String(err.message || err) }))
   }, [run, model, source])
 
+  // the chat's words (web/canvas/rooms.js appAsk): while the app is built, or before there is one, the crew answers
+  // from what it is doing; once there is an app, they are one more change to it
+  const onChat = useCallback(({ text }: { text: string }) => {
+    if (!run || !model) return
+    line('you', text)
+    const a = model.app
+    if (a?.state === 'working' || !a?.hasApp || !source.change) {
+      // the answer comes back as `said` (the window's bubble too), and goes into the chat below
+      onAsk(text)
+      return
+    }
+    source.change(run, text, doneSections(deck)).then(app => { setModel(m => (m ? { ...m, app: { ...m.app, ...app } } : m)); line('sys', `💬 to the app: ${text}`) })
+      .catch(err => line('err', `App: ${String(err.message || err)}`))
+  }, [run, model, source, deck, onAsk, line])
+
+  // an answer to the chat's question (not the '…' while it comes): one line, by whoever answered
+  const answered = useRef<Said>(null)
+  useEffect(() => {
+    if (!said || said.text === '…' || answered.current === said) return
+    answered.current = said
+    setLines(ls => [...ls, { id: `${Date.now()}:${ls.length}`, at: Date.now(), who: said.who === 'Hermia' ? 'hermia' : 'crew', text: said.text, ...(said.who === 'Hermia' ? {} : { name: said.who }) }])
+  }, [said])
+
   const onOpen = useCallback(() => {
     if (!run) return
     source.open?.(run).then(app => setModel(m => (m ? { ...m, app } : m))).catch(() => {})
@@ -102,5 +139,12 @@ export function AppWall() {
     </section>
   )
   if (!model) return <section aria-label="App build" aria-busy="true" className="grid flex-1 grid-cols-2 grid-rows-2 gap-[10px] p-3">{WINDOWS.map(w => <div key={w} className="rounded-[12px] border border-edge bg-deep" />)}</section>
-  return <AppWallView model={model} said={said} onAsk={onAsk} onOpen={onOpen} onFile={readFile} onBack={onBack} going={going} />
+  return (
+    <>
+      <AppWallView model={model} said={said} onAsk={onAsk} onOpen={onOpen} onFile={readFile} onBack={onBack} going={going} docked />
+      {/* the App room opens with its chat docked (issue #542): it is where a change to the app is asked for */}
+      <Chat from={run} project={view.project} lines={feed.lines} log={feed.log} onSubmit={onChat}
+        box={{ placeholder: "Change the app, or ask the crew…", empty: "Ask the crew what they are on, or say what to change: once the app is built, your words change it.", action: "Send" }} />
+    </>
+  )
 }
