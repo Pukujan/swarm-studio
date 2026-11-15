@@ -22,7 +22,8 @@ function appKitStyle() {
   const st = document.createElement('style')
   st.id = 'ak-style'
   st.textContent = `
-.ak-card { width: 190px; min-height: 96px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; background: var(--surface); }
+/* a Plan board card too (.ab.pcard, 210 x 118): it takes its own size over that, filled as panels are (--surface is no token) */
+.ab.pcard.ak-card, .ak-card { width: 190px; height: auto; min-height: 96px; padding: 12px 14px; display: flex; flex-direction: column; justify-content: flex-start; gap: 6px; background: var(--deep); }
 .ak-card b { font: 600 15px var(--body); color: var(--text); }
 .ak-card span { font: 13px var(--body); color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .ak-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; border: 1.5px solid var(--muted); vertical-align: middle; }
