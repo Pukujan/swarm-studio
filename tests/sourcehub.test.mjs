@@ -25,8 +25,14 @@ function github({ login = 'me' } = {}) {
   const hub = { url: at, page: GITHUB.page, file: true }
   const make = (slug, { isPrivate = true, desc = '' } = {}) => { mkdirSync(at(slug), { recursive: true }); g(at(slug), 'init', '-q', '--bare'); g(at(slug), 'symbolic-ref', 'HEAD', 'refs/heads/main'); priv.set(slug, [isPrivate, desc]) }
   const changed = { files: null }
+  // hold() keeps a push job at its look-up of the repository until the function it returns is called: the job is then
+  // still working when the test asks again, whatever the machine's speed (a job's own git work is real, and fast).
+  // The state's own questions (who is signed in) are not held
+  let gate = null
+  const hold = () => { let open; gate = new Promise(r => { open = r }); return () => { gate = null; open() } }
   const gh = async args => {
     calls.push(args)
+    if (gate && args[0] === 'api' && /^repos\/[^/]+\/[^/]+$/.test(args[1])) await gate
     if (args[0] === 'api' && args[1] === 'user') return login ? { ok: true, out: `${login}\n`, err: '' } : { ok: false, out: '', err: 'not logged in' }
     const cmp = args[0] === 'api' && args[1].match(/^repos\/(.+)\/compare\//)
     if (cmp) return changed.files ? { ok: true, out: JSON.stringify([changed.files.length, ...changed.files]), err: '' } : { ok: false, out: '', err: 'HTTP 404' }
@@ -38,7 +44,7 @@ function github({ login = 'me' } = {}) {
   // someone else's commit on the repository
   const commit = (slug, files, msg = 'from elsewhere') => { const c = tmp(); g(c, 'clone', '-q', at(slug), '.'); change(c, files, msg); g(c, 'push', '-q', 'origin', 'HEAD:refs/heads/main'); const sha = g(c, 'rev-parse', 'HEAD'); rmSync(c, { recursive: true, force: true }); return sha }
   const head = slug => g(at(slug), 'rev-parse', 'refs/heads/main')
-  return { root, hub, gh, calls, make, commit, head, at, priv, changed }
+  return { root, hub, gh, calls, make, commit, head, at, priv, changed, hold }
 }
 
 test('a key file is known by its name, an example is not', () => {
@@ -261,10 +267,12 @@ test('the door: link by name, a second job waits, the crew at work blocks a push
     await assert.rejects(S.route.act('p1', { action: 'push', repo: 'https://gitlab.com/a/b' }), /github\.com/)
     await assert.rejects(S.route.act('p1', { action: 'bring', repo: 'me/x', kind: 'game' }), /already has its source/)
     G.make('team/ares')
+    const release = G.hold()
     let st = await S.route.act('p1', { action: 'push', repo: 'team/ares' })
     assert.equal(st.piece, 'game'); assert.equal(st.job.state, 'working')
-    // asked again while it works: the same job, not a second push
+    // asked again while it works (held at its look-up of the repository): the same job, not a second push
     assert.equal((await S.route.act('p1', { action: 'push', repo: 'team/other' })).job.state, 'working')
+    release()
     st = await S.done('p1', 'game')
     assert.equal(st.link.repo, 'team/ares'); assert.equal(st.job.message, 'Pushed to team/ares')
     assert.equal(sourceLinks(S.dataDir)['p1:game'].made, false)
