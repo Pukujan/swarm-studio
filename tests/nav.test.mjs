@@ -173,6 +173,12 @@ test("a project's brand sheet, opened from its Studio, is an address: a reload r
   assert.equal(makeNav({ search: '?room=brand', log: () => {} }).view.room, 'home')
 })
 
+test("a game's own address, with no run, opens its Game room (the version is the game run)", () => {
+  assert.deepEqual(pick(makeNav({ search: '?version=rg&room=game', log: () => {} }).view, ['room', 'version', 'run']), ['game', 'rg', 'rg'])
+  // a game made from a site names both: the site's version and the game's run
+  assert.deepEqual(pick(makeNav({ search: '?version=ra1&run=rg&room=game', log: () => {} }).view, ['room', 'version', 'run']), ['game', 'ra1', 'rg'])
+})
+
 test('an address that asks for something impossible opens what fits, never a mixed screen', () => {
   const load = search => { const n = makeNav({ search, log: () => {} }); return n.view }
   assert.equal(load('?play=prototype').player, 'closed')
