@@ -94,6 +94,27 @@ export const foundSaid = f => [f?.what, f?.who && `for ${f.who}`, f?.pages?.leng
 export const takenSaid = t => (!t ? '' : t.what?.length ? `Taken: ${t.what.join(', ')}` : t.not || '')
 
 /**
+ * The Overview inspector's rows for what a build was given (issue #543): a link's address, and from the board's
+ * refsUsed (what went into the build's brief when it started; null when not known): on a page, game or app the
+ * references it was given, and on a reference what this build was given from it.
+ * @param {any} x  the selected item ({ kind, ref? })  @param {any} board
+ * @returns {[string, string][]}
+ */
+export function refRows(x, board) {
+  /** @type {[string, string][]} */
+  const rows = []
+  if (x?.kind === 'ref' && x.ref?.kind === 'link') rows.push(['Link', String(x.ref.url || '').replace(/^https?:\/\/(www\.)?/, '').slice(0, 60)])
+  const used = board?.refsUsed
+  if (!Array.isArray(used)) return rows
+  if (['page', 'game', 'app'].includes(x?.kind)) rows.push(['Given', used.length ? used.map(r => r.name).join(', ') : 'No references'])
+  if (x?.kind === 'ref') {
+    const u = used.find(r => r.id === x.ref?.id)
+    rows.push(['This build', u ? `Given ${u.what.join(', ')}` : 'Not given (added after it, not read yet, or past the limit)'])
+  }
+  return rows
+}
+
+/**
  * The block's HTML. built: the project has a build to compare.
  * @param {any} ref  @param {{ base?: string, built?: boolean }} [o]
  */

@@ -2,7 +2,7 @@
 // pull request that makes the boards slower or hungrier fails instead of shipping.
 //
 //   node scripts/board-gauge.mjs measure <out.json> [--root <tree>] [--runs 3] [--only overview,deck,next] [--cold]
-//   node scripts/board-gauge.mjs compare <base.json> <head.json> [--memory 0.15] [--gate-frame 1.10]
+//   node scripts/board-gauge.mjs compare <base.json> <head.json> [--memory 0.15] [--gate-frame 1.15 | --no-gate-frame]
 //   (PLAYWRIGHT_DIR and CHROMIUM_PATH as for open-check)
 //
 // The fixture is one seeded build: 250 pages, 3 of them still being built (an agent on each), 100 pictures
@@ -21,10 +21,11 @@
 // CI measures the pull request's base and head in the same runner, interleaved, and compare FAILS on what the
 // runner's speed cannot change: more live frames, a player left after teardown, a film that did not play, a crash,
 // and the memory of the board: JS heap, GPU memory, DOM nodes, layers (thresholds below).
-// FRAME TIME IS REPORT-ONLY for now: measured, printed and written to the job summary, never failed on. On CI
-// runners one measurement of the same code moved from 4 to 15 ms, so no threshold on it holds; it becomes a gate again
-// when a speed-normalised statistic has been shown (docs/perf/README.md, docs/specs/43-image-first-boards.md).
-// --gate-frame <ratio> turns it into a gate (the head's p95 over the base's, over every run's frames) to try one.
+// The board's main-thread WORK is gated too, in a form the runner's speed cannot move (see FRAME_STAT below): the
+// time the browser's main thread spent in tasks over the path, divided by a CPU calibration made in the same
+// recording, the head over the base of each interleaved pair, the median of the pairs, failing past 1.15 (--gate-frame
+// <ratio> changes it, --no-gate-frame turns it off). Single frames' percentiles (p50/p95/p99) are printed and never
+// failed on: on CI one Overview p95 of the same code moved from 4 to 15 ms (docs/perf/README.md).
 // It starts its own throwaway Studio and never touches the 4319 server or the real data folder.
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
@@ -407,11 +408,34 @@ const GATES = [
   { what: 'live frames', key: 'iframes', rule: 'none' },
   { what: 'players left after leaving', key: 'playersAfter', rule: 'none' },
   { what: 'DOM nodes', key: 'nodes', rule: 0.10, floor: 200 },
-  { what: 'layers', key: 'layers', rule: 0.20, floor: 2 },
+  // two numbers that take one of two values from one recording to the next on the same code (the Overview's layers
+  // were 20 in 324 recordings and 15 in 36; its GPU allocators 34 and 27, by when a picture was composited): the head's
+  // median is held to the base's highest, so the lower mode on the base side is not a regression of the head (a
+  // failure of the PR that changed nothing, one trial in forty)
+  { what: 'layers', key: 'layers', rule: 0.20, floor: 2, base: 'max' },
   { what: 'JS heap MB', key: 'jsHeapMB', rule: 'memory', floor: 8 },
   { what: 'GPU process MB', key: 'gpuMB', rule: 'memory', floor: 2 },
-  { what: 'GPU allocators MB', key: 'gpuAllocMB', rule: 'memory', floor: 2 }
+  { what: 'GPU allocators MB', key: 'gpuAllocMB', rule: 'memory', floor: 2, base: 'max' }
 ]
+// The main thread's work over the scripted path, in a form the runner's speed cannot move much: the browser's own count of
+// the time its main thread spent in tasks over the path (taskMs: script, layout, style, paint), divided by the CPU
+// calibration made in the same recording (calibMs, a fixed piece of work timed in that browser). For the base and head
+// recordings made one after the other (b1 h1 b2 h2 b3 h3) the median of the head over the base of each pair is the
+// statistic: a pair is two recordings a minute apart on one machine, and the median of three drops a pair a noisy
+// minute spoiled. A heavier board does more work on the same path; a slower runner does the same work slower in both
+// the task time and the calibration. It is not a percentile of single frames: those moved ±50% between recordings of
+// the same code on the Overview (p75 of frames, tried first, failed 5 of 20 fresh trials), the total did not
+// (docs/perf/README.md has the evidence: 120 board-trials of main against main read 0.94 to 1.10).
+const FRAME_STAT = r => (r.taskMs > 0 && r.calibMs > 0) ? r.taskMs / r.calibMs : null
+function pairedFrame(a, b) {
+  const x = a.runs.filter(r => !r.crashed).map(FRAME_STAT), y = b.runs.filter(r => !r.crashed).map(FRAME_STAT)
+  const n = Math.min(x.length, y.length)
+  const pairs = []
+  for (let i = 0; i < n; i++) if (x[i] > 0 && y[i] != null) pairs.push(y[i] / x[i])
+  return pairs.length >= 2 ? { pairs, ratio: median(pairs) } : null
+}
+// the head may take this much longer than the base, in the statistic above
+const FRAME_GATE = 1.15
 function compare(a, b, memT, gateFrame) {
   const A = pool(a), B = pool(b)
   print(A); print(B)
@@ -423,7 +447,8 @@ function compare(a, b, memT, gateFrame) {
     const r1 = v => (typeof v === 'number' ? Math.round(v * 10) / 10 : v)
     const add = (what, p0, q0, bad, note = '') => { const p = r1(p0), q = r1(q0); row.push(`${what} ${p} → ${q}${bad ? ' ✗' : ''}`); md.push(`| ${id} | ${what} | ${p ?? 'n/a'} | ${q ?? 'n/a'} | ${bad ? '✗' : note} |`) }
     for (const g of GATES) {
-      const p = x[g.key], q = y[g.key]
+      const own = g.base === 'max' ? A.scenes[id].runs.filter(r => !r.crashed && r[g.key] != null).map(r => r[g.key]) : []
+      const p = own.length ? Math.max(...own) : x[g.key], q = y[g.key]
       if (p == null || q == null) { add(g.what, p, q, false, 'not measured'); continue }
       const t = g.rule === 'memory' ? memT : g.rule
       const bad = t === 'none' ? q > p : q > p * (1 + t) && q - p >= (g.floor || 0)
@@ -432,13 +457,19 @@ function compare(a, b, memT, gateFrame) {
     }
     // the film plays on a board that has one, or its players are not measured
     if (y.filmPlaying === 0) { row.push('film did not play ✗'); md.push(`| ${id} | film | | | did not play ✗ |`); fails.push(`${id}: the film did not play, so its players were not measured`) }
-    // frame time: shown, and failed on only when --gate-frame is given
+    // main-thread work, speed-normalised and paired: gated at gateFrame (FRAME_GATE unless --gate-frame says otherwise, 0 turns it off)
+    const pf = pairedFrame(A.scenes[id], B.scenes[id])
+    if (pf) {
+      const bad = gateFrame > 0 && pf.ratio > gateFrame
+      row.push(`main-thread work ${pf.ratio.toFixed(2)}× the base (pairs ${pf.pairs.map(v => v.toFixed(2)).join(', ')})${bad ? ' ✗' : ''}`)
+      md.push(`| ${id} | main-thread work, head over base (task time ÷ CPU calibration, median of ${pf.pairs.length} pairs) | | | ${pf.ratio.toFixed(2)}× (${pf.pairs.map(v => v.toFixed(2)).join(', ')})${bad ? ' ✗' : ''} |`)
+      if (bad) fails.push(`${id}: main-thread work ${pf.ratio.toFixed(2)}× the base (over ${gateFrame}×; pairs ${pf.pairs.map(v => v.toFixed(2)).join(', ')})`)
+    }
+    // the raw percentiles: shown only
     if (x.frame && y.frame) {
       const ratio = y.frame.p95 / x.frame.p95
-      const bad = gateFrame && ratio > gateFrame && y.frame.p95 - x.frame.p95 >= 0.5
-      row.push(`frame p95 ${x.frame.p95.toFixed(1)} → ${y.frame.p95.toFixed(1)} ms (report only)${bad ? ' ✗' : ''}`)
+      row.push(`frame p95 ${x.frame.p95.toFixed(1)} → ${y.frame.p95.toFixed(1)} ms (report only)`)
       md.push(`| ${id} | frame p50 / p95 / p99 (ms) | ${x.frame.p50.toFixed(1)} / ${x.frame.p95.toFixed(1)} / ${x.frame.p99.toFixed(1)} | ${y.frame.p50.toFixed(1)} / ${y.frame.p95.toFixed(1)} / ${y.frame.p99.toFixed(1)} | report only, head ${ratio.toFixed(2)}× |`)
-      if (bad) fails.push(`${id}: frame p95 ${x.frame.p95.toFixed(1)} → ${y.frame.p95.toFixed(1)} ms (over ${gateFrame}×, gated by --gate-frame)`)
     }
     // the camera each side settled on: the same view, or the comparison is of two views
     const cam = (r, k) => A.scenes[id].runs.concat(B.scenes[id].runs).filter(m => !m.crashed && m.camera).map(m => m.camera)
@@ -455,5 +486,5 @@ function compare(a, b, memT, gateFrame) {
 let studio = null
 if (cmd === 'measure') setTimeout(() => { console.log(`the gauge ran past its ${flag('deadline', 25)} minute deadline`); studio?.kill(); process.exit(3) }, Number(flag('deadline', 25)) * 60000).unref()
 if (cmd === 'measure' && pos[0]) await measure(resolve(pos[0]), { root: resolve(flag('root', fileURLToPath(new URL('..', import.meta.url)))), runs: Number(flag('runs', 3)), only: (flag('only', '') || '').split(',').filter(Boolean), cold: rest.includes('--cold') })
-else if (cmd === 'compare' && pos[1]) compare(pos[0], pos[1], Number(flag('memory', 0.15)), flag('gate-frame', null) ? Number(flag('gate-frame')) : 0)
+else if (cmd === 'compare' && pos[1]) compare(pos[0], pos[1], Number(flag('memory', 0.15)), rest.includes('--no-gate-frame') ? 0 : flag('gate-frame', null) ? Number(flag('gate-frame')) : FRAME_GATE)
 else { console.log('node scripts/board-gauge.mjs measure <out.json> [--root <tree>] [--runs 3] [--only a,b] | compare <base.json> <head.json>'); process.exit(2) }

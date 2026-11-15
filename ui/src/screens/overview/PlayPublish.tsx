@@ -20,8 +20,10 @@ export function PlayPublish({ run }: { run: string | null }) {
   const pages = model.pages.length
   const action = useMemo(() => (
     <span className="flex items-center gap-2">
-      <Button role="secondary" isDisabled={!canPlay} onPress={() => go({ type: 'play', pages })}><Icon name="play" size={16} />Play</Button>
-      <Button role="primary" isDisabled={!canPlay} onPress={() => setPublishing(true)}><Icon name="globe" size={16} />{label}</Button>
+      {/* on a phone the buttons are their icons, so the project's name keeps its place in the crumb; the words stay
+          for screen readers */}
+      <Button role="secondary" isDisabled={!canPlay} onPress={() => go({ type: 'play', pages })}><Icon name="play" size={16} /><span className="max-[760px]:sr-only">Play</span></Button>
+      <Button role="primary" isDisabled={!canPlay} onPress={() => setPublishing(true)}><Icon name="globe" size={16} /><span className="max-[760px]:sr-only">{label}</span></Button>
     </span>
   ), [canPlay, pages, label, go])
   useTrail(undefined, action)

@@ -11,11 +11,37 @@ It fails on **counts and memory**: live iframes, players left after leaving, a f
 nodes, layers, JS heap and GPU memory. Their numbers move less than 1 % between measurements of the same code (a
 board of 21,578 nodes measured 21,579), so the thresholds are tight enough to catch a leak and far above the noise.
 
-**Frame time is report-only.** It is printed in the job summary, base against head, and never fails. Measured on CI
+**Single frames' percentiles are report-only.** p50/p95/p99 are printed in the job summary and never fail. Measured on CI
 runners, one Overview p95 of the same code ranged from 4 to 15 ms within a single job (the deck's stayed within 0.5 ms).
 Between measurements a minute apart the runner's own speed changed about 2×, and the Overview's slowest frames fall in
 the first tenth of the path. A threshold of +10 % on a few milliseconds cannot hold against that, and it failed about one
-pull request in three that did not touch the board. `--gate-frame <ratio>` turns it into a gate to try a statistic.
+pull request in three that did not touch the board.
+
+**The board's main-thread work fails past 1.15×.** The statistic is the browser's own count of the time its main thread
+spent in tasks over the path (`taskMs`: script, layout, style, paint), divided by the CPU calibration made in the same
+recording (`calibMs`); for the base and head recordings made one after the other (b1 h1 b2 h2 b3 h3), the head over the
+base of each pair, and the median of the three. A heavier board does more work on the same path; a slower runner does
+the same work slower in both numbers.
+
+How it was chosen, from the soak's recordings of main against main (`gauge-soak.yml`): p50, p75, p90, p95, the mean and
+the trimmed mean of frame times, with and without the calibration, paired and pooled, and the task time, the script,
+layout and style time, the layout and restyle counts. On the first soak of the fixed method, p75 of frames over the
+calibration, paired, read 0.93 to 1.08 and saw +20 % every time, and was picked from it; on two fresh soaks (20 trials,
+not used to pick it) it read 0.63 to 1.50 and failed 5 of 20 on the Overview, whose frames alternate between two sizes.
+The total of the main thread's tasks over the calibration was steady in all four soaks:
+
+| 120 board-trials (40 trials × 3 boards) | head over base, median of 3 pairs |
+|---|---|
+| main against main | 0.94 to 1.10 |
+| +10 % of task time (injected into the recordings) | over 1.15 in 10 of 120 |
+| +15 % | over 1.15 in 66 of 120 |
+| +20 % | over 1.15 in 107 of 120 |
+| +25 % and more | over 1.15 in 120 of 120 |
+
+The gate is 1.15, five points over the worst main-against-main ratio seen: it catches a slowdown of about a fifth or
+more, and nothing smaller. `--gate-frame <ratio>` changes it, `--no-gate-frame` turns it off. The statistic was picked
+looking at soaks 2 to 4, so the proof that matters is the soak run on the pull request that made it a gate, whose trials
+chose nothing.
 
 ## Why a measurement can differ for reasons that are not the code
 

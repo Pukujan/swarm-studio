@@ -69,7 +69,7 @@ function Brief({ t, a }: { t: Turn, a: FeedActs }) {
         className="w-full resize-y rounded-[10px] border border-line-2 bg-void p-3 font-monospace text-sm text-text outline-none data-[focused]:border-frame-hi disabled:opacity-60" />
       {acts.open && !acts.done && (
         <div className="flex flex-wrap gap-2">
-          {acts.routes.map((r, i) => <Button key={r} role={i ? 'secondary' : 'primary'} className={chip} onPress={() => a.briefGo(t, r)}>{routeLabel(r, acts.routes.length === 1)}</Button>)}
+          {acts.routes.map((r, i) => <Button key={r} role={i ? 'secondary' : 'primary'} className={chip} onPress={() => a.briefGo(t, r)}>{!i && acts.go ? acts.go : routeLabel(r, acts.routes.length === 1)}</Button>)}
           {acts.sheet && <Button role="secondary" className={chip} onPress={() => a.brandSheet(t.id, acts.text)}>{acts.sheetLabel}</Button>}
           <Button role="ghost" className={chip} onPress={() => a.keepTalking(t.id)}>Keep talking</Button>
         </div>
