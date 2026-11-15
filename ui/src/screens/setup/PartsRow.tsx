@@ -8,6 +8,7 @@
 // after the person says yes to the exact command Hermes will run.
 import { useState } from 'react'
 import { Button, LinkButton } from '../../primitives/Button'
+import { Busy } from '../../primitives/Busy'
 import { Command } from '../../primitives/Command'
 import { Disclosure } from '../../primitives/Disclosure'
 import { GROUPS, statesOf, tally, type Facts, type Part, type PartFix, type PartState } from '@studio/setup-parts'
@@ -21,8 +22,10 @@ export function partsTally(F: Facts) {
   return tally(GROUPS.flatMap(g => statesOf(F, g)))
 }
 
-export function PartsRow({ facts: F, group, part, isExpanded, onToggle, onGroup, onPart, onGoto, setConn }: {
+export function PartsRow({ facts: F, settled = true, group, part, isExpanded, onToggle, onGroup, onPart, onGoto, setConn }: {
   facts: Facts
+  // every fact has answered: until then the count would move as each one comes, so it says it is checking
+  settled?: boolean
   group: string
   part: string
   isExpanded: boolean
@@ -34,7 +37,7 @@ export function PartsRow({ facts: F, group, part, isExpanded, onToggle, onGroup,
 }) {
   const all = partsTally(F)
   return (
-    <Disclosure name="Parts" state={<><Val>{all.ok} of {all.all}</Val>{all.bad && <Mark ok={false} label="Something is not working" />}</>} isExpanded={isExpanded} onToggle={onToggle}>
+    <Disclosure name="Parts" state={settled ? <><Val>{all.ok} of {all.all}</Val>{all.bad && <Mark ok={false} label="Something is not working" />}</> : <Busy />} isExpanded={isExpanded} onToggle={onToggle}>
       <div className="flex flex-col divide-y divide-edge overflow-hidden rounded-[8px] border border-edge">
         {GROUPS.map(g => {
           const rows = statesOf(F, g), t = tally(rows)

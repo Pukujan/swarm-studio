@@ -17,6 +17,9 @@
 .ov-stage { flex: 1; min-width: 0; position: relative; overflow: hidden; outline: none; touch-action: none;
   background: radial-gradient(circle, rgb(var(--glass-rgb) / .07) 1px, transparent 1.2px) 0 0 / 22px 22px, var(--bg); }
 .ov-stage.panning { cursor: grabbing; }
+/* a double-click on the board opens a file; on the empty canvas it never selects the pictures' and labels' text (#560) */
+.ov-stage { user-select: none; -webkit-user-select: none; }
+.ov-stage :is(input, textarea, [contenteditable]) { user-select: text; -webkit-user-select: text; }
 .ov-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; display: flex; gap: 72px; padding: 48px 56px 140px; width: max-content; }
 .ov-world.ease { transition: transform .3s cubic-bezier(.2, .8, .2, 1); }
 .ov-col { display: flex; flex-direction: column; gap: 64px; }

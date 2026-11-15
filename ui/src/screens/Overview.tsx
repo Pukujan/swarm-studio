@@ -24,6 +24,7 @@ import { ProjectCrumb } from './overview/ProjectCrumb'
 import { Stage, type StageHandle } from './overview/Stage'
 import { useOverview } from './overview/useOverview'
 import './overview/overview.css'
+import { revealLabel } from '../shared/reveal'
 
 const enc = encodeURIComponent
 const narrow = () => matchMedia('(max-width: 760px)').matches
@@ -269,7 +270,7 @@ function fileMenu(x: Item) {
     up ? <MenuRow key="rename" id="rename" icon="type" label="Rename" /> : null,
     up ? <MenuRow key="dup" id="dup" icon="layers" label="Duplicate" /> : null,
     (['art', 'upload', 'film'].includes(x.kind) && x.sending == null) || x.kind === 'page' ? <MenuRow key="dl" id="dl" icon="download" label="Download" /> : null,
-    x.sending == null ? <MenuRow key="show" id="show" icon="file" label="Show in Finder" /> : null,
+    x.sending == null ? <MenuRow key="show" id="show" icon="file" label={revealLabel()} /> : null,
     up ? <MenuSeparator key="sep" /> : null,
     up ? <MenuRow key="del" id="del" icon="trash" label="Delete" red /> : null
   ]
