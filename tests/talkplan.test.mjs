@@ -331,7 +331,7 @@ test('the web side: a game idea opens the talk beside a draft board, and Lock is
   const canvas = canvasSource()
   assert.match(canvas, /if \(talk\.kind === 'game'\) return gameSay\(\{ said: text \}\)/)
   assert.match(canvas, /talkPost\('\/api\/talk', \{ kind: 'game', said \}\)/)
-  assert.match(canvas, /\/lock`\)/)
+  assert.match(canvas, /gameSay\(\{ pick: 'lock', label: 'Lock' \}\)/, 'Lock is a pick the server runs')
   assert.match(canvas, /<small>\$\{esc\(o\.why\)\}<\/small>/, 'the trade-off is the second line')
   const plan = read('plan.js')
   assert.match(plan, /primary\.onclick = \(\) => \(P\.draft \? sw\.talk\?\.lock\?\.\(\) : gate\(\)\)/)
