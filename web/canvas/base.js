@@ -36,8 +36,12 @@ async function chatFiles(list) {
 }
 // a file dropped on the Design deck goes to the build's project References, and Hermia asks once: like this, or
 // use as is (web/refdrop.js, issue #543). The build's own address: the server files it in the build's project.
-refDrop({ root: els.viewport, at: () => (shownRun() ? `/api/runs/${encodeURIComponent(shownRun())}` : null), api, said: text => { botMsg(text) },
-  hosted: () => document.body.classList.contains('hosted') })
+// the Design deck and the App room (a sibling of the deck's viewport) take the same drop, by the build shown; a
+// drop a panel inside already took (the game's cast bench) is that panel's
+const refDropAt = () => (shownRun() ? `/api/runs/${encodeURIComponent(shownRun())}` : null)
+for (const root of [els.viewport, document.getElementById('appview')]) {
+  if (root) refDrop({ root, at: refDropAt, api, said: text => { botMsg(text) }, hosted: () => document.body.classList.contains('hosted'), skip: e => e.defaultPrevented })
+}
 // a project message's attached references, named for the crew (the brief lists the store with its links)
 export const refLines = (text, media) => media.length ? `${text}\n${media.map(m => `Use the reference ${m.data?.kind === 'image' ? 'picture' : 'file'} "${m.name}" (${m.data?.src || ''}).`).join('\n')}` : text
 // where a layer is on screen: the Overview's artboard or the Studio scaffold's card when one shows, else

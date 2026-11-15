@@ -5,14 +5,20 @@
 //   focus(target): a section's name (its data-sec), a card's key, or an element, fitted with a margin, never past 1:1
 //   frameAll(): the whole board in view, beside the inspector when it is open
 //   camera: given one, every move is written to it too (src/board/camera.ts), for the tier manager
+//   drop: a file dropped anywhere on the board goes to References (shared/RefDrop.tsx, issue #543), except on the
+//         Assets section, which keeps it as an asset (onDropFiles)
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { Board } from './useStudio'
 import type { Camera } from '../../board/camera'
+import type { RefDropZone } from '../../shared/RefDrop'
 
 const INSP = 272
 
-export const StudioBoard = forwardRef<Board, { inspector: boolean, fit?: [number, number], onEmptyClick?: () => void, children: ReactNode, onDropFiles?: (to: 'ref' | 'asset', files: File[]) => void, camera?: Camera }>(
-  function StudioBoard({ inspector, fit = [0.35, 1], onEmptyClick, onDropFiles, children, camera }, ref) {
+// a drop on the Assets section is the board's own (the References drop skips it)
+export const onAssets = (e: React.DragEvent) => !!(e.target as HTMLElement).closest?.('[data-sec="assets"]')
+
+export const StudioBoard = forwardRef<Board, { inspector: boolean, fit?: [number, number], onEmptyClick?: () => void, children: ReactNode, onDropFiles?: (to: 'asset', files: File[]) => void, drop?: { zone: RefDropZone, layer: ReactNode }, camera?: Camera }>(
+  function StudioBoard({ inspector, fit = [0.35, 1], onEmptyClick, onDropFiles, drop, children, camera }, ref) {
     const stage = useRef<HTMLDivElement>(null)
     const world = useRef<HTMLDivElement>(null)
     const cam = useRef({ x: 0, y: 0, k: 1 })
@@ -94,13 +100,18 @@ export const StudioBoard = forwardRef<Board, { inspector: boolean, fit?: [number
       return () => { s.removeEventListener('pointerdown', down); s.removeEventListener('pointermove', move); s.removeEventListener('pointerup', up); s.removeEventListener('wheel', wheel) }
     }, [apply, onEmptyClick])
 
-    // files dropped on References or Assets go to that store
-    const sectionOf = (e: React.DragEvent) => (e.target as HTMLElement).closest?.<HTMLElement>('[data-sec="references"], [data-sec="assets"]')
+    // files dropped on Assets are assets; anywhere else on the board, references
     return (
-      <div ref={stage} className="pj-stage" tabIndex={-1} aria-label="Studio"
-        onDragOver={e => { if (e.dataTransfer.types.includes('Files') && sectionOf(e)) e.preventDefault() }}
-        onDrop={e => { const s = sectionOf(e); if (!s || !e.dataTransfer.files.length) return; e.preventDefault(); onDropFiles?.(s.dataset.sec === 'assets' ? 'asset' : 'ref', [...e.dataTransfer.files]) }}>
+      <div ref={stage} className="pj-stage" tabIndex={-1} aria-label="Studio" onDragEnter={drop?.zone.onDragEnter} onDragLeave={drop?.zone.onDragLeave}
+        onDragOver={e => { if (!onAssets(e)) return drop?.zone.onDragOver(e); if (e.dataTransfer.types.includes('Files')) e.preventDefault() }}
+        onDrop={e => {
+          if (!onAssets(e)) return drop?.zone.onDrop(e)
+          drop?.zone.onDrop(e) // the overlay goes; the References drop skips this one
+          if (!e.dataTransfer.files.length) return
+          e.preventDefault(); onDropFiles?.('asset', [...e.dataTransfer.files])
+        }}>
         <div ref={world} className={`pj-world${easing ? ' ease' : ''}`}>{children}</div>
+        {drop?.layer}
       </div>
     )
   }

@@ -186,6 +186,8 @@ export function useStudio(pid: string | null) {
         } catch (err) { fail(err) }
       }
     },
+    // the store as a drop to References left it (shared/RefDrop.tsx), and after its Use as is
+    stored: (refs: StoreItem[], assets?: StoreItem[]) => take(assets ? { refs, assets } : { refs }),
     // a website given on the first step: read for what it says, and walked for its look
     addLink: (url: string) => post<{ refs: StoreItem[] }>(proj('/refs/link'), { url, source: 'import' }).then(j => take({ refs: j.refs })),
     // Lock (decision 0015): the look, locked or opened again

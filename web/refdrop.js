@@ -1,6 +1,6 @@
 // @ts-check
 // One drop target for references (issue #543, decision 0015: "drop anything anywhere"). Whatever is dropped on a
-// screen that has one (the Studio board, a project's Overview, the Design deck) goes to the project's References,
+// screen that has one (the Studio board, a project's Overview, the Design deck, the App room) goes to the project's References,
 // the one place the crew's brief reads. Then Hermia asks once, beside it: "like this, or use as is?". Like this
 // keeps it a reference (the crew matches its look, or reads its words); Use as is moves it to the project's
 // Assets, placed as it is (spec 37). A file over the screen shows where it will go.

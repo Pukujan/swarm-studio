@@ -2,7 +2,8 @@
 // comes from the machine; the app from its routes (source.ts), loaded once and kept up to date from the stream: an
 // app:* event for this build reads its state again (a local call), a file written is read again. While it shows,
 // it tells the server a viewer is here every 30 s, so the app is not stopped under them (decision 0017).
-// A game's App room has not moved: it stays the stand-in.
+// A game's App room has not moved: it stays the stand-in. A file dropped on the wall goes to the project's References
+// (shared/RefDrop.tsx, issue #543), by the build's address when the project is not known, and Hermia asks in the chat.
 import { classicHref } from '../../shell/classic'
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { search } from '../../nav/address'
@@ -17,6 +18,9 @@ import { Chat, type ChatLine } from '../../chat'
 import { doneSections } from '../deck/model'
 import { useDeckRun } from '../deck/source'
 import { crew } from '../deck/crew'
+import { refAt } from '../../shared/refs'
+import { useRefDrop } from '../../shared/RefDrop'
+import { useToast } from '../../primitives/Toast'
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 
@@ -31,6 +35,11 @@ export function AppWall() {
   // the room's chat (issue #542, one box): what was said in it here, the person's words and the answers
   const [lines, setLines] = useState<ChatLine[]>([])
   const line = useCallback((who: ChatLine['who'], text: string) => setLines(ls => [...ls, { id: `${Date.now()}:${ls.length}`, at: Date.now(), who, text }]), [])
+  // the live app's window is a frame: the overlay takes the drop itself (cover), or a file over it would not arrive
+  const hermia = useCallback((text: string) => line('hermia', text), [line])
+  // a file that could not be added (a build in no project yet) is a toast, not a line in the chat
+  const toast = useToast()
+  const drop = useRefDrop({ at: refAt(view.project, run), said: hermia, failed: toast, cover: true })
   // the design the app is made from: a change sends its finished sections, as the current Studio's appAsk does
   const { model: deck } = useDeckRun(run ?? null)
   // the chat shows the build's own lines too, as the deck's chat does (the crew in its shade; the build's news in the Log)
@@ -147,7 +156,10 @@ export function AppWall() {
   if (!model) return <section aria-label="App build" aria-busy="true" className="grid flex-1 grid-cols-2 grid-rows-2 gap-[10px] p-3">{WINDOWS.map(w => <div key={w} className="rounded-[12px] border border-edge bg-deep" />)}</section>
   return (
     <>
-      <AppWallView model={model} said={said} onAsk={onAsk} onOpen={onOpen} onFile={readFile} onBack={onBack} going={going} docked radio={radio} />
+      <div className="relative flex min-h-0 flex-col" {...drop.zone}>
+        <AppWallView model={model} said={said} onAsk={onAsk} onOpen={onOpen} onFile={readFile} onBack={onBack} going={going} docked radio={radio} />
+        {drop.layer}
+      </div>
       {/* the App room opens with its chat docked (issue #542): it is where a change to the app is asked for */}
       <Chat from={run} project={view.project} lines={feed.lines} log={feed.log} onSubmit={onChat}
         box={{ placeholder: "Change the app, or ask the crew…", empty: "Ask the crew what they are on, or say what to change: once the app is built, your words change it.", action: "Send" }} />

@@ -20,7 +20,9 @@ import { FoundLine, Importer } from './studio/Importer'
 import { KitCard } from './studio/KitCard'
 import { StepPath } from './studio/StepPath'
 import './studio/brand-step.css'
-import { StudioBoard } from './studio/StudioBoard'
+import { StudioBoard, onAssets } from './studio/StudioBoard'
+import { refAt } from '../shared/refs'
+import { useRefDrop } from '../shared/RefDrop'
 import { useCardTiers } from './studio/useCardTiers'
 import { createCamera } from '../board/camera'
 import { boardMode } from '../board/flag'
@@ -58,7 +60,7 @@ export function StudioFirst() {
   // it goes back a step and then to Projects (App's Esc, through the machine)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || (e.target as HTMLElement | null)?.closest?.('input, textarea, select, [role="menu"], [role="dialog"]')) return
+      if (e.key !== 'Escape' || (e.target as HTMLElement | null)?.closest?.('input, textarea, select, [role="menu"], [role="dialog"], [data-refask]')) return
       if (sheet) { e.preventDefault(); setSheet(false); return }
       if (sel) { e.preventDefault(); select(null) }
     }
@@ -150,6 +152,16 @@ export function StudioFirst() {
     if (pack && pack !== was.pack) say(moodLine(moods?.packs?.find(p => p.slug === pack)?.name || 'That mood', nextStep(order, now, 'brand'), STEP_NAME))
   })
   useEffect(() => { setWalked([]) }, [pid])
+  // a file dropped anywhere on the board but Assets goes to References, read for what it says (source=import, as a
+  // drop on References was before) and selected, and Hermia asks once in the chat and beside it: like this, or use
+  // as is? (web/scaffold.js's refDrop)
+  const hermia = useCallback((text: string) => setWalked(w => [...w, { id: `drop:${pid}:${w.length}:${Date.now()}`, at: Date.now(), who: 'hermia', text }]), [pid])
+  const drop = useRefDrop<StoreItem>({
+    place: 'top',
+    at: d ? refAt(d.project.id) : null, skip: onAssets, source: 'import', said: hermia,
+    done: (refs, added) => { actions.stored(refs); select(`ref:${added[0].id}`) },
+    asset: (refs, assets) => actions.stored(refs, assets)
+  })
   const said = useMemo(() => [...lines, ...walked, ...(hermesOff ? [hermesOff] : [])], [lines, walked, hermesOff])
   const heard = useCallback((text: string) => {
     if (!pid || d?.studio.idea) return
@@ -336,7 +348,7 @@ export function StudioFirst() {
         </div>
       </aside>
 
-      <StudioBoard ref={board} camera={tiered ? camera : undefined} inspector={insp} onEmptyClick={() => { if (sel) select(null) }} onDropFiles={(to, files) => void actions.upload(to, files)}>
+      <StudioBoard ref={board} camera={tiered ? camera : undefined} inspector={insp} onEmptyClick={() => { if (sel) select(null) }} onDropFiles={(to, files) => void actions.upload(to, files)} drop={drop}>
         <div className="col">{sections}</div>
       </StudioBoard>
 

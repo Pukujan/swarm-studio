@@ -2,7 +2,8 @@
 // in Figma's layout (PATTERNS.md). The open version comes from the machine (`view.run`, room `deck`); its events
 // are folded into the model the canvas and the panels draw: the pages, the crew's cursors, Pages and Layers, the
 // toolbar (the person's Move, Text and Comment), the variables, a picked section's Design tab (Open Design's Edit),
-// comments, the chat, Play and Watch a visitor, Replay, Publish and Post to Feed, and Export (#404).
+// comments, the chat, Play and Watch a visitor, Replay, Publish and Post to Feed, and Export (#404). A file dropped
+// on the stage goes to the project's References (shared/RefDrop.tsx, issue #543; web/canvas/base.js's refDrop).
 // scripts/deck-walk.mjs uses each of them end to end.
 import { classicHref } from '../shell/classic'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -24,6 +25,9 @@ import { ExportDialog } from './deck/ExportDialog'
 import { Player } from './deck/Player'
 import { PublishDialog } from './deck/PublishDialog'
 import { useDeckRun } from './deck/source'
+import { useToast } from '../primitives/Toast'
+import { refAt } from '../shared/refs'
+import { useRefDrop } from '../shared/RefDrop'
 
 // `board` forces the board's mode (a story); otherwise the address's ?board= says (src/board/flag.ts)
 export function DesignDeck({ board: forced }: { board?: BoardMode }) {
@@ -31,6 +35,9 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
   // ☰ → Replay (the machine's `replay`): the saved build plays again, and ends on the finished build
   const { model, loading, error, unfinished = false } = useDeckRun(view.run ?? view.version, view.replay, useCallback(() => go({ type: 'replay', on: false }), [go]))
   const stage = useRef<StageHandle>(null)
+  // a file dropped on the stage: to the project's References, by the build's address when the project is not known
+  const toast = useToast()
+  const drop = useRefDrop({ at: refAt(view.project, model.run ?? view.run ?? view.version), said: toast })
   const [board] = useState(() => forced ?? boardMode())
   const [zoom, setZoom] = useState(1)
   // the page Layers lists: the one the person picked, else the address's page, else the first
@@ -82,7 +89,7 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.defaultPrevented || view.player !== 'closed') return
-      const field = e.target instanceof Element && !!e.target.closest('input, textarea, select, [contenteditable], [role="dialog"]')
+      const field = e.target instanceof Element && !!e.target.closest('input, textarea, select, [contenteditable], [role="dialog"], [data-refask]')
       if (e.key === 'Escape' && tool !== 'move' && !field) { e.preventDefault(); setTool('move'); return }
       if (e.key === 'Escape' && sel && !field) { e.preventDefault(); if (part) setPart(null); else select(null) }
       // V, T and C press the person's tools (web/canvas/loop.js)
@@ -128,7 +135,8 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
       <LeftPanel id="deck-layers-panel" model={model} page={page} sheet={sheet} onClose={closeSheet} selected={sel?.key ?? null}
         onPage={id => { setPicked(id); setFollow(false); setSheet(false); stage.current?.focusPage(id) }}
         onLayer={k => { const l = model.layers[k]; const on = l && l.page !== '*' ? l.page : page ?? model.pages[0]?.id; if (!on) return; select({ key: k, page: on }); setPicked(on); setSheet(false); stage.current?.focusPage(on) }} />
-      <div className="relative flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col" {...drop.zone}>
+        {drop.layer}
         <div className="absolute top-3 left-3 z-20 flex flex-wrap items-center gap-2">
           {!loading && model.state !== 'empty' && <StatusPill model={model} unfinished={unfinished} />}
           <Button role="secondary" aria-expanded={sheet} aria-controls="deck-layers-panel" onPress={() => setSheet(s => !s)} className="md:hidden">
