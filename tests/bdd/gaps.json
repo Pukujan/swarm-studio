@@ -246,5 +246,56 @@
    "why": "Website never reads Checking…: the current Studio does not ask the hosts' states (/api/publish) before showing it",
    "match": "nothing reads Checking"
   }
+ },
+ "design-deck › Breadcrumb › Back": {
+  "next": {
+   "why": "Esc leaves the Design deck for Projects, not the Overview",
+   "match": "Esc leaves the project for Projects"
+  }
+ },
+ "design-deck › Empty states › A new chat": {
+  "next": {
+   "why": "the next UI opens a new chat as a stand-in (\"Open in the Studio\"), with no chat of its own to show",
+   "match": [
+    "Layers does not show",
+    "composer"
+   ]
+  }
+ },
+ "design-deck › Replay › Replaying": {
+  "next": {
+   "why": "the next UI's deck has no ☰ menu with Replay",
+   "match": "no ☰ menu"
+  }
+ },
+ "design-deck › 390 px › The chat at 390": {
+  "next": {
+   "why": "the next UI's chat has no × to fold it at 390",
+   "match": "no × to fold"
+  }
+ },
+ "design-deck › Talk and brief before building › The skip question": {
+  "next": {
+   "why": "Make in the next UI does not open a chat that asks the skip question",
+   "match": [
+    "does not ask to skip",
+    "Skip all, build now"
+   ]
+  }
+ },
+ "projects › Chats › Reopening a chat": {
+  "next": {
+   "why": "a chat in the next UI does not open into the Design deck's chat",
+   "match": [
+    "the Design deck",
+    "the chat does not show"
+   ]
+  }
+ },
+ "projects › Chats › A game's chat": {
+  "next": {
+   "why": "a game's chat in the next UI does not open the Plan board",
+   "match": "no Lock button"
+  }
  }
 }
