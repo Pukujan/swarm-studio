@@ -1,14 +1,37 @@
 // Publish (web/canvas/publish.js): the build as a live link on a host the person picks. Three states, always shown:
 // publishing (the steps), live (the link, Copy, Open, Post to Feed), failed (why, Retry or another host). The state
 // is the build's own (its publish:* events, folded into the model), so it is back after a reload.
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode, type RefObject } from 'react'
+import { Dialog as AriaDialog, Heading, Popover } from 'react-aria-components'
 import { Button, LinkButton } from '../../primitives/Button'
 import { Dialog } from '../../primitives/Dialog'
 import { TextField } from '../../primitives/TextField'
 import { HOSTS, STAGES, connectHost, copyText, feedConnect, getHosts, postToFeed, publish, shortReason, shortUrl, type Hosts } from './publish'
 import { doneSections, liveUrl, type DeckModel, type Host } from './model'
 
-export function PublishDialog({ model, isOpen, onOpenChange }: { model: DeckModel, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
+// Publish's menu (openspec/specs/publish/spec.md: "its menu"): under the Publish button, as the current Studio's
+// #pub-menu opens (web/canvas.css .pub-menu, @pop .2s); where that button is not on screen (a phone, where the right
+// panel is hidden, and /publish typed in the chat), the kit's Dialog
+function Sheet({ title, anchor, isOpen, onOpenChange, children }: { title: string, anchor?: RefObject<HTMLElement | null>, isOpen: boolean, onOpenChange: (open: boolean) => void, children: ReactNode }) {
+  const shown = !!anchor?.current?.getClientRects().length
+  if (!shown) return <Dialog title={title} isOpen={isOpen} onOpenChange={onOpenChange}>{children}</Dialog>
+  return (
+    <Popover triggerRef={anchor} isOpen={isOpen} onOpenChange={onOpenChange} placement="bottom end" offset={8}
+      className="deck-pop w-[min(380px,calc(100vw-16px))] max-h-[calc(100dvh-70px)] overflow-y-auto rounded-[10px] border border-line bg-panel text-text shadow-[0_16px_40px_rgb(var(--shade-rgb)/.62)] outline-none">
+      <AriaDialog className="relative p-4 outline-none">
+        {({ close }) => (
+          <>
+            <Heading slot="title" className="pr-10 font-label text-sm font-semibold uppercase tracking-[.07em]">{title}</Heading>
+            <Button role="ghost" aria-label="Close" onPress={close} className="absolute top-1 right-1">×</Button>
+            <div className="mt-3 font-monospace text-sm">{children}</div>
+          </>
+        )}
+      </AriaDialog>
+    </Popover>
+  )
+}
+
+export function PublishDialog({ model, isOpen, onOpenChange, anchor }: { model: DeckModel, isOpen: boolean, onOpenChange: (open: boolean) => void, anchor?: RefObject<HTMLElement | null> }) {
   // `choose`: the host list, even while a link is live (Publish again)
   const [choose, setChoose] = useState(false)
   const [asked, setAsked] = useState<{ target: Host, error: string } | null>(null)
@@ -28,7 +51,7 @@ export function PublishDialog({ model, isOpen, onOpenChange }: { model: DeckMode
   const view = choose || (!working && !failed && !url) ? 'choose' : working ? 'working' : failed ? 'failed' : 'live'
 
   return (
-    <Dialog title="Publish the website" isOpen={isOpen} onOpenChange={onOpenChange}>
+    <Sheet title="Publish the website" anchor={anchor} isOpen={isOpen} onOpenChange={onOpenChange}>
       {view === 'choose' && <Choose onPick={go} />}
       {view === 'working' && <Steps target={asked?.target ?? p.target} stage={p.state === 'working' ? p.stage : 'export'} />}
       {view === 'failed' && failed && (
@@ -52,7 +75,7 @@ export function PublishDialog({ model, isOpen, onOpenChange }: { model: DeckMode
           <FeedRow run={run} />
         </div>
       )}
-    </Dialog>
+    </Sheet>
   )
 }
 

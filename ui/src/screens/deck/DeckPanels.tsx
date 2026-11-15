@@ -2,7 +2,7 @@
 // build's name, its Pages and the chosen page's Layers (a dot on a layer an agent is writing); along the bottom the
 // toolbar, where a tool lights up while an agent uses it; on the right the crew, the progress and the zoom, and with
 // nothing selected the build's variables, the design tokens the planner set up.
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, type ReactNode, type Ref } from 'react'
 import { Button } from '../../primitives/Button'
 import { Menu, MenuItem } from '../../primitives/Menu'
 import { Icon } from '../../primitives/Icon'
@@ -158,10 +158,11 @@ export function StatusPill({ model, unfinished }: { model: DeckModel, unfinished
 // Publish's label is its state (the breadboard's "Publish", "Publishing…", "Live"); Replay and Export, both acts on
 // the build, are in the ⋯ menu beside it
 // With a section picked, `design` (its Design tab) takes the variables' place, as Figma's right panel does
-export function RightPanel({ model, zoom, onFit, canPlay, onPlay, replay, onPublish, onExport, design, history }: {
+export function RightPanel({ model, zoom, onFit, canPlay, onPlay, replay, onPublish, onExport, design, history, publishRef }: {
   model: DeckModel, zoom: number, onFit: () => void, canPlay: boolean, onPlay: () => void,
   replay: { on: boolean, can: boolean, toggle: () => void }, onPublish: () => void, onExport: () => void,
-  design?: ReactNode, history: { canUndo: boolean, canRedo: boolean, undo: () => void, redo: () => void, undoLabel?: string, redoLabel?: string, error: string }
+  design?: ReactNode, history: { canUndo: boolean, canRedo: boolean, undo: () => void, redo: () => void, undoLabel?: string, redoLabel?: string, error: string },
+  publishRef?: Ref<HTMLButtonElement>
 }) {
   const pubLabel = model.publish.state === 'working' ? 'Publishing…' : model.publish.liveTarget && model.publish.state !== 'failed' ? 'Live' : 'Publish'
   const vars = Object.entries(model.theme?.vars ?? {})
@@ -180,7 +181,8 @@ export function RightPanel({ model, zoom, onFit, canPlay, onPlay, replay, onPubl
       </div>
       <div className="flex gap-2 border-b border-edge px-3 py-2">
         <Button role="primary" isDisabled={!canPlay} onPress={onPlay} className="flex-1"><Icon name="play" size={16} />Play</Button>
-        <Button role="secondary" isDisabled={!canPlay} onPress={onPublish}><Icon name="globe" size={16} />{pubLabel}</Button>
+        {/* Publish as the current Studio's (web/canvas.css .toggle): a glass pill whose fill and edge ease in on hover */}
+        <Button ref={publishRef} role="secondary" isDisabled={!canPlay} onPress={onPublish} className="deck-toggle"><Icon name="globe" size={16} />{pubLabel}</Button>
         <Menu label={<Icon name="more" size={18} />} name="Build" disabledKeys={[...(replay.can ? [] : ['replay']), ...(canPlay ? [] : ['export'])]}
           onAction={k => (k === 'replay' ? replay.toggle() : onExport())}>
           <MenuItem id="replay">{replay.on ? 'Stop replay' : 'Replay'}</MenuItem>
