@@ -14,7 +14,7 @@ for (const app of ['', 'next/']) {
   const p = await ctx.newPage()
   await p.goto(`${s.BASE}/${app}?replay=${s.ids.mid}&speed=2`, { waitUntil: 'load' })
   await new Promise(r => setTimeout(r, 1500))
-  console.log(app || 'classic', JSON.stringify(await p.evaluate(() => ({ pet: document.querySelector('.pet')?.className, op: document.querySelector('.pet') && getComputedStyle(document.querySelector('.pet')).opacity, view: window.swarmCosmos?.nav?.view && { room: window.swarmCosmos.nav.view.room, replay: window.swarmCosmos.nav.view.replay }, state: window.swarmCosmos?.pet?.state }))))
+  console.log(app || 'classic', JSON.stringify(await p.evaluate(() => ({ pets: [...document.querySelectorAll('.pet')].map(e => { const r = e.getBoundingClientRect(); return { cls: e.className, op: getComputedStyle(e).opacity, x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), parent: e.parentElement?.id || e.parentElement?.className } }), view: window.swarmCosmos?.nav?.view && { room: window.swarmCosmos.nav.view.room, replay: window.swarmCosmos.nav.view.replay }, state: window.swarmCosmos?.pet?.state }))))
   await ctx.close()
 }
 await b.close(); s.stop()
