@@ -49,3 +49,18 @@ export const HermiaGivesAnOrder: Story = {
     }
   }
 }
+// each change a version (#542, #550, #554): the last change with its before and after, and the versions to go back to
+const t0 = Date.UTC(2026, 10, 13, 16, 0)
+export const WithVersions: Story = {
+  args: {
+    onBack: () => {},
+    model: {
+      ...built,
+      versions: [
+        { rev: 'v3', t: t0 + 3 * 600000, what: 'Make the booking button green', now: true, changed: ['src/pages/BookAClass.tsx'], screen: '/book', photo },
+        { rev: 'v2', t: t0 + 2 * 600000, what: 'Add an admin page for the week', now: false, changed: ['src/pages/Admin.tsx', 'src/App.tsx'], screen: '/admin', photo },
+        { rev: 'v1', t: t0, what: 'First build', now: false, photo }
+      ]
+    }
+  }
+}
