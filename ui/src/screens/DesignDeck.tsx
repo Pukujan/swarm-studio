@@ -42,6 +42,8 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
   const [sheet, setSheet] = useState(false)
   const closeSheet = useCallback(() => setSheet(false), [])
   const [dialog, setDialog] = useState<'publish' | 'export' | null>(null)
+  // Publish's button: its menu opens under it
+  const publishBtn = useRef<HTMLButtonElement>(null)
   // the picked section (and the part of it the Design tab shows); hand edits, with Undo and Redo
   const [sel, setSel] = useState<Picked | null>(null)
   const [part, setPart] = useState<string | null>(null)
@@ -159,11 +161,11 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
         {!loading && model.state !== 'empty' && <Toolbar model={model} tool={tool} onTool={pressTool} />}
       </div>
       <RightPanel model={model} zoom={zoom} onFit={() => stage.current?.fit()} canPlay={canPlay} onPlay={play} replay={replay}
-        onPublish={() => setDialog('publish')} onExport={() => setDialog('export')} history={edits}
+        onPublish={() => setDialog('publish')} onExport={() => setDialog('export')} history={edits} publishRef={publishBtn}
         design={pickedLayer && <DesignTab layer={pickedLayer} issue={model.issues[pickedLayer.key]?.problem} part={part} onPart={setPart} onClose={() => select(null)}
           onEdit={(patch, why) => { edits.edit(pickedLayer.key, patch, why).then(id => { if (id !== undefined) setPart(id) }) }} />} />
       {view.player !== 'closed' && model.pages.length > 0 && <Player model={model} />}
-      {model.run && <PublishDialog model={model} isOpen={dialog === 'publish'} onOpenChange={o => setDialog(o ? 'publish' : null)} />}
+      {model.run && <PublishDialog model={model} anchor={publishBtn} isOpen={dialog === 'publish'} onOpenChange={o => setDialog(o ? 'publish' : null)} />}
       {model.run && <ExportDialog model={model} isOpen={dialog === 'export'} onOpenChange={o => setDialog(o ? 'export' : null)} />}
     </div>
     {model.run && <DeckChat model={model} picked={sel?.key ?? null}

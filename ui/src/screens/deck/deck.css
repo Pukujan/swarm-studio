@@ -53,7 +53,16 @@
 .deck-think { transition: opacity .25s, transform .25s; }
 .deck-think.swap { opacity: 0; transform: translateY(3px); }
 
+/* Publish as the current Studio's .toggle (web/canvas.css): a glass pill whose fill and edge ease in on hover; its
+   menu rises into place as #pub-menu does (.more-menu, @pop .2s) */
+.deck-toggle { border-radius: 999px !important; background: rgb(var(--glass-rgb) / .06) !important; border-color: rgb(var(--glass-rgb) / .3) !important;
+  transition: background .16s var(--ease), border-color .16s var(--ease), color .16s var(--ease), transform .16s var(--ease); }
+.deck-toggle[data-hovered]:not([data-disabled]) { background: rgb(var(--glass-rgb) / .12) !important; border-color: rgb(var(--glass-rgb) / .55) !important; }
+.deck-toggle[data-pressed]:not([data-disabled]) { transform: scale(.97); }
+.deck-pop { animation: pop .2s var(--ease); }
+@keyframes pop { from { opacity: 0; transform: translateY(6px); } }
+
 /* reduced motion: nothing here moves (the current Studio stills every animation and transition, web/canvas.css) */
 @media (prefers-reduced-motion: reduce) {
-  .deck-crew .cursor, .deck-crew .cursor *, .deck-crew .ghost, .deck-crew .spark, .deck-status, .deck-status *, .deck-status *::after, .deck-flag, .deck-play-frame, .deck-think { animation: none !important; transition: none !important; }
+  .deck-crew .cursor, .deck-crew .cursor *, .deck-crew .ghost, .deck-crew .spark, .deck-status, .deck-status *, .deck-status *::after, .deck-flag, .deck-play-frame, .deck-think, .deck-toggle, .deck-pop { animation: none !important; transition: none !important; }
 }

@@ -17,7 +17,7 @@ import { routeMessage, toApp, askBox } from './route.js'
 import { swEdit } from './edit/patches.js'
 import { setVideoHtml } from './video.js'
 import { layerSheet } from './layers.js'
-import { matchHtml, matchWire, lookBusy } from './lookmatch.js'
+import { matchHtml, matchWire, lookBusy, refRows } from './lookmatch.js'
 import { storyLane } from './story.js'
 import { REF_FROM, fmtTime, clamp01, ptsPath } from './project-parts.js'
 import { revealLabel } from './reveal.js'
@@ -463,7 +463,8 @@ export function makeProject({ sw, C, root }) {
       ...(x.kind === 'draft' ? (x.draft.marks || []).map(id => P.reads.get(id)).filter(Boolean).map(r => [r.mark, r.read]) : []),
       x.kind === 'ref' && ['From', REF_FROM[x.ref.source] || x.ref.source],
       x.kind === 'ref' && x.ref.use && ['Use', x.ref.use],
-      x.kind === 'ref' && x.ref.kind === 'link' && ['Link', x.ref.url.replace(/^https?:\/\/(www\.)?/, '').slice(0, 60)]
+      // a link's address; which references this build was given (issue #543), on its pages and on each reference
+      ...refRows(x, P.board)
     ].filter(Boolean)
     const pv = x.kind === 'film' && x.video ? `<video data-src="${esc(base() + x.video)}"${x.src ? ` data-poster="${esc(base() + x.src)}"` : ''} controls playsinline></video>`
       : x.src ? `<img src="${esc(x.src.startsWith('data:') ? x.src : base() + x.src)}" alt="">` : typeCover(x) ? `<div class="pv-tc">${typeCover(x)}</div>` : `<span class="blank">${ic('file', 28)}</span>`
@@ -482,7 +483,7 @@ export function makeProject({ sw, C, root }) {
     const secs = x.kind === 'page' && sw.layers ? sw.layers.list(x.page) : []
     const secHtml = secs.length ? `<div class="pj-secs" role="list" aria-label="Sections">${secs.map(l => `<button class="pj-ly" role="listitem" data-layer="${esc(l.key)}" draggable="true">${ic(l.shared ? 'layers' : 'frame', 14)}<span>${esc(l.role)}</span></button>`).join('')}</div>` : ''
     setVideoHtml(insp, `<h3><span>${esc(x.name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><div class="pv">${pv}</div>${x.pitch ? `<p class="pj-pitch">${esc(x.pitch)}</p>` : ''}
-      ${kv.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}${secHtml}${useFor}${x.kind === 'ref' && !hosted() ? matchHtml(x.ref, { base: base(), built: !!P.board }) : ''}<div class="btns">${btns}</div>`, true)
+      ${kv.map(([k, v]) => `<div class="kv"><span>${k}</span><b title="${esc(v)}">${esc(v)}</b></div>`).join('')}${secHtml}${useFor}${x.kind === 'ref' && !hosted() ? matchHtml(x.ref, { base: base(), built: !!P.board }) : ''}<div class="btns">${btns}</div>`, true)
     const im = insp.querySelector('.pv img')
     if (im && !x.dims) im.onload = () => { dims.set(x.key, `${im.naturalWidth} × ${im.naturalHeight}`); if (P.sel === x.key) renderInspSoon() }
   }

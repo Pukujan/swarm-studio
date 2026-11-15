@@ -7,7 +7,7 @@ import { tmpdir, homedir } from 'node:os'
 import { join } from 'node:path'
 import http from 'node:http'
 import { compareTokens, scoreOf, colourGap, judgeMatch, matchMessages, MATCH_RULES, walkBuild, fixText } from '../engine/lookmatch.mjs'
-import { lookWorker, lookReader, workLine, workHtml, lookPhase, lookSays, matchHtml, lookBusy, foundSaid, takenSaid } from '../web/lookmatch.js'
+import { lookWorker, lookReader, workLine, workHtml, lookPhase, lookSays, matchHtml, lookBusy, foundSaid, takenSaid, refRows } from '../web/lookmatch.js'
 import { refStore } from '../engine/refs.mjs'
 import { refRoutes } from '../server/refs.mjs'
 import { puppeteer } from '../engine/pageshots.mjs'
@@ -199,4 +199,13 @@ test('takenSaid: what the crew takes from a reference, or why nothing', () => {
   assert.equal(takenSaid({ what: ['style', 'colours', 'type'], not: 'Never its words.' }), 'Taken: style, colours, type')
   assert.equal(takenSaid({ what: [], not: 'Not read yet.' }), 'Not read yet.')
   assert.equal(takenSaid(null), '')
+})
+
+test('refRows: what a build was given, on its pages and on each reference; nothing when not known', () => {
+  const board = { refsUsed: [{ id: 'r1', name: 'mood.png', kind: 'image', what: ['its look'] }] }
+  assert.deepEqual(refRows({ kind: 'page' }, board), [['Given', 'mood.png']])
+  assert.deepEqual(refRows({ kind: 'ref', ref: { id: 'r1', kind: 'image' } }, board), [['This build', 'Given its look']])
+  assert.match(refRows({ kind: 'ref', ref: { id: 'r2', kind: 'image' } }, board)[0][1], /^Not given/)
+  assert.deepEqual(refRows({ kind: 'page' }, { refsUsed: [] }), [['Given', 'No references']])
+  assert.deepEqual(refRows({ kind: 'ref', ref: { id: 'r3', kind: 'link', url: 'https://www.example.com/a' } }, { refsUsed: null }), [['Link', 'example.com/a']], 'an older build: only the address')
 })

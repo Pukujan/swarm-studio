@@ -193,5 +193,8 @@ export function refStore({ projectsDir, uploadsOf = () => [], known = () => true
   // the list as the screens show it: each reference with what the crew takes from it
   const shown = pid => { const t = taken(pid); return list(pid).map(r => ({ ...r, taken: t[r.id] || null })) }
 
-  return { list, shown, all, taken, addFile, addLink, remove, restore, setUse, setLook, setFound, setMatch, file, brief, useText, dir }
+  // what a build starting now reads: the references that reach its brief, with what it takes from each
+  const used = pid => { const t = taken(pid); return list(pid).filter(r => t[r.id]?.what?.length).map(r => ({ id: r.id, name: r.name, kind: r.kind, what: t[r.id].what })) }
+
+  return { list, shown, all, taken, used, addFile, addLink, remove, restore, setUse, setLook, setFound, setMatch, file, brief, useText, dir }
 }
