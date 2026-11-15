@@ -152,7 +152,7 @@ const CURSORS = () => {
     const r = el.getBoundingClientRect()
     const who = el.classList.contains('pet') ? 'Hermia' : el.dataset.agent || el.querySelector('.tag span')?.textContent || 'cursor'
     seen[who] = (seen[who] || 0) + 1
-    return { id: seen[who] > 1 ? `${who} ${seen[who]}` : who, x: Math.round(r.left), y: Math.round(r.top) }
+    return { id: seen[who] > 1 ? `${who} ${seen[who]}` : who, x: Math.round(r.left), y: Math.round(r.top), ...(who === 'Hermia' ? { cls: el.className, op: getComputedStyle(el).opacity, view: JSON.stringify({ r: window.swarmCosmos?.nav?.view?.room, rp: window.swarmCosmos?.nav?.view?.replay }), st: JSON.stringify(window.swarmCosmos?.pet?.state) } : {}) }
   })
 }
 const NOT_MOVED = p => p.getByRole('link', { name: 'Open in the Studio' }).first().isVisible().catch(() => false)
