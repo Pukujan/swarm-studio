@@ -158,5 +158,29 @@
    "why": "the Make menu's items are 34 px tall at 390, under the 44 px a target needs",
    "match": "px tall"
   }
+ },
+ "setup-settings › Settings, one level per tap › Opening Crew": {
+  "current": {
+   "why": "Settings has You, Setup, Lite mode, Background and Data: no Crew group",
+   "match": "Settings has no Crew group"
+  }
+ },
+ "setup-settings › Settings, one level per tap › Esc goes up one level": {
+  "current": {
+   "why": "Esc closes Settings at once from inside a group, instead of going up to the groups first",
+   "match": "the first Esc closes Settings"
+  }
+ },
+ "setup-settings › Loading › Slow connections": {
+  "current": {
+   "why": "with the connections held, no row of Settings shows a busy marker",
+   "match": "shows no busy marker"
+  }
+ },
+ "setup-settings › Closing › One sheet at a time": {
+  "current": {
+   "why": "Settings has no Models row (and so no Change) to open Setup from: Setup opens from its own menu item",
+   "match": "Settings has no Models row"
+  }
  }
 }
