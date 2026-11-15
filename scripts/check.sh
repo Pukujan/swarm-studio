@@ -91,7 +91,9 @@ curl -sf -H 'x-swarm-token: ci' -d '{"kind":"app","text":"full stack saas app fo
 # the plan is a conversation (spec 27): the ants idea asks about Godot first and cannot lock yet
 curl -sf -H 'x-swarm-token: ci' -d '{"kind":"game","said":"a tiny game called army of ants , rts game in godots"}' http://127.0.0.1:$port/api/talk > "$tmp/reply"; has '"id":"c-'; has 'Army of Ants: a tiny real-time strategy'
 chat_id=$(grep -oE '"id":"c-[0-9a-f]{10}"' "$tmp/reply" | head -1 | cut -d'"' -f4)
-[ "$(curl -s -o /dev/null -w '%{http_code}' -H 'x-swarm-token: ci' -d '{}' http://127.0.0.1:$port/api/talk/$chat_id/lock)" = 409 ] || { echo 'an open spec locked'; exit 1; }
+# an early Lock makes no plan: it asks the open question (server/talk.mjs actTurn)
+curl -sf -H 'x-swarm-token: ci' -d '{}' http://127.0.0.1:$port/api/talk/$chat_id/lock > "$tmp/reply" || { echo 'an early lock failed'; exit 1; }
+grep -q '"plan":null' "$tmp/reply" && ! grep -q '"state":"locked"' "$tmp/reply" || { echo 'an open spec locked'; exit 1; }
 # the Setup sheet (spec 6): with no model key the test fails without a call, and the pictures pick is kept
 get /api/setup; has '"seen":false'; has '"pictures"'; has '"account":{"connected":false'
 curl -sf -H 'x-swarm-token: ci' -d '{"seen":true,"pictures":"drawn"}' http://127.0.0.1:$port/api/setup > "$tmp/reply"; has '"seen":true'; has '"mode":"drawn"'
