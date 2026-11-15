@@ -17,7 +17,8 @@ async function sendComment(m: DeckModel, text: string, target: string): Promise<
   return j?.error || 'the studio server is not answering'
 }
 
-export function CommentPin({ model, target }: { model: DeckModel, target: string }) {
+// `ask`: a count that opens it when it goes up (the toolbar's Comment, its C key)
+export function CommentPin({ model, target, ask = 0 }: { model: DeckModel, target: string, ask?: number }) {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -26,6 +27,7 @@ export function CommentPin({ model, target }: { model: DeckModel, target: string
   const l = model.layers[target]
   const thread: Note[] = model.threads[target] ?? []
   useEffect(() => { setOpen(false); setText(''); setError('') }, [target])
+  useEffect(() => { if (ask) setOpen(true) }, [ask])
   useEffect(() => { if (open) area.current?.focus() }, [open])
   if (!l || l.status !== 'done') return null
 
