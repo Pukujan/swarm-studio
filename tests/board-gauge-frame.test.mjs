@@ -12,7 +12,7 @@ const SCRIPT = fileURLToPath(new URL('../scripts/board-gauge.mjs', import.meta.u
 // a board's frames: mostly 2 ms with a slow tail, the same shape every time, scaled by how fast the machine is
 const frames = k => Array.from({ length: 400 }, (_, i) => (i % 20 === 0 ? 9 : 2 + (i % 5) * 0.4) * k)
 // one recording: a machine `speed` times slower than the reference runs its calibration and the board's frames that much slower
-const rec = (speed, board = 1) => ({ root: '', runs: 1, fixture: {}, scenes: { deck: { runs: [{ crashed: false, ft: frames(speed * board), calibMs: 8 * speed, taskMs: 1000 * speed * board, iframes: 252, nodes: 16000, layers: 20, jsHeapMB: 700, gpuMB: 18, gpuAllocMB: 18, playersAfter: 0, filmPlaying: 1, camera: 'c' }] } } })
+const rec = (speed, board = 1, layers = 20) => ({ root: '', runs: 1, fixture: {}, scenes: { deck: { runs: [{ crashed: false, ft: frames(speed * board), calibMs: 8 * speed, taskMs: 1000 * speed * board, iframes: 252, nodes: 16000, layers, jsHeapMB: 700, gpuMB: 18, gpuAllocMB: 18, playersAfter: 0, filmPlaying: 1, camera: 'c' }] } } })
 function run(base, head) {
   const dir = mkdtempSync(join(tmpdir(), 'gauge-frame-'))
   try {
@@ -51,4 +51,15 @@ test('--no-gate-frame shows the ratio and does not fail on it', () => {
     assert.equal(r.status, 0, r.stdout + r.stderr)
     assert.match(r.stdout, /main-thread work 1\.50×/)
   } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('a count that takes one of two values on the same code (the Overview's layers, 15 or 20) is held to the base's highest', () => {
+  // two of three base recordings drew 15 layers, the head's drew 20: the same code, a different mode
+  const base = [rec(1, 1, 15), rec(1, 1, 15), rec(1, 1, 20)], head = [rec(1, 1, 20), rec(1, 1, 20), rec(1, 1, 20)]
+  assert.equal(run(base, head).code, 0)
+  // layers well over the base's highest are still a regression
+  const heavy = [rec(1, 1, 30), rec(1, 1, 30), rec(1, 1, 30)]
+  const r = run(base, heavy)
+  assert.equal(r.code, 1, r.out)
+  assert.match(r.out, /layers 20 → 30/)
 })

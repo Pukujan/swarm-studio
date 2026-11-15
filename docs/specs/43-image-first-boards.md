@@ -225,7 +225,7 @@ custom part that can't be avoided ([0003](../decisions/0003-mature-dependencies.
   and players torn down; whether the film plays.
 - **It fails the PR on what the runner's speed cannot change**, the base and the head measured three times each in one
   CI job, medians compared: any more live iframes, a player left after the video leaves, a film that did not play or a
-  crash; DOM nodes over +10 %, layers over +20 %, JS heap and GPU memory over +15 %.
+  crash; DOM nodes over +10 %, layers over +20 %, JS heap and GPU memory over +15 %. (The Overview's layers and GPU allocators take one of two values from one recording to the next on the same code, so the head is held to the base's highest of the three.)
 - **It fails the PR on the board's main-thread work too**, in a form the runner's speed cannot move: the time the
   browser's main thread spent in tasks over the path, divided by a CPU calibration made in the same recording, the head
   over the base of each pair of recordings made one after the other, the median of three pairs, over **1.15×**. On

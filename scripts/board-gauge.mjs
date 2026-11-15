@@ -408,10 +408,14 @@ const GATES = [
   { what: 'live frames', key: 'iframes', rule: 'none' },
   { what: 'players left after leaving', key: 'playersAfter', rule: 'none' },
   { what: 'DOM nodes', key: 'nodes', rule: 0.10, floor: 200 },
-  { what: 'layers', key: 'layers', rule: 0.20, floor: 2 },
+  // two numbers that take one of two values from one recording to the next on the same code (the Overview's layers
+  // were 20 in 324 recordings and 15 in 36; its GPU allocators 34 and 27, by when a picture was composited): the head's
+  // median is held to the base's highest, so the lower mode on the base side is not a regression of the head (a
+  // failure of the PR that changed nothing, one trial in forty)
+  { what: 'layers', key: 'layers', rule: 0.20, floor: 2, base: 'max' },
   { what: 'JS heap MB', key: 'jsHeapMB', rule: 'memory', floor: 8 },
   { what: 'GPU process MB', key: 'gpuMB', rule: 'memory', floor: 2 },
-  { what: 'GPU allocators MB', key: 'gpuAllocMB', rule: 'memory', floor: 2 }
+  { what: 'GPU allocators MB', key: 'gpuAllocMB', rule: 'memory', floor: 2, base: 'max' }
 ]
 // The main thread's work over the scripted path, in a form the runner's speed cannot move much: the browser's own count of
 // the time its main thread spent in tasks over the path (taskMs: script, layout, style, paint), divided by the CPU
@@ -443,7 +447,8 @@ function compare(a, b, memT, gateFrame) {
     const r1 = v => (typeof v === 'number' ? Math.round(v * 10) / 10 : v)
     const add = (what, p0, q0, bad, note = '') => { const p = r1(p0), q = r1(q0); row.push(`${what} ${p} → ${q}${bad ? ' ✗' : ''}`); md.push(`| ${id} | ${what} | ${p ?? 'n/a'} | ${q ?? 'n/a'} | ${bad ? '✗' : note} |`) }
     for (const g of GATES) {
-      const p = x[g.key], q = y[g.key]
+      const own = g.base === 'max' ? A.scenes[id].runs.filter(r => !r.crashed && r[g.key] != null).map(r => r[g.key]) : []
+      const p = own.length ? Math.max(...own) : x[g.key], q = y[g.key]
       if (p == null || q == null) { add(g.what, p, q, false, 'not measured'); continue }
       const t = g.rule === 'memory' ? memT : g.rule
       const bad = t === 'none' ? q > p : q > p * (1 + t) && q - p >= (g.floor || 0)
