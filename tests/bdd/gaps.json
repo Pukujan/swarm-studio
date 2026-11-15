@@ -182,5 +182,25 @@
    "why": "Settings has no Models row (and so no Change) to open Setup from: Setup opens from its own menu item",
    "match": "Settings has no Models row"
   }
+ },
+ "brand-sheet › Options side by side › A pack in part": {
+  "current": {
+   "why": "selecting a pack takes its palette too: Type then changes nothing the pack had not already changed",
+   "match": "the palette changes too"
+  },
+  "next": {
+   "why": "selecting a pack takes its palette too: Type then changes nothing the pack had not already changed",
+   "match": "the palette changes too"
+  }
+ },
+ "brand-sheet › Empty state › The options could not be made": {
+  "current": {
+   "why": "when the brand request fails nothing says so: no toast shows",
+   "match": "no toast"
+  },
+  "next": {
+   "why": "when the brand request fails nothing says so: no toast shows",
+   "match": "no toast"
+  }
  }
 }
