@@ -1,0 +1,37 @@
+name: flake-soak
+# Runs the checks that have flaked, again and again, on ten runners at once, on this tree: a flake fixed is one that
+# does not fail in any trial. Runs when a pull request is labelled `flake-soak` (remove the label and add it again to
+# run it again), or by hand.
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  soak:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'flake-soak'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        trial: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --no-audit --no-fund
+        working-directory: tools/dev
+      - run: npx playwright install --with-deps chromium-headless-shell
+        working-directory: tools/dev
+      - run: npm ci --prefix ui --no-audit --no-fund && npm run --prefix ui build
+      # the unit test that waits on a held push job, 30 times
+      - run: for i in $(seq 1 30); do node --test tests/sourcehub.test.mjs > /dev/null || { echo "sourcehub failed on pass $i"; node --test tests/sourcehub.test.mjs | tail -40; exit 1; }; done
+      - run: for i in $(seq 1 50); do node --test tests/socketsafe.test.mjs > /dev/null || { echo "socketsafe failed on pass $i"; exit 1; }; done
+      # the Overview scenarios that open the Design deck, 4 times each in both apps
+      - run: npm run bdd -- -g "A page into the Design deck|Esc from a room" --repeat-each 4
+        working-directory: tools/dev
+      # motion parity, every scene, as a pull request that touches ui/, web/ or server/ runs it
+      - run: npm install --no-save --no-package-lock playwright@1.64.1 && node scripts/motion-parity.mjs run "$RUNNER_TEMP/parity"
