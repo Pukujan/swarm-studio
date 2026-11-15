@@ -461,7 +461,7 @@ export function Projects() {
             <MenuSeparator key="-" />,
             <MenuRow key="p" id="purge" icon="trash" label="Delete forever" red />
           ] : ids.length > 1 ? [
-            <Submenu key="m" icon="folder" label="Move to" name="Move to">{moveRows(ids)}</Submenu>,
+            <Submenu key="m" icon="folder" label="Move to" name="Move to" onAction={k => { setMenu(null); moveTo(ids, String(k)) }}>{moveRows(ids)}</Submenu>,
             <MenuSeparator key="-" />,
             <MenuRow key="t" id="trash" icon="trash" label="Delete" red />
           ] : [
@@ -469,7 +469,7 @@ export function Projects() {
             ...(p1.planId ? [<MenuRow key="pl" id="plan" icon="layers" label="Open the plan" />] : []),
             <MenuRow key="r" id="rename" icon="type" label="Rename" />,
             <MenuRow key="d" id="dup" icon="layers" label="Duplicate" />,
-            <Submenu key="m" icon="folder" label="Move to" name="Move to">{moveRows(ids)}</Submenu>,
+            <Submenu key="m" icon="folder" label="Move to" name="Move to" onAction={k => { setMenu(null); moveTo(ids, String(k)) }}>{moveRows(ids)}</Submenu>,
             <MenuRow key="dl" id="dl" icon="download" label="Download" />,
             <MenuRow key="f" id="show" icon="file" label="Show in Finder" />,
             <MenuSeparator key="-" />,
