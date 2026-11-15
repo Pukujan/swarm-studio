@@ -30,6 +30,19 @@ export interface AppMap {
 
 export interface RunEvent { type: string, run?: string, t?: number, [k: string]: unknown }
 
+// one version of the app (engine/appjob.mjs versions, issue #542): its first build or a change, newest first
+export interface AppVersion {
+  rev: string
+  t: number
+  // what was asked, "First build", or "Back to: …"
+  what: string
+  now: boolean
+  // the change's files, the screen they are on (a route, or null for the first screen) and its photo
+  changed?: string[]
+  screen?: string | null
+  photo?: string | null
+}
+
 export interface AppModel {
   run: string
   title: string
@@ -43,6 +56,7 @@ export interface AppModel {
   file: { path: string, text: string } | null
   files: { path: string, size: number }[]
   deployedAt?: number
+  versions?: AppVersion[]
 }
 
 const letters = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')

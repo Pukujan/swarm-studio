@@ -42,7 +42,8 @@ export function useStudio(pid: string | null) {
   const [error, setError] = useState<string | null>(null)
   const [takes, setTakes] = useState<{ pid: string, packs: Pack[] } | null>(null)
   // the Brand step's own board (decision 0015): the options to pick a mood from, and the moodboard that follows
-  const [moods, setMoods] = useState<{ pid: string, view: BrandView | null } | null>(null)
+  // `failed`: the options could not be made (no model, Hermes not there): the skeletons stop, the reason and Try again show
+  const [moods, setMoods] = useState<{ pid: string, view: BrandView | null, failed?: string } | null>(null)
   const [sel, setSel] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   // a kit's own state changed (it asked to be drawn again)
@@ -131,9 +132,9 @@ export function useStudio(pid: string | null) {
       }
       // the Brand step: its options and moodboard, the brand made from the idea first (the slow part, under skeletons)
       if (got.studio.mode !== 'takes' && 'brand' in got.studio.steps && got.studio.idea) {
-        setMoods(cur => cur?.pid === pid ? cur : { pid, view: null })
+        setMoods(cur => cur?.pid === pid && !cur.failed ? cur : { pid, view: null })
         const made = got.brand ? api<BrandView>(proj('/brand')) : post<BrandView>(proj('/brand'), { brief: got.studio.idea, kind: got.studio.kind === 'app' ? 'app' : 'site' })
-        made.then(view => setMoods({ pid, view })).catch(fail)
+        made.then(view => setMoods({ pid, view })).catch(err => { setMoods({ pid, view: null, failed: err instanceof Error ? err.message : String(err) }); fail(err) })
       }
       // a kit that loads or drafts its own state does it once, before its cards are drawn
       const k = KITS[got.studio.kind] || KITS.site
@@ -199,5 +200,5 @@ export function useStudio(pid: string | null) {
     useTake: (slug: string) => post(proj('/brand/pick'), { part: 'pack', id: slug }).then(() => post<StudioData>(at('/mode'), { mode: 'studio' })).then(take)
   }
 
-  return { d, error, takes, moods: moods?.pid === pid ? moods.view : null, sel, select, toast, fail, kit, ctx, stateOf, steps, gone, planSections, cards, board, actions, tick, reload: load }
+  return { d, error, takes, moods: moods?.pid === pid ? moods.view : null, moodsFailed: moods?.pid === pid ? moods.failed ?? null : null, sel, select, toast, fail, kit, ctx, stateOf, steps, gone, planSections, cards, board, actions, tick, reload: load }
 }

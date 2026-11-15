@@ -24,7 +24,7 @@ test('the next UI unless the classic one was chosen, and the choice stays', () =
 
 test('the server serves / by the choice, /classic/ always the classic Studio, and the classic Studio has its way back', () => {
   const src = readFileSync(new URL('../server/server.mjs', import.meta.url), 'utf8')
-  assert.match(src, /const next = !classic && ui\.get\(\) === 'next' \? nextPage\(uiDist, \{ token \}\) : null/)
+  assert.match(src, /const next = !classic && ui\.get\(\) === 'next' \? nextPage\(uiDist, \{ token, \.\.\.playBoot\(\) \}\) : null/)
   assert.match(src, /res\.end\(next \|\| canvasPage\(\)\)/)
   assert.match(read('web/home.js'), /label: 'Use the new Studio'/)
   assert.match(read('ui/src/shell/TopBar.tsx'), /Use the classic Studio/)

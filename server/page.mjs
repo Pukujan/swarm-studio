@@ -61,9 +61,13 @@ export const CANVAS_MODULES = ['route.js', 'icons.js', 'composer.js', 'chatmode.
 // the studio controller, Projects and a project: its own modules joined into one
 export const studioModules = webDir => ['icons.js', 'route.js', 'video.js', 'setup-parts.js', 'setup.js', 'settings.js', 'makeways.js', 'walkline.js', 'templatepick.js', 'bringin.js', 'hermesline.js', 'gametalk.js', 'home.js', 'edit/patches.js', 'layers.js', 'lookmatch.js', 'story.js', 'project-parts.js', 'project.js', 'work.js', 'board.js', 'plan.js', 'brand.js', ...kitFiles(webDir), 'kits.js', 'scaffold.js', 'nav.js', 'modes.js', 'pet.js', 'studio.js']
 
+// what Play's frames add to a built page, in both Studios (the next UI's playdoc.ts too): the scroll reveal in the
+// feel the theme asks for, and the layout guard that moves a floated panel off the text it would cover
+export const playBoot = () => ({ motion: { css: MOTION_CSS, src: swarmMotion.toString(), snappy: SNAPPY.source }, layout: layoutSource() })
+
 export function canvasPage(webDir, extra = {}) {
   const read = f => readFileSync(join(webDir, f), 'utf8')
-  const boot = JSON.stringify({ version: webVersion(webDir), frameHtml: read('frame.html'), motion: { css: MOTION_CSS, src: swarmMotion.toString(), snappy: SNAPPY.source }, layout: layoutSource(), guard: swarmLayout.toString(), ...extra }).replace(/</g, '\\u003c')
+  const boot = JSON.stringify({ version: webVersion(webDir), frameHtml: read('frame.html'), ...playBoot(), guard: swarmLayout.toString(), ...extra }).replace(/</g, '\\u003c')
   // the plain scripts (PAGE_SCRIPTS; ui.js is the UI kit, docs/specs/12-flow-map.md: shadcn-style components and the panel helpers)
   return PAGE_SCRIPTS.reduce((html, f) => html.replace(`<script src="${f}"></script>`, () => `<script>${read(f)}</script>`), read('index.html'))
     .replace('<link rel="stylesheet" href="tokens.css">', () => `<style>${read('tokens.css')}</style>`)

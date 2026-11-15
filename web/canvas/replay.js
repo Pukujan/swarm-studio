@@ -229,6 +229,8 @@ export async function openRun(id) {
     if (S.kind === 'game') setView('app')
     else if (stop) stoppedMsg(stop)
     else if (!events.some(e => e.type === 'layer:done' && e.html)) botMsg('This file was saved before Swarm Studio kept finished sections, so only its plan is shown.')
+    // an App room the address named (a reload, Back, a link) was entered before its build was here: it reads the app now
+    if (S.kind !== 'game' && view === 'app') setView('app')
   }
   setAuto(true)
   // a player the address names (a reload, Back) opens once its build is here
