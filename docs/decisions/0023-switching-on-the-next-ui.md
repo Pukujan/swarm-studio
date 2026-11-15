@@ -1,7 +1,8 @@
 # 0023. Switching the next UI on for people
 
 - Date: 2026-11-14
-- Status: **proposed**, for the owner to decide. Nothing is switched on until this is accepted.
+- Status: decided in [0024](0024-the-next-ui-is-the-studio.md): the owner said "Yes, switch it". `/` serves the
+  next UI, and the classic Studio stays at `/classic/`.
 - Follows: [0013](0013-react-ui-coexists.md) (step 5: `/` serves the new UI once every screen has moved),
   [0008](0008-releases-stable-pin.md) (an unfinished feature has no visible door) and
   [0018](0018-next-ui-build-on-release.md) (only a release carries `ui/dist/`)

@@ -1,8 +1,8 @@
 // Board gauge (image-first boards, step 1): how heavy a big board is, measured the same way every time, so a
 // pull request that makes the boards slower or hungrier fails instead of shipping.
 //
-//   node scripts/board-gauge.mjs measure <out.json> [--root <tree>] [--runs 3] [--only overview,deck,next]
-//   node scripts/board-gauge.mjs compare <base.json> <head.json> [--frame 0.10] [--memory 0.15]
+//   node scripts/board-gauge.mjs measure <out.json> [--root <tree>] [--runs 3] [--only overview,deck,next] [--cold]
+//   node scripts/board-gauge.mjs compare <base.json> <head.json> [--memory 0.15] [--gate-frame 1.10]
 //   (PLAYWRIGHT_DIR and CHROMIUM_PATH as for open-check)
 //
 // The fixture is one seeded build: 250 pages, 3 of them still being built (an agent on each), 100 pictures
@@ -14,18 +14,25 @@
 //   GPU-process memory (a memory-infra dump in a Chrome trace), live frames (iframes), and video players
 //   alive with the film playing and after leaving the board (an element still holding its media is a player
 //   that was never torn down: pause, remove src, load).
-// CI measures the pull request's base and head in the same runner, interleaved, and compare fails when the
-// head's median is past the thresholds: p95 frame time +10% (taken over every run's frames, and at least
-// 0.5 ms: frames of 2-4 ms move more than 10% on the same code), memory (JS heap, DOM nodes, GPU) +15%, and
-// any more live frames, crashes or players left after teardown, or a film that did not play.
-// docs/perf/board-gauge.json keeps a baseline to read.
+// Every board is fitted to one camera before the path (its own "fit everything": the Overview's Frame all, the
+// classic deck's 0, the next deck's fit button), and the path starts once that camera has stopped moving, so base
+// and head are measured from the same view; a board whose camera goes somewhere else on its own (Follow framing
+// the crew) would otherwise show up as a change in frame time.
+// CI measures the pull request's base and head in the same runner, interleaved, and compare FAILS on what the
+// runner's speed cannot change: more live frames, a player left after teardown, a film that did not play, a crash,
+// and the memory of the board: JS heap, GPU memory, DOM nodes, layers (thresholds below).
+// FRAME TIME IS REPORT-ONLY for now: measured, printed and written to the job summary, never failed on. On CI
+// runners one measurement of the same code moved from 4 to 15 ms, so no threshold on it holds; it becomes a gate again
+// when a speed-normalised statistic has been shown (docs/perf/README.md, docs/specs/43-image-first-boards.md).
+// --gate-frame <ratio> turns it into a gate (the head's p95 over the base's, over every run's frames) to try one.
 // It starts its own throwaway Studio and never touches the 4319 server or the real data folder.
 import { createRequire } from 'node:module'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { appendFileSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { deflateSync, crc32 } from 'node:zlib'
 import { startStudio, onFreePort } from './studio-child.mjs'
 
@@ -117,13 +124,51 @@ const PROBE = `(() => {
 // NETWORK_EMPTY; its currentSrc is no sign either way, since Chromium keeps the last address after the load
 const PLAYERS = () => [...(window.__media || [])].filter(m => m.networkState !== m.NETWORK_EMPTY).length
 
+// fit: what a person does to see everything; cam: the element whose transform is the camera
 const SCENES = [
-  { id: 'overview', at: '/?project=RUN&version=RUN', ready: n => document.querySelectorAll('.pj-stage[aria-label="Overview"] .ab.page:not(.wait-in)').length >= n, film: true },
-  { id: 'deck', at: '/?project=RUN&version=RUN&room=deck', ready: n => (window.swarm?.S?.frames?.length || 0) >= n },
-  { id: 'next', at: '/next/?project=RUN&version=RUN&room=deck', ready: n => !!document.querySelector('[role="region"][aria-label="Canvas"]') && document.querySelectorAll('iframe').length >= n }
+  { id: 'overview', at: '/?project=RUN&version=RUN', ready: n => document.querySelectorAll('.pj-stage[aria-label="Overview"] .ab.page:not(.wait-in)').length >= n, film: true,
+    fit: page => page.click('button[aria-label="Frame all"]', { timeout: 15000 }), cam: '.pj-world' },
+  { id: 'deck', at: '/?project=RUN&version=RUN&room=deck', ready: n => (window.swarm?.S?.frames?.length || 0) >= n,
+    // the 0 key frames every page and turns Follow off (web/canvas/loop.js); not typed into the chat
+    fit: async page => { await page.evaluate(() => document.activeElement?.blur?.()); await page.keyboard.press('0') }, cam: '#world' },
+  { id: 'next', at: '/next/?project=RUN&version=RUN&room=deck', ready: n => !!document.querySelector('[role="region"][aria-label="Canvas"]') && document.querySelectorAll('iframe').length >= n,
+    fit: page => page.getByRole('button', { name: /fit every page/i }).click({ timeout: 15000 }), cam: '[role="region"][aria-label="Canvas"] [style*="scale("]' }
 ]
 
-async function measure(out, { root, runs: N, only }) {
+// Every page's two snapshots, saved on the server as they are for a project that has been opened before: the Overview
+// then paints from them and photographs nothing. Without them it photographs the pages in view while the path is
+// played, in idle time, a different amount of work in whichever frames it lands in: one p95 of the same code went
+// from 4 to 15 ms in a single CI job. The pictures are JPEGs made here at the two sizes the Overview keeps (a small
+// one of 360 px and a full one of 864), so decoding costs what it does for a real photograph.
+async function seedSnaps(launch, BASE, TOKEN) {
+  const browser = await within('launching Chromium', 60000, launch())
+  try {
+    const page = await within('a page for the pictures', 30000, browser.newPage())
+    const pic = await within('making the pictures', 30000, page.evaluate(() => {
+      const make = (w, h) => {
+        const c = Object.assign(document.createElement('canvas'), { width: w, height: h }), g = c.getContext('2d')
+        const k = g.createLinearGradient(0, 0, w, h)
+        k.addColorStop(0, '#2e4057'); k.addColorStop(1, '#c9a227')
+        g.fillStyle = k; g.fillRect(0, 0, w, h)
+        g.fillStyle = '#eee'
+        for (let i = 0; i < 12; i++) g.fillRect(w * 0.08, h * (0.08 + i * 0.075), w * (0.3 + 0.4 * ((i * 37) % 10) / 10), h * 0.03)
+        return c.toDataURL('image/jpeg', 0.82)
+      }
+      return { s: make(360, 225), f: make(864, 540) }
+    }))
+    const api = (path, body) => within(path, 30000, fetch(`${BASE}${path}`, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json', 'x-swarm-token': TOKEN }, body: body ? JSON.stringify(body) : undefined }).then(r => r.json()))
+    const { pages } = await api(`/api/runs/${RUN}/snaps`)
+    for (const [id, d] of Object.entries(pages)) for (const size of ['s', 'f']) {
+      const out = await api(`/api/runs/${RUN}/snaps`, { page: id, v: d.v, size, image: pic[size] })
+      if (!out.ok) throw new Error(`saving ${id} ${size}: ${JSON.stringify(out)}`)
+    }
+    const after = await api(`/api/runs/${RUN}/snaps`)
+    const saved = Object.values(after.pages).filter(d => d.s && d.f).length
+    if (saved !== PAGES) throw new Error(`${saved} of ${PAGES} pages have their snapshots`)
+  } finally { await within('closing Chromium', 30000, browser.close()).catch(() => {}) }
+}
+
+async function measure(out, { root, runs: N, only, cold }) {
   const { chromium } = await loadPlaywright()
   const launch = () => chromium.launch({ ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}), args: ['--disable-frame-rate-limit', '--disable-gpu-vsync'] })
   // the film: four seconds recorded from a canvas in the browser (Playwright's Chromium plays WebM, not H.264);
@@ -148,28 +193,45 @@ async function measure(out, { root, runs: N, only }) {
   const data = mkdtempSync(join(tmpdir(), 'swarm-gauge-'))
   const runsDir = join(data, 'runs')
   mkdirSync(runsDir)
+  // the classic Studio at `/`, as the gauge measures it (decision 0024: `/` is the next UI unless the person chose it)
+  writeFileSync(join(data, 'ui.json'), JSON.stringify({ ui: 'classic' }))
   const fake = createServer((req, res) => { req.resume(); req.on('end', () => res.writeHead(500, { 'content-type': 'application/json' }).end('{"error":"no model here"}')) })
   // on a port the system picks and the fake keeps (asked for and let go, another process could take it first)
   await new Promise(r => fake.listen(0, '127.0.0.1', r))
   const fakePort = fake.address().port
   const TOKEN = 'gauge'
   const env = { ...process.env, SWARM_TOKEN: TOKEN, SWARM_DATA_DIR: data, SWARM_RUNS_DIR: runsDir, SWARM_OUTPUT_DIR: join(data, 'out'), SWARM_BASE_URL: `http://127.0.0.1:${fakePort}/v1`, SWARM_API_KEY: 'none', SWARM_FEED_URL: 'http://127.0.0.1:9' }
+  // GAUGE_REQLOG: the server says each request as it arrives (scripts/gauge-reqlog.mjs), for finding what hung it
+  if (process.env.GAUGE_REQLOG) env.NODE_OPTIONS = `${env.NODE_OPTIONS || ''} --import=${pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), 'gauge-reqlog.mjs')).href}`.trim()
   for (const k of ['SWARM_PORT', 'SWARM_HERMES_PY', 'SWARM_HERMES_PYTHONPATH', 'HERMES_CUSTOM_INFERHUB_API_KEY', 'SWARM_ELEVENLABS_KEY', 'SWARM_TTS_URL']) delete env[k]
   // The fixture's pictures carry the server's address, so the port is picked before the server starts; when
   // another process took it in between, the fixture is written and the server started again on another
   // (scripts/studio-child.mjs)
-  const { child: server, base: BASE } = await onFreePort(port => { fixture(runsDir, `http://127.0.0.1:${port}`, film); return startStudio({ root, env, port }) })
+  const { child: server, base: BASE, log: serverLog } = await onFreePort(port => { fixture(runsDir, `http://127.0.0.1:${port}`, film); return startStudio({ root, env, port, show: !!process.env.GAUGE_SHOW }) })
   studio = server
   const result = { root, runs: N, fixture: { pages: PAGES, live: LIVE, pictures: PICTURES, films: 1, filmBytes: film.length }, scenes: {} }
   try {
     await fetch(`${BASE}/api/setup`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-swarm-token': TOKEN }, body: JSON.stringify({ seen: true }) }).catch(() => {})
+    if (!cold) await seedSnaps(launch, BASE, TOKEN)
     for (let r = 0; r < N; r++) for (const sc of SCENES.filter(s => !only.length || only.includes(s.id))) {
-      // a fresh browser and no saved pictures each time: every run starts from the same place
-      rmSync(join(runsDir, RUN, 'snaps'), { recursive: true, force: true })
+      // a fresh browser each time; the pictures are saved (seedSnaps) unless --cold asks for none, which
+      // makes the Overview photograph them while the path is played
+      if (cold) rmSync(join(runsDir, RUN, 'snaps'), { recursive: true, force: true })
       const browser = await within('launching Chromium', 60000, launch())
       // a page that crashes (out of memory, most likely) or stops answering is a result, not the end of the gauge
       let m
-      try { m = await within(`the ${sc.id} board`, 300000, scene(browser, sc, BASE)) } catch (e) { m = { crashed: true, error: String(e?.message || e).split(/\r?\n/)[0].slice(0, 200) } } finally { await within('closing Chromium', 30000, browser.close()).catch(() => {}) }
+      try { m = await within(`the ${sc.id} board`, 300000, scene(browser, sc, BASE)) } catch (e) {
+        // whether the Studio's server still answers says which side is stuck, the server or the page
+        const t0 = Date.now()
+        const answer = await within('the server', 8000, fetch(`${BASE}/api/state`).then(r => r.status)).then(s => `answers ${s} in ${Date.now() - t0} ms`, e => `does not answer (${String(e?.message || e).slice(0, 60)})`)
+        const alive = server.exitCode === null && server.signalCode === null ? 'running' : `exited (code ${server.exitCode}, signal ${server.signalCode})`
+        // and what it is doing (where `ps` exists): its CPU and memory, and the commands of its children, which is
+        // what a server blocked on a synchronous child process is waiting for
+        let ps = ''
+        try { ps = execFileSync('ps', ['-o', '%cpu=,rss=', '-p', String(server.pid)], { encoding: 'utf8', timeout: 3000 }).trim() } catch {}
+        try { ps += `; children: ${execFileSync('ps', ['-A', '-o', 'ppid=,pid=,etime=,command='], { encoding: 'utf8', timeout: 5000, maxBuffer: 2e7 }).split('\n').filter(l => l.trim().split(/\s+/)[0] === String(server.pid)).map(l => l.trim().slice(0, 220)).join(' | ') || 'none'}` } catch {}
+        m = { crashed: true, error: String(e?.message || e).split(/\r?\n/)[0].slice(0, 200), server: `${alive}; ${answer}`, ps, log: serverLog().trim().split('\n').slice(-14).map(l => l.slice(0, 160)) }
+      } finally { await within('closing Chromium', 30000, browser.close()).catch(() => {}) }
       ;(result.scenes[sc.id] ||= { runs: [] }).runs.push(m)
       console.log(`· ${sc.id} run ${r + 1}: ${JSON.stringify({ ...m, ft: undefined })}`)
     }
@@ -187,6 +249,10 @@ async function scene(browser, sc, BASE) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, colorScheme: 'dark' })
   await ctx.addInitScript(PROBE)
   const page = await ctx.newPage()
+  // The Studio asks for the build's story when it opens one with a film, and the server answers by exporting the
+  // whole site first: a headless Chrome run, synchronously, for each page with no picture (about 4 s each; here 150
+  // of 250), which freezes the server for minutes. It has nothing to do with the board's frames, so it is not asked.
+  await page.route(url => /^\/api\/runs\/[^/]+\/story(\/|$)/.test(url.pathname), route => route.fulfill({ status: 200, json: {} }))
   const cdp = await ctx.newCDPSession(page)
   await within('Performance.enable', 15000, cdp.send('Performance.enable'))
   const t0 = Date.now()
@@ -211,19 +277,45 @@ async function scene(browser, sc, BASE) {
     // when it did not play, where it stopped: the Files row, the inspector, or the media itself
     if (!filmPlaying) filmWhy = { clicked, hovered, played, ...await within('reading the film', 15000, page.evaluate(() => { const v = document.querySelector('.pj-insp video'); return { row: !!document.querySelector('.pj-list .row[data-key="film:0"]'), sel: window.swarmCosmos?.projectView ? document.querySelector('.pj-list .row.on')?.dataset.key || null : null, video: !!v, src: v?.currentSrc || v?.getAttribute('src') || null, readyState: v?.readyState ?? null, networkState: v?.networkState ?? null, error: v?.error ? `${v.error.code} ${v.error.message}` : null } })).catch(e => ({ read: e.message })) }
   }
-  // the path: pan right and down, zoom out to see it all, zoom in on a corner, pan back; the same every time
+  // every board starts from the same view: fitted, and the camera still for 1.5 s (it glides there, and Follow, where
+  // it is on, moves it again as the crew work); what it settled on is recorded
+  await within('fitting the board', 30000, sc.fit(page)).catch(() => {})
+  let camera = '', still = 0
+  for (let i = 0; i < 60 && still < 5; i++) {
+    await wait(300)
+    const now = await within('reading the camera', 10000, page.evaluate(sel => document.querySelector(sel)?.style.transform || '', sc.cam)).catch(() => '')
+    still = now && now === camera ? still + 1 : 0
+    camera = now
+  }
+  // the path: pan right and down, zoom out to see it all, zoom in on a corner, pan back; the same every time. It is
+  // played twice and the second pass is the one recorded: the first one makes the board do what it does only the
+  // first time it is moved (decoding the pictures it shows, laying out what comes into view), which is most of the
+  // slow frames of a single pass and lands in them by timing, not by the code
   const box = await within('the window size', 15000, page.evaluate(() => ({ w: innerWidth, h: innerHeight })))
   await page.mouse.move(box.w / 2, box.h / 2)
-  await within('starting the frame count', 15000, page.evaluate(() => { window.__ft = [] }))
   const steps = [...Array(30)].map(() => [0, 40, 80, false]).concat([...Array(12)].map(() => [0, 0, 120, true]), [...Array(16)].map(() => [0, 0, -90, true]), [...Array(30)].map(() => [0, -40, -80, false]))
-  for (const [, dx, dy, zoom] of steps) {
-    if (zoom) await page.keyboard.down('Control')
-    await within('a wheel step', 15000, page.mouse.wheel(dx, dy))
-    if (zoom) await page.keyboard.up('Control')
-    await wait(30)
+  const walk = async () => {
+    for (const [, dx, dy, zoom] of steps) {
+      if (zoom) await page.keyboard.down('Control')
+      await within('a wheel step', 15000, page.mouse.wheel(dx, dy))
+      if (zoom) await page.keyboard.up('Control')
+      await wait(30)
+    }
+    await wait(500)
   }
-  await wait(500)
+  // the browser's own counters (CDP Performance.getMetrics) and how fast this machine runs a fixed piece of script
+  // right now: the best of five runs of the same loop. Counts of layouts and style recalculations do not depend on how
+  // fast the machine is; the times and the loop do, and say by how much
+  const counters = async () => Object.fromEntries((await within('Performance.getMetrics', 15000, cdp.send('Performance.getMetrics'))).metrics.map(x => [x.name, x.value]))
+  const calibrate = () => within('the calibration', 20000, page.evaluate(() => { let best = Infinity; for (let k = 0; k < 5; k++) { const t = performance.now(); let x = 0; for (let i = 0; i < 3e6; i++) x += Math.sqrt(i) * 1.0001; if (x < 0) console.log(x); best = Math.min(best, performance.now() - t) } return best }))
+  await walk()
+  await wait(1500)
+  const c0 = await counters(), speed0 = await calibrate()
+  await within('starting the frame count', 15000, page.evaluate(() => { window.__ft = [] }))
+  await walk()
   const ft = await within('reading the frame times', 15000, page.evaluate(() => { const f = window.__ft || []; window.__ft = null; return f }))
+  const c1 = await counters(), speed1 = await calibrate()
+  const d = k => (c1[k] ?? 0) - (c0[k] ?? 0)
   // memory once the path is done, after a GC
   await within('HeapProfiler.collectGarbage', 30000, cdp.send('HeapProfiler.collectGarbage')).catch(() => {})
   const metric = async name => (await within('Performance.getMetrics', 15000, cdp.send('Performance.getMetrics'))).metrics.find(x => x.name === name)?.value ?? null
@@ -244,7 +336,7 @@ async function scene(browser, sc, BASE) {
   }
   await within('closing the page', 30000, ctx.close()).catch(() => {})
   // (the frame times themselves too, to the 0.1 ms: compare takes its percentiles over every run's frames)
-  return { readyMs: ready, filmPlaying, filmWhy, ft: ft.map(x => round(x)), frames: ft.length, frame: { p50: round(pct(ft, 0.5)), p95: round(pct(ft, 0.95)), p99: round(pct(ft, 0.99)) }, jsHeapMB: MB(heap), nodes, layers, gpuMB: gpu?.process ?? null, gpuAllocMB: gpu?.alloc ?? null, iframes, players, playersAfter: after }
+  return { readyMs: ready, camera, filmPlaying, filmWhy, ft: ft.map(x => round(x)), frames: ft.length, frame: { p50: round(pct(ft, 0.5)), p95: round(pct(ft, 0.95)), p99: round(pct(ft, 0.99)) }, calibMs: round(Math.min(speed0, speed1), 2), layouts: d('LayoutCount'), restyles: d('RecalcStyleCount'), scriptMs: round(d('ScriptDuration') * 1000), layoutMs: round(d('LayoutDuration') * 1000), styleMs: round(d('RecalcStyleDuration') * 1000), taskMs: round(d('TaskDuration') * 1000), jsHeapMB: MB(heap), nodes, layers, gpuMB: gpu?.process ?? null, gpuAllocMB: gpu?.alloc ?? null, iframes, players, playersAfter: after }
 }
 
 async function layerCount(cdp) {
@@ -305,40 +397,63 @@ function pool(files) {
   for (const s of Object.values(out.scenes)) medians(s)
   return out
 }
-function compare(a, b, frameT, memT) {
+// What fails: only things the runner's speed cannot change. Counts (live frames, players, crashes, layers, nodes)
+// and memory (heap, GPU) barely move between measurements of the same code, so their thresholds can be tight;
+// frame time can't, so it is shown and not failed on (the head over the base is printed, and the camera each board
+// settled on, to see two views that differ).
+const GATES = [
+  // what, key, rule: 'no more' (never above the base), or a share the head may exceed the base by with a floor
+  { what: 'crashes', key: 'crashes', rule: 'none' },
+  { what: 'live frames', key: 'iframes', rule: 'none' },
+  { what: 'players left after leaving', key: 'playersAfter', rule: 'none' },
+  { what: 'DOM nodes', key: 'nodes', rule: 0.10, floor: 200 },
+  { what: 'layers', key: 'layers', rule: 0.20, floor: 2 },
+  { what: 'JS heap MB', key: 'jsHeapMB', rule: 'memory', floor: 8 },
+  { what: 'GPU process MB', key: 'gpuMB', rule: 'memory', floor: 2 },
+  { what: 'GPU allocators MB', key: 'gpuAllocMB', rule: 'memory', floor: 2 }
+]
+function compare(a, b, memT, gateFrame) {
   const A = pool(a), B = pool(b)
   print(A); print(B)
-  const fails = []
+  const fails = [], md = ['## Board gauge', '', `Base against head, ${A.runs} and ${B.runs} measurements each, medians. **Failing checks** are counts and memory; **frame time is report-only** (it moves more between measurements of the same code than any threshold could hold).`, '', '| board | check | base | head | |', '|---|---|---:|---:|---|']
   for (const id of Object.keys(B.scenes)) {
     const x = A.scenes[id]?.median, y = B.scenes[id].median
     if (!x) { console.log(`  ${id}: not on the base, not compared`); continue }
     const row = []
-    // floor: a change smaller than this is not counted, however large in percent (frame times of 2-4 ms)
-    const over = (what, k, t, get = m => m[k], floor = 0) => {
-      const p = get(x), q = get(y)
-      if (p == null || q == null) return row.push(`${what} n/a`)
-      const bad = t == null ? q > p : q > p * (1 + t) && q - p >= floor
-      row.push(`${what} ${p} → ${q}${bad ? ' ✗' : ''}`)
-      if (bad) fails.push(`${id}: ${what} ${p} → ${q} (${t == null ? 'no more than the base' : `over +${Math.round(t * 100)}%`})`)
+    const r1 = v => (typeof v === 'number' ? Math.round(v * 10) / 10 : v)
+    const add = (what, p0, q0, bad, note = '') => { const p = r1(p0), q = r1(q0); row.push(`${what} ${p} → ${q}${bad ? ' ✗' : ''}`); md.push(`| ${id} | ${what} | ${p ?? 'n/a'} | ${q ?? 'n/a'} | ${bad ? '✗' : note} |`) }
+    for (const g of GATES) {
+      const p = x[g.key], q = y[g.key]
+      if (p == null || q == null) { add(g.what, p, q, false, 'not measured'); continue }
+      const t = g.rule === 'memory' ? memT : g.rule
+      const bad = t === 'none' ? q > p : q > p * (1 + t) && q - p >= (g.floor || 0)
+      add(g.what, p, q, bad)
+      if (bad) fails.push(`${id}: ${g.what} ${p} → ${q} (${t === 'none' ? 'no more than the base' : `over +${Math.round(t * 100)}%`})`)
     }
-    over('crashes', 'crashes', null)
     // the film plays on a board that has one, or its players are not measured
-    if (y.filmPlaying === 0) { row.push('film did not play ✗'); fails.push(`${id}: the film did not play, so its players were not measured`) }
-    over('frame p95 ms', 'p95', frameT, m => m.frame?.p95, 0.5)
-    over('JS heap MB', 'jsHeapMB', memT)
-    over('DOM nodes', 'nodes', memT)
-    over('GPU MB', 'gpuMB', memT)
-    over('live frames', 'iframes', null)
-    over('players after leaving', 'playersAfter', null)
-    console.log(`${fails.some(f => f.startsWith(`${id}:`)) ? '✗' : '✓'} ${id}: ${row.join(' · ')}`)
+    if (y.filmPlaying === 0) { row.push('film did not play ✗'); md.push(`| ${id} | film | | | did not play ✗ |`); fails.push(`${id}: the film did not play, so its players were not measured`) }
+    // frame time: shown, and failed on only when --gate-frame is given
+    if (x.frame && y.frame) {
+      const ratio = y.frame.p95 / x.frame.p95
+      const bad = gateFrame && ratio > gateFrame && y.frame.p95 - x.frame.p95 >= 0.5
+      row.push(`frame p95 ${x.frame.p95.toFixed(1)} → ${y.frame.p95.toFixed(1)} ms (report only)${bad ? ' ✗' : ''}`)
+      md.push(`| ${id} | frame p50 / p95 / p99 (ms) | ${x.frame.p50.toFixed(1)} / ${x.frame.p95.toFixed(1)} / ${x.frame.p99.toFixed(1)} | ${y.frame.p50.toFixed(1)} / ${y.frame.p95.toFixed(1)} / ${y.frame.p99.toFixed(1)} | report only, head ${ratio.toFixed(2)}× |`)
+      if (bad) fails.push(`${id}: frame p95 ${x.frame.p95.toFixed(1)} → ${y.frame.p95.toFixed(1)} ms (over ${gateFrame}×, gated by --gate-frame)`)
+    }
+    // the camera each side settled on: the same view, or the comparison is of two views
+    const cam = (r, k) => A.scenes[id].runs.concat(B.scenes[id].runs).filter(m => !m.crashed && m.camera).map(m => m.camera)
+    const cams = [...new Set(cam())]
+    if (cams.length > 1) md.push(`| ${id} | camera | ${cams.length} different views | | see the recordings |`)
+    console.log(`${fails.some(f => f.startsWith(id + ':')) ? '✗' : '✓'} ${id}: ${row.join(' · ')}`)
   }
+  if (process.env.GITHUB_STEP_SUMMARY) { try { appendFileSync(process.env.GITHUB_STEP_SUMMARY, md.join('\n') + '\n') } catch {} }
   if (fails.length) { console.log(`\n${fails.join('\n')}`); process.exit(1) }
-  console.log('\nNo board got slower or heavier.')
+  console.log('\nNo board got heavier or leaked (frame time is report-only).')
 }
 
 // and the whole run has a deadline (--deadline minutes, 25 by default): past it the gauge says so and exits
 let studio = null
 if (cmd === 'measure') setTimeout(() => { console.log(`the gauge ran past its ${flag('deadline', 25)} minute deadline`); studio?.kill(); process.exit(3) }, Number(flag('deadline', 25)) * 60000).unref()
-if (cmd === 'measure' && pos[0]) await measure(resolve(pos[0]), { root: resolve(flag('root', fileURLToPath(new URL('..', import.meta.url)))), runs: Number(flag('runs', 3)), only: (flag('only', '') || '').split(',').filter(Boolean) })
-else if (cmd === 'compare' && pos[1]) compare(pos[0], pos[1], Number(flag('frame', 0.10)), Number(flag('memory', 0.15)))
+if (cmd === 'measure' && pos[0]) await measure(resolve(pos[0]), { root: resolve(flag('root', fileURLToPath(new URL('..', import.meta.url)))), runs: Number(flag('runs', 3)), only: (flag('only', '') || '').split(',').filter(Boolean), cold: rest.includes('--cold') })
+else if (cmd === 'compare' && pos[1]) compare(pos[0], pos[1], Number(flag('memory', 0.15)), flag('gate-frame', null) ? Number(flag('gate-frame')) : 0)
 else { console.log('node scripts/board-gauge.mjs measure <out.json> [--root <tree>] [--runs 3] [--only a,b] | compare <base.json> <head.json>'); process.exit(2) }

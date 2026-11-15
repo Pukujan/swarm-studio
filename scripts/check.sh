@@ -60,6 +60,12 @@ if [ -f ui/dist/index.html ]; then
   # Mermaid for the app build wall's Map (spec 44): its own classic script beside the page, and nothing else from ui/dist/
   curl -sf http://127.0.0.1:$port/next/vendor/mermaid.min.js > "$tmp/reply"; has 'mermaid'
   [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$port/next/vendor/index.html)" = 404 ] || { echo '/next/vendor/ serves a file it does not list'; exit 1; }
+  # / is the next UI and /classic/ the classic Studio (decision 0024); "Use the classic Studio" makes / the classic one
+  curl -sf http://127.0.0.1:$port/ > "$tmp/reply"; has '<div id="root">'
+  curl -sf http://127.0.0.1:$port/classic/ > "$tmp/reply"; has '"frameHtml"'
+  curl -sf -H 'x-swarm-token: ci' -H 'content-type: application/json' -d '{"ui":"classic"}' http://127.0.0.1:$port/api/ui > "$tmp/reply"; has '"classic"'
+  curl -sf http://127.0.0.1:$port/ > "$tmp/reply"; has '"frameHtml"'
+  curl -sf -H 'x-swarm-token: ci' -H 'content-type: application/json' -d '{"ui":"next"}' http://127.0.0.1:$port/api/ui > /dev/null
 elif [ -n "${SWARM_NEED_UI:-}" ]; then echo 'ui/dist/ is not built: npm ci --prefix ui && npm run --prefix ui build'; exit 1
 else echo '  /next/ skipped: ui/dist/ is not built (npm run --prefix ui build)'
 fi
