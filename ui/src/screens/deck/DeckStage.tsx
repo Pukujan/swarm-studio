@@ -19,6 +19,38 @@ type Cam = { x: number, y: number, k: number }
 const LABEL = 28
 const MIN_K = 0.04, MAX_K = 2
 
+// the box around every section the crew is writing (web/canvas/deck.js bboxActive); none at work: every page
+function activeBox(m: DeckModel, geo: Record<string, FrameGeo>) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+  const add = (ax: number, ay: number, bx: number, by: number) => { x0 = Math.min(x0, ax); y0 = Math.min(y0, ay); x1 = Math.max(x1, bx); y1 = Math.max(y1, by) }
+  for (const a of m.agents) {
+    const b = a.layer ? sectionBox(m, geo, a.layer) : null
+    if (b) add(b.x, b.y, b.x + b.w, b.y + Math.max(b.h, 300))
+  }
+  if (x0 === Infinity) for (const p of m.pages) add(frameX(p), LABEL - 120, frameX(p) + FRAME_W, LABEL + (geo[p.id]?.height || 700))
+  return x0 === Infinity ? null : { x0, y0: y0 - 160, x1, y1: y1 + 80 }
+}
+
+// where the reviewer looks on a page under review (web/canvas/auto.js rvSpot): a section, a little way in
+function reviewSpot(m: DeckModel, geo: Record<string, FrameGeo>, id: string, n: number) {
+  const page = m.pages.find(p => p.id === id)
+  if (!page) return null
+  const keys = Object.keys(geo[id]?.slots ?? {})
+  if (!keys.length) return { x: frameX(page) + 640, y: LABEL + 300 }
+  const [left, top, width, height] = geo[id].slots[keys[n % keys.length]].box
+  return { x: frameX(page) + left + width * (0.25 + ((n * 37) % 50) / 100), y: LABEL + top + Math.min(height, 600) * 0.45 }
+}
+
+// a section's box in the world's coordinates, on the first page that shows it
+function sectionBox(m: DeckModel, geo: Record<string, FrameGeo>, key: string) {
+  const l = m.layers[key]
+  const page = l && (l.page === '*' ? m.pages[0] : m.pages.find(p => p.id === l.page))
+  const g = page && geo[page.id]?.slots[key]
+  if (!page || !g) return null
+  const [x, y, w, h] = g.box
+  return { x: frameX(page) + x, y: LABEL + y, w, h: Math.max(h, l.height) }
+}
+
 // where an agent's cursor goes, in the world's coordinates (web/canvas/deck.js agentTarget)
 function target(m: DeckModel, geo: Record<string, FrameGeo>, a: DeckAgent): { x: number, y: number } | null {
   const l = a.layer ? m.layers[a.layer] : null
@@ -32,9 +64,6 @@ function target(m: DeckModel, geo: Record<string, FrameGeo>, a: DeckAgent): { x:
   return { x: x0 + g.last[0], y: y0 + g.last[1] - 6 }
 }
 
-// the agent the camera follows: one writing, else one just starting
-const followed = (m: DeckModel) => m.agents.find(a => a.layer && m.layers[a.layer]?.status === 'streaming') ?? m.agents.find(a => a.layer)
-
 // a section the person picked, on the page it was picked on (the nav and footer are on every page)
 export interface Picked { key: string, page: string }
 
@@ -45,7 +74,8 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
   pickExtra?: ReactNode
 }) {
   const stage = useRef<HTMLDivElement>(null)
-  const [cam, setCam] = useState<Cam>({ x: 40, y: 40, k: 0.16 })
+  // where the camera starts (web/canvas/core.js cam): Follow glides from here to the crew
+  const [cam, setCam] = useState<Cam>({ x: 40, y: 140, k: 0.16 })
   // The camera on screen: while Follow moves it, it eases a little each frame toward `cam` (web/canvas/loop.js), else
   // it is `cam` at once. Written straight to the world element, so React draws nothing per frame; the crew's cursors
   // read the same, so they stay on their sections while it moves.
@@ -59,13 +89,17 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
     Object.assign(shown.current, cam)
     if (world.current) world.current.style.transform = `translate(${cam.x.toFixed(1)}px, ${cam.y.toFixed(1)}px) scale(${cam.k.toFixed(4)})`
   }, [cam, follow])
+  // the glide runs only while following: a board that is not followed draws no frame of its own (board gauge)
   useEffect(() => {
-    let raf = 0
-    const still = matchMedia('(prefers-reduced-motion: reduce)')
+    if (!follow || matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    let raf = 0, last = 0
     const tick = () => {
       const { cam: to, follow: ease } = want.current, s = shown.current
-      if (ease && !still.matches) {
-        s.x += (to.x - s.x) * 0.12; s.y += (to.y - s.y) * 0.12; s.k += (to.k - s.k) * 0.12
+      if (ease) {
+        // the same glide at any frame rate: 0.06 a frame at 60 fps, raised to the frames that passed
+        const t0 = performance.now(), f = 1 - Math.pow(1 - 0.06, Math.min(100, t0 - (last || t0 - 16.7)) / 16.7)
+        last = t0
+        s.x += (to.x - s.x) * f; s.y += (to.y - s.y) * f; s.k += (to.k - s.k) * f
         if (Math.abs(to.x - s.x) + Math.abs(to.y - s.y) < 0.5 && Math.abs(to.k - s.k) < 1e-4) Object.assign(s, to)
       } else Object.assign(s, to)
       const t = `translate(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px) scale(${s.k.toFixed(4)})`
@@ -74,7 +108,7 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [])
+  }, [follow])
   const [geo, setGeo] = useState<Record<string, FrameGeo>>({})
   const [panning, setPanning] = useState(false)
   const onGeo = useCallback((page: string, g: FrameGeo) => setGeo(all => ({ ...all, [page]: g })), [])
@@ -99,24 +133,37 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
   }, [frame, model.pages])
   useImperativeHandle(ref, () => ({ fit, focusPage }), [fit, focusPage])
 
-  // Follow: the page the agent is writing, at a width that reads, its cursor a third of the way down
+  // Follow (web/canvas/loop.js, deck.js bboxActive and fit): every 700 ms the camera takes in every section the crew
+  // is writing (each at least 300 tall, 160 of headroom above and 80 below), at least 1500 × 900 of the world and at
+  // most half scale, centred; it glides there a little each frame
+  const fitAt = useRef(0)
   useEffect(() => {
-    const s = stage.current, a = follow ? followed(model) : undefined
-    const t = a && target(model, geo, a)
-    if (!s || !t || !s.clientWidth) return
-    const vw = s.clientWidth, vh = s.clientHeight
-    const k = Math.min(1, Math.max(MIN_K, (vw - 48) / FRAME_W))
-    const next = { k, x: Math.round(vw / 2 - t.x * k), y: Math.round(vh / 3 - t.y * k) }
-    setCam(c => (Math.abs(c.x - next.x) + Math.abs(c.y - next.y) + Math.abs(c.k - next.k) * 1000 < 2 ? c : next))
+    const s = stage.current
+    if (!follow || !s || !s.clientWidth) return
+    const wait = fitAt.current - performance.now()
+    const run = () => {
+      fitAt.current = performance.now() + 700
+      const b = activeBox(model, geo)
+      if (!b) return
+      const vw = s.clientWidth, vh = s.clientHeight - 90
+      const w = Math.max(b.x1 - b.x0, 1500), h = Math.max(b.y1 - b.y0, 900)
+      const k = Math.max(0.06, Math.min(0.5, Math.min(vw / (w * 1.08), vh / (h * 1.08))))
+      const next = { k, x: vw / 2 - (b.x0 + b.x1) / 2 * k, y: vh / 2 + 10 - (b.y0 + b.y1) / 2 * k }
+      setCam(c => (Math.abs(c.x - next.x) + Math.abs(c.y - next.y) + Math.abs(c.k - next.k) * 1000 < 1 ? c : next))
+    }
+    if (wait <= 0) { run(); return }
+    const t = setTimeout(run, wait)
+    return () => clearTimeout(t)
   }, [follow, model, geo])
 
   // the first look fits every page; a page added later is fitted in until the person moves the camera
   const moved = useRef(false)
-  useEffect(() => { if (!moved.current) fit() }, [fit, model.pages.length])
+  // (while Follow is on, it is Follow that frames the crew)
+  useEffect(() => { if (!moved.current && !follow) fit() }, [fit, model.pages.length, follow])
   useEffect(() => {
     const s = stage.current
     if (!s) return
-    const o = new ResizeObserver(() => { if (!moved.current) fit() })
+    const o = new ResizeObserver(() => { if (!moved.current && !want.current.follow) fit() })
     o.observe(s)
     return () => o.disconnect()
   }, [fit])
@@ -250,7 +297,7 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
         ))}
       </div>
       {pick && pickExtra && <div data-ui className="absolute z-20 flex justify-end" style={{ left: Math.max(8, pick.left + pick.width - 328), top: Math.max(8, pick.top + 8), width: 320 }}>{pickExtra}</div>}
-      <CrewCursors model={model} cam={shown} stage={stage} target={a => target(model, geo, a)} />
+      <CrewCursors model={model} cam={shown} stage={stage} target={a => target(model, geo, a)} box={k => sectionBox(model, geo, k)} spot={(p, n) => reviewSpot(model, geo, p, n)} />
       <div aria-hidden className="pointer-events-none absolute inset-0">
         {pick && <div data-picked className="absolute border-[1.5px] border-text" style={pick} />}
         {flags.map(f => (
