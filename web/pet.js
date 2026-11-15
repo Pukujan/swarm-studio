@@ -455,7 +455,8 @@ export function makePet({ sw, C, doc = document }) {
   // the canvas's events: a build starts (she hands over) and ends (she says so)
   sw?.on?.(e => {
     if (e.type === 'run:start') { P.building = true; P.buildAt = Date.now(); away() }
-    if (e.type === 'run:done' || e.type === 'run:stopped' || e.type === 'reset') {
+    // (the stream's reset as it connects is not the end of a replay the view is playing: she stays away)
+    if (e.type === 'run:done' || e.type === 'run:stopped' || (e.type === 'reset' && !C?.nav?.view?.replay)) {
       const was = P.building && Date.now() - P.buildAt > 5000
       P.building = false
       away()
