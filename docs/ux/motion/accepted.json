@@ -1,5 +1,5 @@
 {
-  "why": "The App room opens with its chat open (issue #542, one box: the chat is where a change to the app is asked for), so the App scene now shows the chat's lines fading in as they come, as they do in every room where the chat is open.",
-  "gained": ["page @in 0.3s 1 div.item<#feed"],
-  "lost": []
+  "why": "Hermia's dotted radio line (web/canvas/start.js) was never hidden: `hidden` set as a property on an SVG element is not the attribute, so its empty path ran its dash animation unseen in every room. It now runs only while she is giving a helper an order (#560, #529, #530).",
+  "gained": [],
+  "lost": ["page @radio-dash endless path"]
 }

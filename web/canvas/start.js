@@ -166,6 +166,8 @@ const radioLine = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
 radioLine.setAttribute('class', 'radio-line')
 radioLine.setAttribute('aria-hidden', 'true')
 radioLine.innerHTML = '<path/>'
+// an SVG element has no `hidden` property: the attribute is what hides it (and stops its dash animating unseen)
+radioLine.setAttribute('hidden', '')
 crewLayer.append(radioLine)
 
 // Which screen is busy, where the agents may point, and what they are each doing.
@@ -240,7 +242,7 @@ function crewTick(now) {
     }
   }
   // @ts-ignore
-  if (!job) { radioLine.hidden = true; return }
+  if (!job) { radioLine.setAttribute('hidden', ''); return }
   let lineTo = null
   for (const [i, m] of crew.members.entries()) {
     // pinned: the cursor rides its file's caret while the code types out
@@ -280,9 +282,9 @@ function crewTick(now) {
   // Hermia's dotted line, from her strip to the helper she is giving an order to
   const from = lineTo && document.querySelector('#app-hermia:not([hidden]):not(.min) .ah-head .cw-radio-av')?.getBoundingClientRect()
   // @ts-ignore
-  radioLine.hidden = !from?.width
+  radioLine.toggleAttribute('hidden', !from?.width)
   // @ts-ignore
-  if (!radioLine.hidden) {
+  if (!radioLine.hasAttribute('hidden')) {
     const x1 = from.left + from.width / 2, y1 = from.bottom, x2 = lineTo.x + 6, y2 = lineTo.y + 4
     // @ts-ignore
     radioLine.firstChild.setAttribute('d', `M${x1.toFixed(1)} ${y1.toFixed(1)}C${x1.toFixed(1)} ${(y1 + 80).toFixed(1)} ${x2.toFixed(1)} ${(y2 - 80).toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`)
