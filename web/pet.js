@@ -468,7 +468,8 @@ export function makePet({ sw, C, doc = document }) {
       const was = P.building && Date.now() - P.buildAt > 5000
       P.building = false
       away()
-      if (was && e.type === 'run:done') note('built', { pages: e.pages })
+      // (a replay is a build seen again, not a new one: she says nothing of it)
+      if (was && e.type === 'run:done' && !P.replay) note('built', { pages: e.pages })
     }
   })
 
