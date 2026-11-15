@@ -230,11 +230,6 @@
     "why": "Both decks keep a crew cursor on screen between sections (#540), but the /next/ deck's replay reaches the same events about half a second later and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a cursor is on screen in one deck only, or in both at another place."
   },
   {
-    "key": "replay cursor Hermia: differs",
-    "label": "later (#530)",
-    "why": "Hermia's own cursor on the deck during a build, where the current deck shows her; the /next/ deck does not draw her there yet."
-  },
-  {
     "key": "replay cursor Reviewer: differs",
     "label": "drift",
     "why": "The /next/ deck draws the reviewer's cursor too (#540, web/canvas/auto.js rvMove and rvSpot), but its replay reaches review:start about half a second later, so at a given step it is on screen in one deck only, or in both at another place."
@@ -263,11 +258,6 @@
     "key": "replay reduced cursor Di: differs",
     "label": "drift",
     "why": "Both decks keep a crew cursor on screen between sections (#540), but the /next/ deck's replay reaches the same events about half a second later and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a cursor is on screen in one deck only, or in both at another place."
-  },
-  {
-    "key": "replay reduced cursor Hermia: differs",
-    "label": "later (#530)",
-    "why": "Hermia's own cursor on the deck during a build, where the current deck shows her; the /next/ deck does not draw her there yet."
   },
   {
     "key": "replay reduced cursor Reviewer: differs",

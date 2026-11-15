@@ -73,7 +73,8 @@ export function DeckChat({ model, picked, onCommand }: {
   // words come back as the brief, so Build starts it again, once per build (#541). Hermia's line says why.
   useEffect(() => {
     if (!run || model.state !== 'stopped' || !model.stopped || model.planned || !model.brief) return
-    setTalk(t => (t?.id === `again:${run}` ? t : { id: `again:${run}`, kind: 'site', brief: model.brief }))
+    // its first button reads Try again, as the current deck's does (web/canvas/panels.js stoppedMsg)
+    setTalk(t => (t?.id === `again:${run}` ? t : { id: `again:${run}`, kind: 'site', brief: model.brief, what: 'The same build, once more', go: 'Try again' }))
   }, [run, model.state, model.stopped, model.planned, model.brief])
 
   const comment = async (text: string, body: { target?: string | null, targets?: string[] }) => {
