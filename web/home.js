@@ -10,6 +10,7 @@ import { makeWays, makeModeOf, makeStudioStep } from './makeways.js'
 import { templatePicker } from './templatepick.js'
 import { bringEntry } from './bringin.js'
 import { hermesLine } from './hermesline.js'
+import { takeGameTalk } from './gametalk.js'
 
 const KIND = { site: 'site', app: 'code', game: 'game', film: 'film' }
 const KIND_NAME = { site: 'Site', app: 'App', game: 'Game', film: 'Film' }
@@ -1070,7 +1071,7 @@ export function makeHome({ sw, C, root }) {
     show() {
       root.hidden = false
       H.on = true
-      if (!H.me) loadMe()
+      if (!H.me) loadMe(); takeGameTalk(C)
       refresh()
       if (given) setTimeout(handover, 0) // after this view change has finished
       if (!setupAsked && !hosted()) { setupAsked = true; setup.first() }
