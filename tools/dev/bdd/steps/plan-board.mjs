@@ -4,6 +4,7 @@
 // with its price changed on the way, since the test Studio has no paid parts. The paid build and the painting are
 // Manual lines in the spec (they need models).
 import { bind, problems, step } from '../kit.mjs'
+import { studio as newStudio } from '../../../../scripts/walkthrough-fixtures.mjs'
 
 const wait = (page, ms = 1000) => page.waitForTimeout(ms)
 const BASE = ({ studio, app }) => `${studio.BASE}${app ? '/next/' : '/'}`
@@ -34,9 +35,16 @@ async function board(fx, title, { price, width = 1440 } = {}) {
 const label = async page => (await lockBtn(page).count()) ? (await lockBtn(page).textContent()).replace(/\s+/g, ' ').trim() : null
 const dialogOf = page => page.getByRole('dialog').filter({ visible: true }).first()
 
+// a saved plan shows on Projects as a card of its own, so a scenario that saves one does it in a Studio of its own: the
+// shared Studio's Projects (which the Projects scenarios' axe and empty views read) stays as it was
+const own = fn => async fx => {
+  const o = await newStudio()
+  try { await o.api('/api/setup', { seen: true }); fx.studio = o; await fn(fx) } finally { try { o.stop() } catch { /* its folder may be held a moment on Windows */ } }
+}
+
 const BIND = {
   'plan-board › Breadcrumb › The plan menu': [
-    step('the plan\'s name pressed', async fx => {
+    step('the plan\'s name pressed', own(async fx => {
       await board(fx, 'Night Market')
       const name = fx.page.getByRole('button', { name: 'Night Market', exact: true }).filter({ visible: true }).first()
       const menuItems = () => fx.page.getByRole('menu').filter({ visible: true }).first().evaluate(m => [...m.querySelectorAll('[role="menuitem"], button')].map(b => b.innerText.trim()).filter(Boolean)).catch(() => null)
@@ -52,7 +60,7 @@ const BIND = {
       fx.seen.hasX = await x.count()
       if (fx.seen.hasX) { await x.click({ timeout: 3000 }).catch(() => {}); await wait(fx.page, 500) }
       fx.seen.byX = fx.seen.hasX ? await open() : null
-    }),
+    })),
     step('a menu of Save as template only, closed by ×, Esc or a click outside', async ({ seen }) => seen.missing ? problems(seen.missing) : problems([
       JSON.stringify(seen.items) !== JSON.stringify(['Save as template']) && `the menu offers ${JSON.stringify(seen.items)}, not Save as template only`,
       seen.byEsc && 'Esc does not close the menu',
@@ -62,7 +70,7 @@ const BIND = {
     ]))
   ],
   'plan-board › Loading › A saved plan opening': [
-    step('a saved plan opened with its request held back', async fx => {
+    step('a saved plan opened with its request held back', own(async fx => {
       await fx.page.setViewportSize({ width: 1440, height: 900 })
       const id = await makePlan(fx, 'Night Market')
       let release; const gate = new Promise(r => { release = r })
@@ -78,7 +86,7 @@ const BIND = {
       await lockBtn(fx.page).waitFor({ timeout: 10_000 }).catch(() => {})
       await wait(fx.page, 1500)
       fx.seen.after = await cards()
-    }),
+    })),
     step('three waiting cards until the cards land in their place', async ({ seen }) => problems([
       seen.held.waiting !== 3 && `${seen.held.waiting} waiting cards show while the plan is held, not three`,
       seen.after.waiting && `${seen.after.waiting} waiting cards stay after the plan lands`,
@@ -86,20 +94,20 @@ const BIND = {
     ]))
   ],
   'plan-board › Nothing costly before Lock › The price on the button': [
-    step('a plan with Meshy parts, and one with none, loaded', async fx => {
+    step('a plan with Meshy parts, and one with none, loaded', own(async fx => {
       await board(fx, 'Night Market', { price: () => PRICE(324) })
       fx.seen.meshy = await label(fx.page)
       await fx.page.unrouteAll({ behavior: 'ignoreErrors' })
       await board(fx, 'Night Market 2')
       fx.seen.flat = await label(fx.page)
-    }),
+    })),
     step('Lock · n credits, and Lock · n pictures', async ({ seen }) => problems([
       !/^Lock · \d+ credits$/.test(seen.meshy || '') && `a plan with Meshy parts reads "${seen.meshy}", not Lock · <n> credits`,
       !/^Lock · \d+ pictures$/.test(seen.flat || '') && `a plan with none reads "${seen.flat}", not Lock · <n> pictures`
     ]))
   ],
   'plan-board › Nothing costly before Lock › The Gate': [
-    step('Lock · n pressed', async fx => {
+    step('Lock · n pressed', own(async fx => {
       await board(fx, 'Night Market', { price: () => PRICE(324) })
       if (!await lockBtn(fx.page).count()) { fx.seen.missing = ['no Lock button on the board']; return }
       await lockBtn(fx.page).click({ timeout: 5000 }); await wait(fx.page, 1000)
@@ -108,7 +116,7 @@ const BIND = {
         first: !!d.querySelector('input[type="checkbox"]') && /test one first/i.test(d.innerText),
         primaries: [...d.querySelectorAll('button')].filter(b => /^lock\b/i.test(b.innerText.trim())).length
       })).catch(() => null)
-    }),
+    })),
     step('a dialog of the parts, coding runs, pictures, Test one first and one Lock', async ({ seen }) => seen.missing ? problems(seen.missing) : problems([
       !seen.gate && 'no dialog opens',
       seen.gate && !/3 × 108/.test(seen.gate.text) && 'the dialog does not list the part as n × each',
@@ -119,7 +127,7 @@ const BIND = {
     ]))
   ],
   'plan-board › Nothing costly before Lock › A stale price': [
-    step('the price changed between showing and confirming', async fx => {
+    step('the price changed between showing and confirming', own(async fx => {
       let stale = false
       await fx.page.setViewportSize({ width: 1440, height: 900 })
       const id = await makePlan(fx, 'Night Market')
@@ -134,7 +142,7 @@ const BIND = {
       fx.seen.locks = locks
       fx.seen.again = await dialogOf(fx.page).evaluate(d => d.innerText.replace(/\s+/g, ' ').trim()).catch(() => null)
       fx.seen.locked = (await fx.studio.api(`/api/plans/${id}`))?.gate?.locked
-    }),
+    })),
     step('nothing locked, the Gate open again with the new price', async ({ seen }) => seen.missing ? problems(seen.missing) : problems([
       seen.locked && 'the plan was locked',
       seen.again === null && 'the Gate does not open again',
@@ -142,7 +150,7 @@ const BIND = {
     ]))
   ],
   'plan-board › Empty state › A fresh talk': [
-    step('a game talk that has answered nothing yet', async fx => {
+    step('a game talk that has answered nothing yet', own(async fx => {
       await fx.page.setViewportSize({ width: 1440, height: 900 })
       if (fx.app) await fx.page.goto(`${BASE(fx)}?room=plan`)
       else { await fx.page.goto(BASE(fx)); await fx.page.locator('.home .card').first().waitFor(); await fx.page.evaluate(() => window.swarmCosmos.talkGame({ text: 'A platformer through a night market' })) }
@@ -152,7 +160,7 @@ const BIND = {
         const lines = world.innerText.split('\n').map(l => l.trim()).filter(Boolean)
         return { cards: [...document.querySelectorAll('[data-key^="card:"], .pcard')].filter(e => e.getClientRects().length).length, long: lines.filter(l => l.length > 50 && /[.!?]$/.test(l)) }
       })
-    }),
+    })),
     step('waiting cards or card names; no helper sentence', async ({ seen }) => problems([
       !seen.board.cards && 'the board shows no cards, waiting or named',
       seen.board.long.length && `a helper sentence shows: "${seen.board.long[0]}"`
