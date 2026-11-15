@@ -235,6 +235,7 @@ export function lookBrief(ref) {
     `- Style: ${L.words.prompt}`,
     t.palette?.length ? `- Colours: background ${t.bg}, text ${t.text}${t.accent ? `, accent ${t.accent}` : ''} (palette ${t.palette.join(', ')})` : '',
     f.display?.name ? `- Type: headings like ${f.display.name} (${f.display.kind}${f.display.upper ? ', uppercase' : ''}), body like ${f.body?.name || f.display.name} (${f.body?.kind || f.display.kind})${f.label ? `, small labels in ${f.label.kind}${f.label.tracking >= 0.05 ? ', wide tracking' : ''}` : ''}. Use the closest font you can load (Google Fonts), not theirs.` : '',
+    L.words.layout ? `- Layout: ${L.words.layout}` : '',
     t.radius ? `- Corners: ${t.radius}` : '',
     L.words.motion ? `- Motion: ${L.words.motion}` : '',
     L.words.threeD ? `- Instead of their 3D piece: ${L.words.threeD}` : '',

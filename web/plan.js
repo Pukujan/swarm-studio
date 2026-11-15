@@ -101,7 +101,8 @@ export function makePlan({ sw, C, root }) {
   }).join('')
   function render() {
     const p = P.plan
-    if (!p) { world.innerHTML = P.id ? `<div class="col"><section class="pj-sec"><span class="al">Plan</span><div class="abs">${'<div class="ab pcard wait-in" aria-busy="true"><b></b><span></span></div>'.repeat(3)}</div></section></div>` : ''; return }
+    // a plan being opened, or a new game's talk drafting one, shows three waiting cards until it comes (#392)
+    if (!p) { world.innerHTML = P.id || P.draft ? `<div class="col"><section class="pj-sec"><span class="al">Plan</span><div class="abs">${'<div class="ab pcard wait-in" aria-busy="true"><b></b><span></span></div>'.repeat(3)}</div></section></div>` : ''; return }
     crumb.querySelector('.pl-name').textContent = p.title || 'Plan'
     renderPrimary()
     const cards = p.cards.map((c, i) => `<div class="ab pcard${P.writing != null && i >= P.writing ? ' wait' : ''}" data-key="card:${esc(c.id)}" tabindex="0" role="button" aria-label="${esc(c.name)}">

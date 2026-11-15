@@ -52,6 +52,14 @@ test('without a model the first words fill in, and nothing is guessed', async ()
   assert.equal(await findIn('   '), null)
 })
 
+test('without a model, lines that say what they are are still read: "Pages:" and "For:" (#543)', async () => {
+  const f = await findIn('Cedar Cafe brand brief\nA small cafe by the river.\nFor: locals, cyclists, families on weekends.\nPages: Home, Menu, Visit us and Events.')
+  assert.deepEqual(f.pages, ['Home', 'Menu', 'Visit us', 'Events'])
+  assert.equal(f.who, 'locals, cyclists, families on weekends')
+  // a page list in a sentence is not a labelled line: nothing is guessed from it
+  assert.deepEqual((await findIn('A cafe site with a home page and a menu')).pages, [])
+})
+
 test('with a model its fields are kept, clipped, and a broken answer falls back to the words', async () => {
   const chat = async messages => { assert.match(messages[0].content, /Return JSON only/); return 'Sure: {"idea":"A bakery site","what":"A harbour bakery","who":"Early commuters","pages":["Home","Bread","Visit us", ""]}' }
   const f = await findIn('Moss and Tide Bakery', { chat })
@@ -60,7 +68,7 @@ test('with a model its fields are kept, clipped, and a broken answer falls back 
   assert.equal(g.by, 'words'); assert.equal(g.what, 'Moss and Tide Bakery')
 })
 
-test('only a reference brought to the first step is read', async () => {
+test('a file is read wherever it is given; a link only when brought to the first step; a picture never (#543)', async () => {
   const projectsDir = dir()
   mkdirSync(join(projectsDir, 'p1'))
   const refs = refStore({ projectsDir, known: pid => pid === 'p1' })
@@ -74,9 +82,15 @@ test('only a reference brought to the first step is read', async () => {
     assert.equal(r.ref.source, 'import'); assert.deepEqual(r.ref.found, { state: 'reading' })
     r = await fetch(`${u}/api/projects/p1/refs/link`, { method: 'POST', body: JSON.stringify({ url: 'https://tea.example', source: 'import' }) }).then(r => r.json())
     assert.equal(r.ref.found.state, 'reading')
+    // a PDF dropped on References in the current Studio is read too: its words reach the crew's brief
     r = await fetch(`${u}/api/projects/p1/refs?name=other.pdf`, { method: 'POST', body: tinyPdf(['B']) }).then(r => r.json())
-    assert.equal(r.ref.found, undefined, 'an ordinary reference is not read')
-    assert.deepEqual(read, ['brief.pdf', 'tea.example'])
+    assert.equal(r.ref.found?.state, 'reading', 'a file given as a reference is read')
+    // a picture has no words, and a link added as a reference is walked for its look, not read
+    r = await fetch(`${u}/api/projects/p1/refs?name=shot.png`, { method: 'POST', body: Buffer.from([0x89, 0x50, 0x4e, 0x47]) }).then(r => r.json())
+    assert.equal(r.ref.found, undefined, 'a picture is not read')
+    r = await fetch(`${u}/api/projects/p1/refs/link`, { method: 'POST', body: JSON.stringify({ url: 'https://cafe.example' }) }).then(r => r.json())
+    assert.equal(r.ref.found, undefined, 'a link from Add link is walked, not read')
+    assert.deepEqual(read, ['brief.pdf', 'tea.example', 'other.pdf'])
   } finally { srv.close() }
 })
 

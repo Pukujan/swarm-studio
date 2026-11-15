@@ -41,7 +41,10 @@ export const alias: AliasOptions = [
   // Open Design's Edit, ported (web/edit/patches.js, decision 0010): one part of a finished section changed by hand
   { find: '@studio/edit', replacement: fileURLToPath(new URL('../web/edit/patches.js', import.meta.url)) },
   // where a message typed into a build's chat goes (web/route.js): the Design deck routes the same way
-  { find: '@studio/route', replacement: fileURLToPath(new URL('../web/route.js', import.meta.url)) }
+  { find: '@studio/route', replacement: fileURLToPath(new URL('../web/route.js', import.meta.url)) },
+  // a page's picture, taken inside its frame and sized in a worker (web/capture.js, spec 36): the Overview photographs
+  // a changed page the same way in both apps (src/screens/overview/Snapper.tsx)
+  { find: '@studio/capture', replacement: fileURLToPath(new URL('../web/capture.js', import.meta.url)) }
 ]
 
 export default defineConfig({

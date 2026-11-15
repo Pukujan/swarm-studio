@@ -12,6 +12,7 @@ import { useTrail } from '../../shell/Trail'
 import { AppWallView, WINDOWS, type Said } from './AppWallView'
 import { doneScreens, type AppModel, type RunEvent } from './model'
 import { AppSourceContext } from './source'
+import { foldRadio, NO_RADIO, type Radio } from './radio'
 import { Chat, type ChatLine } from '../../chat'
 import { doneSections } from '../deck/model'
 import { useDeckRun } from '../deck/source'
@@ -25,6 +26,8 @@ export function AppWall() {
   const source = useContext(AppSourceContext)
   const [model, setModel] = useState<AppModel | null>(null)
   const [said, setSaid] = useState<Said>(null)
+  // the crew's radio for this build (#529): Hermia's orders and the helpers' acts and replies, from the stream
+  const [radio, setRadio] = useState<Radio>(NO_RADIO)
   // the room's chat (issue #542, one box): what was said in it here, the person's words and the answers
   const [lines, setLines] = useState<ChatLine[]>([])
   const line = useCallback((who: ChatLine['who'], text: string) => setLines(ls => [...ls, { id: `${Date.now()}:${ls.length}`, at: Date.now(), who, text }]), [])
@@ -62,6 +65,8 @@ export function AppWall() {
         run, title: (app.name || str(start?.title) || str(start?.brief)).slice(0, 60), crew: agents.slice(0, 4), app, map, files: f.files, file: null,
         done: doneScreens(events), deployedAt: events.findLast(e => e.type === 'app:deployed')?.t, versions: v?.versions
       })
+      // the orders and replies saved with the build: the strip says the last one (the stream adds the live ones)
+      setRadio(events.reduce(foldRadio, { ...NO_RADIO, run }))
       const writing = [...(app.steps || [])].reverse().find(s => s.kind === 'write' && s.file)?.text
       if (writing) readFile(writing)
     }).catch(() => { if (live) setModel(null) })
@@ -71,6 +76,7 @@ export function AppWall() {
       if (e.type === 'app:deployed') setModel(m => (m ? { ...m, deployedAt: e.t } : m))
       const step = e.type === 'app:step' ? e.step as { kind?: string, file?: boolean, text?: string } : null
       if (step?.kind === 'write' && step.file && step.text) readFile(step.text)
+      if (e.type === 'crew:lead' || e.type === 'crew:act' || e.type === 'agent:say') setRadio(r => foldRadio(r, e))
       if (e.type.startsWith('app:')) refresh()
     })
     const beat = source.seen ? window.setInterval(() => source.seen?.(run).catch(() => {}), 30000) : 0
@@ -141,7 +147,7 @@ export function AppWall() {
   if (!model) return <section aria-label="App build" aria-busy="true" className="grid flex-1 grid-cols-2 grid-rows-2 gap-[10px] p-3">{WINDOWS.map(w => <div key={w} className="rounded-[12px] border border-edge bg-deep" />)}</section>
   return (
     <>
-      <AppWallView model={model} said={said} onAsk={onAsk} onOpen={onOpen} onFile={readFile} onBack={onBack} going={going} docked />
+      <AppWallView model={model} said={said} onAsk={onAsk} onOpen={onOpen} onFile={readFile} onBack={onBack} going={going} docked radio={radio} />
       {/* the App room opens with its chat docked (issue #542): it is where a change to the app is asked for */}
       <Chat from={run} project={view.project} lines={feed.lines} log={feed.log} onSubmit={onChat}
         box={{ placeholder: "Change the app, or ask the crew…", empty: "Ask the crew what they are on, or say what to change: once the app is built, your words change it.", action: "Send" }} />

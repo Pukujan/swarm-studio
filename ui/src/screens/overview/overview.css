@@ -70,6 +70,9 @@
 .ov-ask { display: flex; align-items: center; gap: 8px; width: min(380px, 40vw); margin-left: 6px; padding-left: 12px; border-left: 1px solid var(--line); }
 .ov-files-btn { display: none !important; }
 .ov-drop { position: absolute; inset: 12px; z-index: 40; border: 2px dashed var(--line-2); border-radius: 16px; background: rgb(var(--void-rgb) / .5); pointer-events: none; }
+/* the page being photographed (Snapper.tsx), at its own width: in the viewport (a frame off screen is not laid out
+   in time) but never seen or reached */
+.ov-booth { position: fixed; left: 0; top: 0; z-index: -1; opacity: 0; pointer-events: none; }
 .ov-error { position: absolute; left: calc(272px + 24px); top: 24px; z-index: 30; margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--surface-2); color: var(--hot-text); font: 13px var(--mono); }
 
 /* a phone: the board alone; Files opens as a sheet from the dock, the inspector sits at the foot */

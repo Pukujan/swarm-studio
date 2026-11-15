@@ -70,7 +70,7 @@ export function studioRoutes({ studios, assets, refs, projects, chats, builtOf =
       built: built ? { theme: built.theme || null, pages: built.pages || [] } : null,
       studio,
       brand: studios.brands.get(pid)?.brand || null,
-      refs: refs.list(pid),
+      refs: refs.shown(pid),
       assets: assets.list(pid)
     }
   }
@@ -132,14 +132,14 @@ export function studioRoutes({ studios, assets, refs, projects, chats, builtOf =
     if (!r || !r.file) throw bad('that reference has no file', 404)
     const asset = assets.addCopy(pid, { name: r.name, source: 'upload', w: r.w, h: r.h }, join(refs.dir(pid), r.file))
     refs.remove(pid, id)
-    return { asset, assets: assets.list(pid), refs: refs.list(pid) }
+    return { asset, assets: assets.list(pid), refs: refs.shown(pid) }
   }
   function assetToRef(pid, id) {
     const at = assets.path(pid, id)
     if (!at) throw bad('no such asset', 404)
     const ref = refs.addFile(pid, { name: at.asset.name, source: 'upload' }, readFileSync(at.file))
     assets.remove(pid, id)
-    return { ref, assets: assets.list(pid), refs: refs.list(pid) }
+    return { ref, assets: assets.list(pid), refs: refs.shown(pid) }
   }
 
   function handle(req, res, url) {

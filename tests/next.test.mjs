@@ -74,8 +74,8 @@ test('every name ui/ declares for @studio/makeways is one the current Studio\'s 
   assert.deepEqual([...read('ui/src/studio/studio-makeways.d.ts').match(/export type MakeMode = (.*)/)[1].matchAll(/'(\w+)'/g)].map(m => m[1]), makeways.MAKE_KINDS.site)
 })
 
-test('every name ui/ declares for @studio/clean, @studio/icons, @studio/video and @studio/edit is one the web file exports', async () => {
-  for (const [dts, file] of [['ui/src/screens/deck/studio-clean.d.ts', '../web/clean.js'], ['ui/src/primitives/studio-icons.d.ts', '../web/icons.js'], ['ui/src/legacy/studio-pet.d.ts', '../web/pet.js'], ['ui/src/primitives/studio-video.d.ts', '../web/video.js'], ['ui/src/screens/deck/studio-edit.d.ts', '../web/edit/patches.js'], ['ui/src/screens/deck/studio-route.d.ts', '../web/route.js'], ['ui/src/studio/studio-walkline.d.ts', '../web/walkline.js']]) {
+test('every name ui/ declares for @studio/clean, @studio/icons, @studio/video, @studio/edit and @studio/capture is one the web file exports', async () => {
+  for (const [dts, file] of [['ui/src/screens/deck/studio-clean.d.ts', '../web/clean.js'], ['ui/src/primitives/studio-icons.d.ts', '../web/icons.js'], ['ui/src/legacy/studio-pet.d.ts', '../web/pet.js'], ['ui/src/primitives/studio-video.d.ts', '../web/video.js'], ['ui/src/screens/deck/studio-edit.d.ts', '../web/edit/patches.js'], ['ui/src/screens/deck/studio-route.d.ts', '../web/route.js'], ['ui/src/studio/studio-walkline.d.ts', '../web/walkline.js'], ['ui/src/board/studio-capture.d.ts', '../web/capture.js']]) {
     const mod = await import(file)
     const declared = [...read(dts).matchAll(/^export declare (?:const|function) (\w+)/gm)].map(m => m[1])
     assert.ok(declared.length >= 1, dts)

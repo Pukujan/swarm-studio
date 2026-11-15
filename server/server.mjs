@@ -1816,7 +1816,8 @@ function readWhatYouHave(pid, ref) {
       if (!found) return refs.setFound(pid, ref.id, { state: 'failed', note: 'nothing to read in it', at: Date.now() })
       if (found.idea) try { studioRoute.setIdea(pid, found.idea) } catch {}
       await brands.story(pid, studios.get(pid)?.idea || found.idea, found)
-      refs.setFound(pid, ref.id, { state: 'ready', at: Date.now(), ...found })
+      // the words themselves, cut short, go with it: the crew's brief quotes them (engine/refs.mjs brief)
+      refs.setFound(pid, ref.id, { state: 'ready', at: Date.now(), ...found, words: String(got.text).replace(/\s+/g, ' ').trim().slice(0, 1500) })
     } catch (err) {
       try { refs.setFound(pid, ref.id, { state: 'failed', note: String(err.message || err).split('\n')[0].slice(0, 160), at: Date.now() }) } catch {}
     } finally { readings.delete(key) }

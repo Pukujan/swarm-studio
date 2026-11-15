@@ -27,6 +27,18 @@ const SOURCES = new Set(['upload', 'chat', 'feed', 'link', 'plan', 'film', 'impo
 const kindOf = name => { const t = REF_TYPES[extname(name).slice(1).toLowerCase()] || ''; return t.startsWith('image/') ? 'image' : t.startsWith('video/') ? 'video' : t.startsWith('audio/') ? 'audio' : 'file' }
 const clip = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n)
 
+// how many of each kind reach the crew's brief, and which: the first ones given
+const LIMIT = { pics: 12, looks: 3, links: 8, docs: 6 }
+function briefParts(live) {
+  const links = live.filter(r => r.kind === 'link')
+  return {
+    pics: live.filter(r => r.kind === 'image').slice(0, LIMIT.pics),
+    looks: links.filter(r => lookBrief(r)).slice(0, LIMIT.looks),
+    plain: links.filter(r => !lookBrief(r)).slice(0, LIMIT.links),
+    docs: live.filter(r => r.kind === 'file').slice(0, LIMIT.docs)
+  }
+}
+
 // a picture's size from its header (PNG, JPEG, GIF); null when it cannot tell
 export function imageSize(buf) {
   if (!buf || buf.length < 24) return null
@@ -137,16 +149,40 @@ export function refStore({ projectsDir, uploadsOf = () => [], known = () => true
   }
   // what the crew's brief says about the store (the uploads are listed apart, as before)
   function brief(pid) {
-    const live = list(pid)
-    const pics = live.filter(r => r.kind === 'image')
-    const links = live.filter(r => r.kind === 'link')
+    const g = briefParts(list(pid))
     const out = []
-    if (pics.length) out.push(`The owner's reference pictures. Match their look; place one as it is (<img src="…">, no data-gen) only where its use says so:\n${pics.slice(0, 12).map(r => `- ${r.name}${r.use ? ` (for ${r.use})` : ''}: ${r.src}`).join('\n')}`)
-    const looks = links.map(r => lookBrief(r)).filter(Boolean)
-    const plain = links.filter(r => !lookBrief(r))
-    if (looks.length) out.push(...looks.slice(0, 3))
-    if (plain.length) out.push(`Links the owner gave as references:\n${plain.slice(0, 8).map(r => `- ${r.url}${r.use ? ` (for ${r.use})` : ''}`).join('\n')}`)
+    if (g.pics.length) out.push(`The owner's reference pictures. Match their look; place one as it is (<img src="…">, no data-gen) only where its use says so:\n${g.pics.map(r => `- ${r.name}${r.use ? ` (for ${r.use})` : ''}: ${r.src}`).join('\n')}`)
+    if (g.looks.length) out.push(...g.looks.map(r => lookBrief(r)))
+    if (g.plain.length) out.push(`Links the owner gave as references:\n${g.plain.map(r => `- ${r.url}${r.use ? ` (for ${r.use})` : ''}`).join('\n')}`)
+    // documents the owner gave (a PDF, a text or Markdown file): what the crew read in them (issue #543)
+    if (g.docs.length) out.push(`Documents the owner gave. Build from what they say (the facts, the names, the pages, who it is for); never copy their layout or quote them at length:\n${g.docs.map(docLine).join('\n')}`)
     return out.join('\n\n')
+  }
+  // what each live reference gives the crew (issue #543), worked out the same way as the brief, so the card says
+  // exactly what reaches it: { id: { what: ['colours', 'type', …], not: 'why nothing (more) is taken' } }
+  function taken(pid) {
+    const live = list(pid), g = briefParts(live), out = {}
+    const inBrief = new Set([...g.pics, ...g.looks, ...g.plain, ...g.docs].map(r => r.id))
+    for (const r of live) {
+      const L = r.look, f = r.found
+      if (!inBrief.has(r.id)) {
+        out[r.id] = { what: [], not: r.kind === 'video' || r.kind === 'audio' ? 'The crew does not take anything from clips or sounds yet.' : `Only the first ${LIMIT[r.kind === 'link' ? (lookBrief(r) ? 'looks' : 'links') : r.kind === 'image' ? 'pics' : 'docs']} of these reach the crew.` }
+      } else if (r.kind === 'image') out[r.id] = { what: ['its look'] }
+      else if (r.kind === 'link' && g.looks.includes(r)) {
+        const t = L.tokens || {}, w = L.words || {}
+        out[r.id] = { what: ['style', t.palette?.length && 'colours', t.fonts?.display?.name && 'type', w.layout && 'layout', t.radius && 'corners', w.motion && 'motion'].filter(Boolean), not: 'Never its words, names, logo or pictures.' }
+      } else if (r.kind === 'link') out[r.id] = { what: ['the address'], not: L?.state === 'walking' ? 'Still being read.' : L?.state === 'failed' ? `Could not open it${L.note ? ` (${L.note})` : ''}, so only the address.` : '' }
+      else out[r.id] = f?.state === 'ready' ? { what: ['words', f.pages?.length && 'pages', f.who && 'who it is for'].filter(Boolean), not: 'Never its layout.' }
+        : { what: [], not: f?.state === 'failed' ? `Could not read it${f.note ? ` (${f.note})` : ''}.` : 'Not read yet.' }
+    }
+    return out
+  }
+  // one document in the brief: its name, the person's note, and what was read in it, or why it could not be
+  function docLine(r) {
+    const f = r.found || {}, note = r.use ? ` (for ${r.use})` : ''
+    if (f.state !== 'ready') return `- ${r.name}${note}: ${f.state === 'failed' ? `could not be read${f.note ? ` (${f.note})` : ''}` : 'not read yet'}`
+    const said = [f.what && `what: ${f.what}`, f.who && `for: ${f.who}`, f.pages?.length && `pages: ${f.pages.join(', ')}`].filter(Boolean).join('; ')
+    return clip(`- ${r.name}${note}: ${said ? `${said}. ` : ''}It says: ${f.words || f.idea || ''}`, 1800)
   }
   // "use this for the hero": the line the crew is sent, like a comment on that section
   function useText(r, section) {
@@ -154,5 +190,8 @@ export function refStore({ projectsDir, uploadsOf = () => [], known = () => true
     return clip(`Use ${what} for ${section}.${r.kind === 'image' ? ' Place it as it is (<img src="…">, no data-gen) or match its look, whichever fits the section.' : ' Match its look and feel.'} Keep everything else.`, 600)
   }
 
-  return { list, all, addFile, addLink, remove, restore, setUse, setLook, setFound, setMatch, file, brief, useText, dir }
+  // the list as the screens show it: each reference with what the crew takes from it
+  const shown = pid => { const t = taken(pid); return list(pid).map(r => ({ ...r, taken: t[r.id] || null })) }
+
+  return { list, shown, all, taken, addFile, addLink, remove, restore, setUse, setLook, setFound, setMatch, file, brief, useText, dir }
 }
