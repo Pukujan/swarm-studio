@@ -102,5 +102,18 @@ html,body{margin:0;background:var(--background,#fff);color:var(--foreground,#111
 body.hint [data-goto]{outline:3px solid #8e8e93cc;outline-offset:2px}
 .tour-hover{outline:2px solid #8e8e93aa;outline-offset:3px;filter:brightness(1.06)}
 .tour-press{transform:scale(.96);transition:transform .1s}</style>
-${PLAY_SCRIPT}</head><body>${pageParts(pageBody(m, page)).html}</body></html>`
+${PLAY_SCRIPT}${playTags(t)}</head><body>${pageParts(pageBody(m, page)).html}</body></html>`
+}
+
+// What the current Studio's Play adds (web/canvas/player.js layoutTag, motionTags), from the page's boot
+// (server/page.mjs playBoot): the layout guard, which moves a floated text panel that would cover other text at
+// this width beside the box it sat on, and the scroll reveal in the feel the theme asks for (snappy or gentle).
+// A reader who asks for reduced motion gets no reveal (engine/motion.mjs checks it inside the frame).
+function playTags(t: DeckModel['theme']): string {
+  const boot = window.SWARM
+  const layout = boot?.layout ? `<script>addEventListener('load', () => ${boot.layout})<\/script>` : ''
+  const m = boot?.motion
+  if (!m) return layout
+  const preset = new RegExp(m.snappy).test(`${t?.name || ''}`.toLowerCase()) ? 'snappy' : 'gentle'
+  return `${layout}<style>${m.css}</style><script>addEventListener('load', () => setTimeout(() => (${m.src})(document.body, ${JSON.stringify(preset)}), 60))<\/script>`
 }

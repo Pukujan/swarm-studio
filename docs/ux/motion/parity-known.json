@@ -145,16 +145,6 @@
     "why": "With reduced motion the current Studio puts Hermia 300 px further right (665,176) than it does in normal motion (365,176), on another page skeleton; the next UI keeps her normal-motion spot (365,179) in both. The current Studio's reduced-motion spot is the odd one out."
   },
   {
-    "key": "play only in /: frame ~opacity 750ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "later (#531)",
-    "why": "The prototype's scroll reveal and layout guard (BOOT.motion, BOOT.layout, web/canvas/player.js:115) are not in /next/'s player boot yet; #438 left them out."
-  },
-  {
-    "key": "play only in /: frame ~transform 750ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "later (#531)",
-    "why": "The prototype's scroll reveal and layout guard (BOOT.motion, BOOT.layout, web/canvas/player.js:115) are not in /next/'s player boot yet; #438 left them out."
-  },
-  {
     "key": "play only in /: page @radio-dash endless 800ms linear",
     "label": "later (#530)",
     "why": "Hermia's dotted radio line to the agent she last spoke to (web/canvas/start.js:272-280); the /next/ deck draws none yet."
@@ -328,16 +318,6 @@
     "key": "studio reduced cursor Hermia: differs",
     "label": "intended (decision 0015)",
     "why": "The chat docks along the bottom (decision 0015), so the Studio's board starts about 300 px further left than in the current Studio, where the chat takes the left column; Hermia rests beside the same card, which is that much further left."
-  },
-  {
-    "key": "visitor only in /: frame ~opacity 750ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "later (#531)",
-    "why": "The prototype's scroll reveal and layout guard (BOOT.motion, BOOT.layout, web/canvas/player.js:115) are not in /next/'s player boot yet; #438 left them out."
-  },
-  {
-    "key": "visitor only in /: frame ~transform 750ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "later (#531)",
-    "why": "The prototype's scroll reveal and layout guard (BOOT.motion, BOOT.layout, web/canvas/player.js:115) are not in /next/'s player boot yet; #438 left them out."
   },
   {
     "key": "visitor only in /: page @radio-dash endless 800ms linear",

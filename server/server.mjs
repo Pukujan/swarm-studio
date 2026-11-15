@@ -38,7 +38,7 @@ import { MOTION_CSS, SNAPPY, swarmMotion, motionPreset } from '../engine/motion.
 import { speak, mix, VOICES } from '../engine/sound.mjs'
 import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
-import { canvasPage as sharedCanvasPage, webVersion as pageVersion } from './page.mjs'
+import { canvasPage as sharedCanvasPage, webVersion as pageVersion, playBoot } from './page.mjs'
 import { nextPage, nextVendor } from './next.mjs'
 import { makeProjects, stateOf, gameProgress } from './projects.mjs'
 import { CHAT_ID } from '../engine/chats.mjs'
@@ -3037,7 +3037,7 @@ const server = createServer((req, res) => {
     // the code changed under this server (an update): the page's parts would no longer fit. With no work
     // running, a new server takes over and the page opens again on it
     if (replaceSelf()) return res.end('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="2"><title>Swarm Studio</title><body style="margin:0;background:#0f0f0f">')
-    const next = !classic && ui.get() === 'next' ? nextPage(uiDist, { token }) : null
+    const next = !classic && ui.get() === 'next' ? nextPage(uiDist, { token, ...playBoot() }) : null
     res.end(next || canvasPage())
     return
   }
@@ -3061,7 +3061,7 @@ const server = createServer((req, res) => {
     return
   }
   if (url.pathname === '/next/' || url.pathname === '/next/index.html') {
-    const page = nextPage(uiDist, { token })
+    const page = nextPage(uiDist, { token, ...playBoot() })
     if (!page) return void res.writeHead(404).end('not found')
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
     res.end(page)
