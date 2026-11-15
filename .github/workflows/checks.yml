@@ -147,10 +147,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - uses: actions/setup-python@v5
+      # (the hosted runner's setup-python installs a framework with sudo, which the self-hosted Mac must not: it uses
+      # the python3 it has, in a venv under the temp folder)
+      - if: ${{ runner.environment != 'self-hosted' }}
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install --quiet pillow
+      - run: |
+          if [ "${{ runner.environment }}" = self-hosted ]; then
+            py=$(command -v python3.12 || command -v python3 || echo /opt/homebrew/bin/python3)
+            "$py" --version && "$py" -m venv "$RUNNER_TEMP/venv"
+            echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+            "$RUNNER_TEMP/venv/bin/python" -m pip install --quiet pillow
+          else
+            python -m pip install --quiet pillow
+          fi
       # the next UI's build, made here as on every branch: main and pull requests carry no ui/dist/, only a release
       # does (docs/decisions/0018-next-ui-build-on-release.md); SWARM_NEED_UI makes the checks fail without it
       - run: npm ci --prefix ui --no-audit --no-fund && npm run --prefix ui build
@@ -257,7 +268,7 @@ jobs:
         run: |
           if [ -n "$HERMES_HOME" ]; then pkill -f "$HERMES_HOME" || true; fi
           pkill -f "$RUNNER_TEMP/pw" || true
-          rm -rf "$HERMES_HOME" "$RUNNER_TEMP/pw" "$RUNNER_TEMP/npm" "$RUNNER_TEMP/pip" "$RUNNER_TEMP/uv" "$RUNNER_TEMP/xdg" "$RUNNER_TEMP/hermes-install.sh" "$RUNNER_TEMP/plugins.txt" test-results
+          rm -rf "$HERMES_HOME" "$RUNNER_TEMP/pw" "$RUNNER_TEMP/npm" "$RUNNER_TEMP/pip" "$RUNNER_TEMP/uv" "$RUNNER_TEMP/xdg" "$RUNNER_TEMP/venv" "$RUNNER_TEMP/hermes-install.sh" "$RUNNER_TEMP/plugins.txt" test-results
           rm -rf "${TMPDIR:-/tmp}"/swarm-walk-* "${TMPDIR:-/tmp}"/swarm-video-* "${TMPDIR:-/tmp}"/swarm-ff-* "${TMPDIR:-/tmp}"/swarm-images-*
           df -h "$RUNNER_TEMP" | tail -1
   # property tests (decision 0019): random sequences against the deterministic rules, 1000 cases each, with
