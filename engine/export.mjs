@@ -517,6 +517,21 @@ function keepThumb(htmlDir, seo, runDir) {
   } catch {}
 }
 
+// The site's pages alone, to photograph them (a story's screens, issue #565): the static HTML and its pictures in
+// `outDir`, nothing else. No search pass (its share pictures were shot with a synchronous Chrome per page, and a big
+// site held the whole server for minutes), no React project, no zip, and never the export folder Publish and Post
+// to Feed read.
+export async function exportPages({ events, runId, runDir, outDir, name = '', fill = null }) {
+  const snap = snapshot(events, [], { name })
+  if (!snap.pages.some(p => p.sections.length)) throw new Error('nothing built yet')
+  rmSync(outDir, { recursive: true, force: true })
+  const htmlDir = join(outDir, 'html')
+  mkdirSync(htmlDir, { recursive: true })
+  const html = staticSite(snap, htmlDir, runId, runDir)
+  if (fill) { try { await fill(outDir) } catch {} }
+  return { dir: outDir, html }
+}
+
 export async function exportRun({ events, runId, runDir, sections, name: given = '', fill = null }) {
   const snap = snapshot(events, sections, { name: given })
   if (!snap.pages.some(p => p.sections.length)) throw new Error('nothing built yet')

@@ -6,7 +6,7 @@
 //   GET  /story/<id>/screens/<page>-<desktop|phone>.jpg -> a page shot a beat may use
 // Nothing here posts anything: the cards go to the Feed only through Post to Feed, and to a network
 // only when the person presses Post on their own connected account.
-import { existsSync, mkdirSync, readFileSync, writeFileSync, createReadStream } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, createReadStream } from 'node:fs'
 import { join } from 'node:path'
 import { storyFacts, writeStory, readStory, saveStory, editStory, picturesOf, STORY_TYPES } from '../engine/story.mjs'
 import { drawCards, SHAPES } from '../engine/storycards.mjs'
@@ -14,9 +14,11 @@ import { drawCards, SHAPES } from '../engine/storycards.mjs'
 const RUN_ID = /^[\w.-]{1,80}$/
 
 // runsDir, dataDir; readEvents(id); brandOf(id) -> the chat's brand record or null;
-// chat() -> (messages -> text) or null; shots(id) -> [{ page, desktop, phone }] as data URLs (a fresh
-// export's page shots), or [] when there is no browser
-export function storyRoutes({ runsDir, dataDir, readEvents, brandOf = () => null, chat = () => null, shots = async () => [], pitchOf = async () => '' }) {
+// chat() -> (messages -> text) or null; shots(id, pages) -> [{ page, desktop, phone }] as data URLs (those pages
+// shot from the site's pages), or [] when there is no browser; savedShot(id) -> (page -> the file of its saved
+// snapshot of what it looks like now, spec 36, or null); notify(id, type, data): progress, live only
+export const SHOT_CAP = 12
+export function storyRoutes({ runsDir, dataDir, readEvents, brandOf = () => null, chat = () => null, shots = async () => [], savedShot = () => () => null, notify = () => {}, pitchOf = async () => '' }) {
   const json = (res, code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
   const body = req => new Promise(resolve => {
     let b = ''
@@ -36,19 +38,24 @@ export function storyRoutes({ runsDir, dataDir, readEvents, brandOf = () => null
     return storyFacts(events, id, { brand, pitch: pitches.get(id) })
   }
 
-  // the page shots a story's screens use, kept as files so a redraw does not shoot the site again
+  // the page shots a story's screens use, kept as files so a redraw does not shoot the site again. Never on the
+  // request (issue #565: a fresh export shot the pages with a synchronous Chrome, and a 250-page site held the
+  // whole server for minutes): a page's saved snapshot (spec 36) when it has one, else the page is shot after the
+  // answer (later), and the cards are drawn again when it is in. Until then its beat is drawn without it.
+  const screensDir = id => join(runsDir, id, 'story', 'screens')
+  const hasShot = (id, p) => existsSync(join(screensDir(id), `${p}-desktop.jpg`)) || existsSync(join(screensDir(id), `${p}-phone.jpg`))
   async function screensOf(id, story) {
-    const dir = join(runsDir, id, 'story', 'screens')
+    const dir = screensDir(id)
     const want = [...new Set(story.beats.filter(b => b.picture?.kind === 'screen').map(b => b.picture.page))]
-    const have = p => existsSync(join(dir, `${p}-desktop.jpg`)) || existsSync(join(dir, `${p}-phone.jpg`))
+    const have = p => hasShot(id, p)
     if (want.some(p => !have(p))) {
       mkdirSync(dir, { recursive: true })
-      for (const s of await shots(id).catch(() => [])) {
-        for (const k of ['desktop', 'phone']) {
-          const m = /^data:image\/\w+;base64,(.+)$/.exec(s[k] || '')
-          if (m && /^[\w-]{1,60}$/.test(s.page)) writeFileSync(join(dir, `${s.page}-${k}.jpg`), Buffer.from(m[1], 'base64'))
-        }
+      const saved = savedShot(id)
+      for (const p of want.filter(p => !have(p) && /^[\w-]{1,60}$/.test(p))) {
+        const f = saved(p)
+        if (f) try { copyFileSync(f, join(dir, `${p}-desktop.jpg`)) } catch {}
       }
+      later(id, want.filter(p => !have(p)))
     }
     const out = {}
     for (const p of want) {
@@ -56,6 +63,30 @@ export function storyRoutes({ runsDir, dataDir, readEvents, brandOf = () => null
       out[p] = { desktop: f('desktop'), phone: f('phone') }
     }
     return out
+  }
+
+  // The pages still without a shot, shot after the answer: one build at a time, at most SHOT_CAP pages, each page
+  // tried once while the server runs (one with no browser to shoot it is not tried again and again), with
+  // progress; then the story's cards are drawn again with them.
+  let line = Promise.resolve()
+  const tried = new Set()
+  function later(id, pages) {
+    const take = pages.filter(p => /^[\w-]{1,60}$/.test(p) && !tried.has(`${id}/${p}`)).slice(0, SHOT_CAP)
+    if (!take.length) return
+    for (const p of take) tried.add(`${id}/${p}`)
+    line = line.then(async () => {
+      notify(id, 'story:shots', { state: 'shooting', pages: take.length })
+      let made = 0
+      for (const s of await shots(id, take).catch(() => [])) {
+        for (const k of ['desktop', 'phone']) {
+          const m = /^data:image\/\w+;base64,(.+)$/.exec(s[k] || '')
+          if (m && take.includes(s.page)) { writeFileSync(join(screensDir(id), `${s.page}-${k}.jpg`), Buffer.from(m[1], 'base64')); if (k === 'desktop') made++ }
+        }
+      }
+      const story = made ? readStory(join(runsDir, id)) : null
+      if (story) await once(id, () => draw(id, story)).catch(() => {})
+      notify(id, 'story:shots', { state: 'done', pages: take.length, made })
+    }).catch(() => {})
   }
 
   async function draw(id, story) {
