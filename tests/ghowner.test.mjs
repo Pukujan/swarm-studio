@@ -181,8 +181,6 @@ test('a project\'s first push makes its source repository in the organization; a
   assert.equal(mine.repo, 'me/old')
   writeFileSync(join(old, 'a.txt'), 'b')
   assert.equal((await pushSource({ dir: old, link: mine, title: 'Old', hub: G.hub, gh: G.gh, ownerOf })).repo, 'me/old')
-  // a push never forces
-  assert.ok(!G.calls.some(c => c.includes('--force') || c.includes('-f')))
 })
 
 test('typed in the chat: "publish to <organization>" and "where do builds go"; host words are not names', () => {

@@ -92,7 +92,7 @@ export function openSettings({ sw, esc }) {
       const v = S.gh
       const pick = (k, name, { state = '', on = false, off = false } = {}) => `<button type="button" class="set-row" role="radio" aria-checked="${on}"${off ? ' aria-disabled="true"' : ''} data-owner="${esc(k)}"><i class="set-dot${on ? ' on' : ''}" aria-hidden="true"></i><b>${esc(name)}</b><span>${esc(state)}</span></button>`
       list.innerHTML = `<button type="button" class="set-row set-back" data-k="you">${ic('chl', 14)}<b>You</b></button>`
-        + (!v ? '' : `<div role="radiogroup" aria-label="Where builds go">${v.login ? pick('', v.login, { state: 'Your account', on: !v.owner }) : ''}${v.orgs.map(o => pick(o.login, o.login, { state: o.can ? '' : o.why, on: v.owner === o.login, off: !o.can })).join('')}</div>`)
+        + (!v ? '' : `<div class="set-radios" role="radiogroup" aria-label="Where builds go">${v.login ? pick('', v.login, { state: 'Your account', on: !v.owner }) : ''}${v.orgs.map(o => pick(o.login, o.login, { state: o.can ? '' : o.why, on: v.owner === o.login, off: !o.can })).join('')}</div>`)
         + (S.ghErr || v?.error ? `<p class="set-goes" role="alert">${esc(S.ghErr || v?.error || '')}</p>` : '')
       return
     }

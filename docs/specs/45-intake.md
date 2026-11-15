@@ -304,7 +304,8 @@ https://github.com/Swarm-Generations ... so they wont flood my public repos".
   its name.
 - **Shared organizations.** Other members' Studios publish there too: a marked site repository there is replaced
   only when it is this build's own (its name is the one this build published to). Any other is skipped, as one the
-  Studio did not make.
+  Studio did not make. The limit: "its own" is known by name, so another member's marked repository with the very
+  name this build published to before would be taken for it.
 - The rules above still hold in an organization: the source push never forces, never takes over a repository the
   Studio did not make or the person did not name, and refuses key files. The site's repository is replaced on
   each publish (a force push, as before) only when it is this build's own; a site with a key file in it is not
