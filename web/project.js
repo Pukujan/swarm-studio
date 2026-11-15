@@ -13,7 +13,7 @@
 // "Tell the crew…" changes just it. Each change is a saved edit event, so it undoes, replays and
 // reaches anyone else on the same build (room for working together later).
 import { ic, cursor, CREW, PAINTERS, REVIEWER, painterOf } from './icons.js'
-import { routeMessage } from './route.js'
+import { routeMessage, toApp, askBox } from './route.js'
 import { swEdit } from './edit/patches.js'
 import { setVideoHtml } from './video.js'
 import { layerSheet } from './layers.js'
@@ -439,6 +439,7 @@ export function makeProject({ sw, C, root }) {
     drawMarks()
   }
   function renderInsp() {
+    askBox(document.querySelector('.pj-ask:not(.pj-lask) input'), P.board, find(P.sel)?.kind)
     const x = P.sel && find(P.sel)
     insp.hidden = !x
     root.classList.toggle('insp-on', !!x)
@@ -1334,6 +1335,7 @@ export function makeProject({ sw, C, root }) {
     if (x?.kind === 'art') return replace(x)
     input.value = ''
     if (x?.kind === 'page' && P.layer && sw.layers?.get(P.layer)?.done) { sw.layers.fix(P.layer, text); toast(`${ic('msg', 15)}<span>On it</span>`); return }
+    if (toApp(P.board, x?.kind) && sw.appAsk) { C.go('station', 'app'); C.chat(true); sw.appAsk(text); return }
     const route = routeMessage({ text, run: P.run, site: !P.board?.game && P.board?.pages?.length > 0, selected: x?.kind === 'page', hosted: hosted() })
     if (route === 'fix') { sw.focusPage(x.page); sw.submit(`/fix ${text}`); toast(`${ic('msg', 15)}<span>On it</span>`); setTimeout(load, 1500); return }
     // the project's next version: every page kept, the crew builds what was asked. A version with

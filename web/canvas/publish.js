@@ -134,9 +134,11 @@ export function pubShow() {
   posted.alone = false
   if (pub.state === 'working') {
     const names = PUB_STAGES[pub.target]
-    if (!names) return pubPop('<div class="pstage">Publishing…</div>')
+    // the link's row while it is on its way, marked busy: Hermia works on it (web/pet.js, #392)
+    const link = '<div class="plink-wait wait-in" role="status" aria-busy="true" aria-label="The live link, on its way"><i></i><i></i></div>'
+    if (!names) return pubPop(`<div class="pstage">Publishing…</div>${link}`)
     const steps = Object.keys(names), at = Math.max(0, steps.indexOf(pub.stage))
-    return pubPop(`<div class="psteps">${steps.map((k, i) => `<div class="${i < at ? 'did' : i === at ? 'now' : ''}">${i < at ? '✓' : i === at ? '◌' : '·'} ${names[k]}</div>`).join('')}</div>`)
+    return pubPop(`<div class="psteps">${steps.map((k, i) => `<div class="${i < at ? 'did' : i === at ? 'now' : ''}">${i < at ? '✓' : i === at ? '◌' : '·'} ${names[k]}</div>`).join('')}</div>${link}`)
   }
   if (pub.state === 'failed') {
     const el = pubPop(`<div class="pstate err"><b>Not published</b><span>${esc(shortReason(pub.message))}</span></div>

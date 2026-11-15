@@ -24,20 +24,36 @@
     "detail": "reads \"Design deck\", should read \"Home › Projects › Alpha Tea › Design deck\""
   },
   {
+    "key": "film@1440 axe label",
+    "detail": "Form elements must have labels: .dcolor"
+  },
+  {
+    "key": "film@1440 axe label-content-name-mismatch",
+    "detail": "Elements must have their visible text as part of their accessible name: .brand"
+  },
+  {
     "key": "film@1440 breadcrumb",
-    "detail": "reads \"Film studio\", should read \"Home › Projects › River Hours › Film\""
+    "detail": "reads \"no breadcrumb; the file name reads \"RIVER HOURS\"\", should read \"Home › Projects › River Hours › Film\""
   },
   {
     "key": "film@1440 loading",
-    "detail": "nothing showed it was loading, and the screen asked for no data"
+    "detail": "nothing showed it was loading while /api/models, /api/auto, /api/work, /api/runs/2026-11-01T14-00-00-000Z/events, /api/media were held"
+  },
+  {
+    "key": "film@390 axe label",
+    "detail": "Form elements must have labels: .dcolor"
+  },
+  {
+    "key": "film@390 axe label-content-name-mismatch",
+    "detail": "Elements must have their visible text as part of their accessible name: .brand"
   },
   {
     "key": "film@390 breadcrumb",
-    "detail": "reads \"Film studio\", should read \"Home › Projects › River Hours › Film\""
+    "detail": "reads \"no breadcrumb\", should read \"Home › Projects › River Hours › Film\""
   },
   {
     "key": "film@390 loading",
-    "detail": "nothing showed it was loading, and the screen asked for no data"
+    "detail": "nothing showed it was loading while /api/models, /api/auto, /api/work, /api/runs/2026-11-01T14-00-00-000Z/events, /api/media, /api/runs/2026-11-01T14-00-00-000Z/cuts were held"
   },
   {
     "key": "game@1440 breadcrumb",

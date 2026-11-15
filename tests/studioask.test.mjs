@@ -189,8 +189,9 @@ test('/api/studio/:pid/ask: typed answers set the pages and the pictures, and st
     // the pages, typed
     j = await ask({ said: 'Home, Work, Contact', asked: 'pages' })
     assert.deepEqual(j.studio.kit.pages, ['Home', 'Work', 'Contact'])
-    assert.equal(j.ask.next, 'pictures')
-    // the pictures, typed: the same kit state the board's Pictures card sets
+    // Setup already asked about pictures (its Pictures row): that counts as said, so nothing more is asked (#541)
+    assert.equal(j.ask.next, null)
+    // the pictures can still be typed: the same kit state the board's Pictures card sets
     j = await ask({ said: 'stock photos', asked: 'pictures', building: true })
     assert.equal(j.studio.kit.pictures, 'stock')
     assert.deepEqual([j.ask.next, j.ask.build], [null, true])
@@ -208,7 +209,7 @@ test('/api/studio/:pid/ask: typed answers set the pages and the pictures, and st
     const r = await (await s.call(`/api/studio/${other.project.id}/ask`, { said: 'skip all, just build' })).json()
     assert.equal(r.ask.build, true)
     assert.equal(r.studio.kit.pagesBy, 'crew')
-    assert.ok(['painted', 'stock', 'drawn'].includes(r.studio.kit.pictures))
+    assert.equal(r.studio.kit.pictures, undefined, "Setup's pictures stand: none is set over them")
     assert.match(r.ask.text, /^Building it now: the crew picks the look and the pages, pictures (painted|stock photos|drawn)\.$/)
     // another kind is not asked a website's questions
     const app = await (await s.call('/api/studio', { kind: 'app', idea: 'A habit tracker' })).json()

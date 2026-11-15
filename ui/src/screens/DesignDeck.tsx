@@ -3,6 +3,7 @@
 // are folded into the model the canvas and the panels draw. Slice 1 of the port (#404): the frame, the pages, the
 // crew's cursors, Pages and Layers, the toolbar, and the variables. The chat, editing, marks, Play and Publish
 // follow, and until then the current Studio has them at the same address.
+import { classicHref } from '../shell/classic'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, LinkButton } from '../primitives/Button'
 import { Icon } from '../primitives/Icon'
@@ -63,7 +64,7 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
   const canPlay = !loading && model.pages.some(p => model.order.some(k => model.layers[k].text && (model.layers[k].page === p.id || model.layers[k].page === '*')))
   const replay = { on: view.replay, can: !loading && (view.replay || model.state === 'done'), toggle: () => go({ type: 'replay', on: !view.replay }) }
 
-  const studio = <LinkButton role="secondary" href={`/${search(view, location.search)}`}>Open in the Studio</LinkButton>
+  const studio = <LinkButton role="secondary" href={classicHref(search(view, location.search))}>Open in the Studio</LinkButton>
   if (error) {
     return (
       <section role="alert" className="grid h-[calc(100dvh-3.5rem)] place-content-center justify-items-center gap-4 p-6 text-center">

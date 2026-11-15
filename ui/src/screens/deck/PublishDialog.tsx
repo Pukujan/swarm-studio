@@ -58,14 +58,19 @@ export function PublishDialog({ model, isOpen, onOpenChange }: { model: DeckMode
 
 function Steps({ target, stage }: { target: Host | null, stage: string }) {
   const names = target ? STAGES[target] : undefined
-  if (!names) return <p role="status">Publishing…</p>
+  // the live link's row while it is on its way, marked busy (#392, web/canvas/publish.js)
+  const link = <div role="status" aria-busy="true" aria-label="The live link, on its way" className="wait-in mt-3 flex gap-2"><i className="block rounded-[10px] bg-surface-2 motion-safe:animate-pulse h-8 flex-1" /><i className="block rounded-[10px] bg-surface-2 motion-safe:animate-pulse h-8 w-24" /></div>
+  if (!names) return <><p role="status">Publishing…</p>{link}</>
   const steps = Object.keys(names), at = Math.max(0, steps.indexOf(stage))
   return (
-    <ol role="status" aria-label="Publishing" className="flex flex-col gap-1.5">
-      {steps.map((k, i) => (
-        <li key={k} className={i < at ? 'text-muted' : i === at ? 'text-text' : 'text-dim'}>{i < at ? '✓' : i === at ? '◌' : '·'} {names[k]}</li>
-      ))}
-    </ol>
+    <>
+      <ol role="status" aria-label="Publishing" className="flex flex-col gap-1.5">
+        {steps.map((k, i) => (
+          <li key={k} className={i < at ? 'text-muted' : i === at ? 'text-text' : 'text-dim'}>{i < at ? '✓' : i === at ? '◌' : '·'} {names[k]}</li>
+        ))}
+      </ol>
+      {link}
+    </>
   )
 }
 
@@ -74,7 +79,8 @@ function Choose({ onPick }: { onPick: (h: Host) => void }) {
   const [hosts, setHosts] = useState<Hosts | null>(null)
   const [again, setAgain] = useState(0)
   useEffect(() => { let on = true; getHosts().then(h => on && setHosts(h), () => on && setHosts({})); return () => { on = false } }, [again])
-  if (!hosts) return <p role="status" aria-busy="true">Checking…</p>
+  // the hosts' buttons on their way, marked busy (#392): Hermia shows she is working
+  if (!hosts) return <div role="status" aria-busy="true" aria-label="Checking the hosts" className="wait-in flex flex-col gap-2">{[0, 1, 2].map(i => <i key={i} className="block rounded-[10px] bg-surface-2 motion-safe:animate-pulse h-10" />)}</div>
   const signed = (h: Host) => (h === 'github' ? !!hosts.github : h === 'local' ? true : !!hosts[h]?.user)
   const Pick = ({ h }: { h: Host }) => (
     <Button role="secondary" isDisabled={!signed(h)} onPress={() => onPick(h)} className="flex-1 justify-between normal-case! tracking-normal!">

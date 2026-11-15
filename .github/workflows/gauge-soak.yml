@@ -1,0 +1,48 @@
+name: gauge-soak
+# How steady the board gauge is (scripts/board-gauge.mjs): the same code, main, on both sides, measured the way the
+# board-gauge job measures a pull request, on ten runners at once. Nothing differs between the sides, so a trial that
+# fails is a false failure. Every recording is uploaded, to see how a change to the gauge's method would have done on
+# them (docs/perf/README.md).
+#
+# Runs when a pull request is labelled `gauge-soak` (remove the label and add it again to run it again), or by hand.
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  soak:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'gauge-soak'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        trial: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-save --no-package-lock playwright@1.64.1 && npx playwright install --with-deps chromium-headless-shell
+      # the tree of main is both sides (the gauge script is this branch's)
+      - run: |
+          git worktree add "$RUNNER_TEMP/main" origin/main
+          npm ci --prefix "$RUNNER_TEMP/main/ui" --no-audit --no-fund && npm run --prefix "$RUNNER_TEMP/main/ui" build
+      - run: |
+          g=$RUNNER_TEMP/gauge
+          mkdir -p $g
+          for i in 1 2 3; do
+            node scripts/board-gauge.mjs measure $g/base$i.json --root "$RUNNER_TEMP/main" --runs 1
+            node scripts/board-gauge.mjs measure $g/head$i.json --root "$RUNNER_TEMP/main" --runs 1
+          done
+          node scripts/board-gauge.mjs compare $g/base1.json,$g/base2.json,$g/base3.json $g/head1.json,$g/head2.json,$g/head3.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gauge-soak-${{ matrix.trial }}
+          path: ${{ runner.temp }}/gauge
+          retention-days: 14

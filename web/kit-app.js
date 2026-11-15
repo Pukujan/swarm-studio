@@ -66,7 +66,8 @@ async function appKitApi(ctx, path, body, method = 'POST') {
   if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
   return j
 }
-const appKitOf = ctx => appKitState.get(ctx.project) || appKitState.set(ctx.project, { kit: null, connects: [], left: [], spec: null, sel: null }).get(ctx.project)
+// the project's id: the Studio passes the project ({ id, name, … }), an older caller its id (web/kit-video.js pidOf)
+const appKitPid = ctx => (typeof ctx.project === 'string' ? ctx.project : ctx.project?.id) || '', appKitOf = ctx => appKitState.get(appKitPid(ctx)) || appKitState.set(appKitPid(ctx), { kit: null, connects: [], left: [], spec: null, sel: null }).get(appKitPid(ctx))
 // a new kit from the server: keep it, save it to the project, and fetch the words, plan and proposal
 async function appKitTake(ctx, out) {
   const st = appKitOf(ctx)
@@ -75,7 +76,7 @@ async function appKitTake(ctx, out) {
   clearTimeout(st.saving)
   st.saving = setTimeout(async () => {
     try {
-      if (ctx.project) await appKitApi(ctx, `/api/kit/app/${encodeURIComponent(ctx.project)}`, { kit: st.kit }, 'PUT')
+      if (appKitPid(ctx)) await appKitApi(ctx, `/api/kit/app/${encodeURIComponent(appKitPid(ctx))}`, { kit: st.kit }, 'PUT')
       st.spec = await appKitApi(ctx, '/api/kit/app/spec', { kit: st.kit })
       ctx.refresh?.()
     } catch (err) { ctx.board?.toast?.(err.message) }
@@ -219,8 +220,8 @@ export const appKit = {
     appKitStyle()
     const st = appKitOf(ctx)
     if (st.kit) return st
-    if (ctx.project) {
-      const saved = await appKitApi(ctx, `/api/kit/app/${encodeURIComponent(ctx.project)}`).catch(() => null)
+    if (appKitPid(ctx)) {
+      const saved = await appKitApi(ctx, `/api/kit/app/${encodeURIComponent(appKitPid(ctx))}`).catch(() => null)
       if (saved?.kit) { Object.assign(st, saved); st.spec = await appKitApi(ctx, '/api/kit/app/spec', { kit: st.kit }).catch(() => null); return st }
     }
     // the brief's own words at once, then the planner's fuller kit when it answers (never over an edit)
@@ -280,7 +281,7 @@ export const appKit = {
   async build(spec, ctx) {
     const a = spec?.kits?.app
     if (!a?.kit) throw new Error('lock the app plan first')
-    const job = await appKitApi(ctx, '/api/auto', { prompt: a.kit.brief || ctx.studio?.idea || a.kit.title || 'an app', games: 'none', only: ['app', 'data', 'deploy'], appkit: a.kit, ...(ctx.project ? { project: ctx.project } : {}), ...(ctx.chat?.id ? { chat: ctx.chat.id } : {}) })
+    const job = await appKitApi(ctx, '/api/auto', { prompt: a.kit.brief || ctx.studio?.idea || a.kit.title || 'an app', games: 'none', only: ['app', 'data', 'deploy'], appkit: a.kit, ...(appKitPid(ctx) ? { project: appKitPid(ctx) } : {}), ...(ctx.chat?.id ? { chat: ctx.chat.id } : {}) })
     return { run: job.run }
   },
   // the reviewer's result, recorded on the run by the build's last step (engine/appkit.mjs kitChecks)

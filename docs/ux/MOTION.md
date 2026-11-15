@@ -76,9 +76,17 @@ check how it looks. A screen whose `/next/` still shows its name and "Open in th
 moved yet. As in the motion check, each app is recorded twice, and a difference counts only when both runs
 agree. Nothing is retried.
 
-Known differences are in [motion/parity-known.json](motion/parity-known.json). Each one is labelled
-`intended (PR #N)`, a slice that leaves it for later on purpose, or `drift`, which is to be fixed, and each
-has a why. A new difference fails the job. A known one that no longer happens is printed so its entry can be
+Known differences are in [motion/parity-known.json](motion/parity-known.json). Each has a why and one of three
+labels:
+
+- `intended (decision NNNN)`: the owner decided the next UI differs here, and the label cites where. That's a
+  decision record, a spec (`spec 44`, `spec design-deck`) or a written pattern (`PATTERNS: …`). For example,
+  decision 0015 docks the chat along the bottom, which moves the Studio's board left.
+- `later (#issue)`: `/next/` hasn't built this yet. It's open work, and the issue says what done looks like.
+- `drift`: it should match and doesn't. It's to be fixed.
+
+A slice that hasn't built something yet is `later`, never `intended`: only a decision makes a difference
+intended. A new difference fails the job. A known one that no longer happens is printed so its entry can be
 deleted. To write the list again: `node scripts/motion-parity.mjs run <dir> --update`, then label the new
 entries.
 

@@ -58,6 +58,10 @@ export interface DeckModel {
   failed: number
   t0: number
   tEnd: number
+  // what the build was asked (run:start), and why it stopped when it was not the person's Stop (the model, Hermes,
+  // a timeout: run:stopped's reason), with what to do
+  brief: string
+  stopped: { message: string, action: string } | null
 }
 
 // one engine event, as the server writes it; only the fields the deck reads are named
@@ -78,7 +82,7 @@ const FRESH_MS = 8000
 export const belongs = (page: string, l: DeckLayer) => l.page === '*' || l.page === page
 
 export function empty(run: string | null = null): DeckModel {
-  return { run, kind: 'site', title: '', state: 'empty', pages: [], layers: {}, order: [], agents: [], theme: null, publish: NO_PUBLISH, exported: null, threads: {}, issues: {}, lines: [], reviewing: [], planned: 0, done: 0, failed: 0, t0: 0, tEnd: 0 }
+  return { run, kind: 'site', title: '', state: 'empty', pages: [], layers: {}, order: [], agents: [], theme: null, publish: NO_PUBLISH, exported: null, threads: {}, issues: {}, lines: [], reviewing: [], planned: 0, done: 0, failed: 0, t0: 0, tEnd: 0, brief: '', stopped: null }
 }
 
 // What a stream is "doing" right now, read off its tail (web/canvas/deck.js detectTool).
@@ -117,6 +121,12 @@ function setAgent(m: DeckModel, id: string, patch: Partial<DeckAgent>) {
 
 const agentOf = (m: DeckModel, id: unknown) => m.agents.find(a => a.id === id)
 
+// why a build stopped, when it was not the person's own Stop
+function reasonOf(e: DeckEvent): { message: string, action: string } | null {
+  const r = e.reason as { code?: unknown, message?: unknown, action?: unknown } | undefined
+  return r && typeof r === 'object' && r.code !== 'person' && str(r.message) ? { message: str(r.message), action: str(r.action) } : null
+}
+
 const LINES = 300
 // the build's line for an event, if it has one (the last 300 are kept)
 function lineOf(m: DeckModel, e: DeckEvent): DeckLine | null {
@@ -132,7 +142,8 @@ function lineOf(m: DeckModel, e: DeckEvent): DeckLine | null {
     case 'comment:none': return { id, at, who: 'hermia', text: 'Not sure which section that is about. Select one on the canvas and comment there.' }
     case 'layer:failed': return str(e.keep) ? null : { id, at, who: 'err', text: `${str(e.layer)} failed: ${str(e.message) || 'no reason given'}`, layers: where }
     case 'run:done': return { id, at, who: 'sys', text: `Done: ${num(e.done)}/${num(e.planned)} sections across ${num(e.pages)} pages in ${(num(e.ms) / 1000).toFixed(1)}s${num(e.failed) ? `, ${num(e.failed)} failed` : ''}.` }
-    case 'run:stopped': return { id, at, who: 'sys', text: 'Stopped. Everything finished is kept.' }
+    // a stop for a reason is Hermia's line in the chat, with what to do (#541); the person's own Stop is the Log's
+    case 'run:stopped': return reasonOf(e) ? { id, at, who: 'hermia', text: [reasonOf(e)!.message, reasonOf(e)!.action.replace(/`/g, '')].filter(Boolean).join(' ') } : { id, at, who: 'sys', text: 'Stopped. Everything finished is kept.' }
     case 'error': return { id, at, who: 'err', text: `${str(e.where) || 'build'}: ${str(e.message)}` }
     default: return null
   }
@@ -157,6 +168,7 @@ function step(m: DeckModel, e: DeckEvent): DeckModel {
       n.state = 'planning'
       n.kind = e.kind === 'game' ? 'game' : 'site'
       n.title = (str(e.title) || str(e.brief)).slice(0, 60)
+      n.brief = str(e.brief)
       const agents = Array.isArray(e.agents) ? e.agents as { id: string, name: string }[] : []
       n.agents = agents.map(a => ({ id: String(a.id), name: String(a.name), layer: null, tool: 'move', idle: true }))
       return n
@@ -263,6 +275,7 @@ function step(m: DeckModel, e: DeckEvent): DeckModel {
       const n = draft(m)
       n.state = 'stopped'
       n.tEnd = num(e.t)
+      n.stopped = reasonOf(e)
       for (const a of n.agents) setAgent(n, a.id, { idle: true, layer: null, tool: 'move' })
       for (const k of n.order) {
         const l = n.layers[k]

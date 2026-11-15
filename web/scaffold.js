@@ -15,6 +15,7 @@ import { ic } from './icons.js'
 import { matchHtml, matchClick, lookBusy, lookWorker, workLine, workHtml, lookPhase, lookSays, LOOK_POLL } from './lookmatch.js'
 import { makeBoard } from './board.js'
 import { KITS } from './kits.js'
+import { moodLine, nextStep, walkLine } from './walkline.js'
 import { layerTree, layerSheet } from './layers.js'
 
 // what a project's builds use for pictures (web/setup.js's three)
@@ -28,7 +29,7 @@ const ROLE_NAME = { pack: 'Brand kit' }
 
 export function makeScaffold({ sw, C, root }) {
   const esc = sw.esc
-  const A = { on: false, pid: null, d: null, sel: null, framed: false, busy: false, wantsBuild: false, asking: null, talked: null, cards: new Map(), takes: null }
+  const A = { on: false, pid: null, d: null, sel: null, framed: false, busy: false, wantsBuild: false, asking: null, talked: null, cards: new Map(), takes: null, walked: /** @type {{ pid: string | null, pack: string | null } | null} */ (null), plannedAsk: /** @type {string | null} */ (null) }
 
   const bd = makeBoard({ root, cls: 'project plan scaffold', label: 'Studio', fit: [0.35, 1], on: () => A.on, selected: () => !!A.sel, clear: () => select(null) })
   const { world, insp } = bd
@@ -126,12 +127,28 @@ export function makeScaffold({ sw, C, root }) {
     if (step === 'proposal') return d.studio.locked ? 'done' : d.studio.proposal ? 'started' : 'empty'
     return 'empty'
   }
-  // the record follows what the board shows
+  // the record follows what the board shows. A step that is now done (here, or on the brand sheet) is said in the
+  // chat, with what it meant and which step is next (#541, web/walkline.js); a mood picked on the sheet too
   function sync() {
+    let said = null
     for (const s of Object.keys(A.d.studio.steps)) {
       const now = stateOf(s)
+      if (now === 'done' && A.d.studio.steps[s] !== 'done') said = s
       if (now !== A.d.studio.steps[s]) { A.d.studio.steps[s] = now; post(at('/step'), { step: s, state: now }).catch(() => {}) }
     }
+    const pack = A.d.brand?.pack || null
+    if (A.walked?.pid === A.pid && A.talked === A.pid) {
+      if (said) walkSay(said, 'done')
+      // the option's name from its slug ("warm-editorial": Warm editorial)
+      else if (pack && pack !== A.walked.pack) sw.say?.(moodLine(pack.charAt(0).toUpperCase() + pack.slice(1).replace(/-/g, ' '), nextStep(walkOrder(), stateOf, 'brand'), STEP_NAME))
+    }
+    A.walked = { pid: A.pid, pack }
+  }
+  // the walk, in the kit's order (the current Studio's Lock is its review, not a step that is done)
+  const walkOrder = () => kit().steps.filter(s => s in A.d.studio.steps)
+  /** @param {string} step @param {'done' | 'skipped'} how */
+  function walkSay(step, how) {
+    sw.say?.(walkLine({ step, how, next: nextStep(walkOrder(), stateOf, step) ?? nextStep(walkOrder(), stateOf), names: STEP_NAME }))
   }
 
   // ---------- render
@@ -405,7 +422,7 @@ export function makeScaffold({ sw, C, root }) {
       box.innerHTML = `<div class="sc-acts"><button class="btn ghost" data-a="skip">${ic(skipped ? 'restore' : 'x', 15)}${skipped ? 'Bring back' : 'Skip'}</button><button class="btn ghost" data-a="remove">${ic('trash', 15)}Remove</button></div>`
       box.onclick = e => {
         const a = e.target.closest('[data-a]')?.dataset.a
-        if (a === 'skip') post(at('/step'), { step: id, state: skipped ? 'empty' : 'skipped' }).then(take).catch(fail)
+        if (a === 'skip') post(at('/step'), { step: id, state: skipped ? 'empty' : 'skipped' }).then(take).then(() => { if (!skipped) walkSay(id, 'skipped') }).catch(fail)
         if (a === 'remove') post(at('/step'), { step: id, state: 'removed' }).then(d => { A.sel = null; take(d) }).catch(fail)
       }
       return
@@ -453,7 +470,20 @@ export function makeScaffold({ sw, C, root }) {
     // the step it is in is where the person is (the address follows)
     const step = key?.startsWith('step:') ? key.slice(5) : key && world.querySelector(`.ab[data-key="${CSS.escape(key)}"]`)?.closest('[data-sec]')?.dataset.sec
     if (step && C.nav.view.room === 'studio' && C.nav.view.step !== step) C.nav.go({ type: 'studio.step', step })
+    if (step === 'plan') askAtPlan()
     render()
+  }
+  // the pages are asked at the Plan step, once per project, before Build (#541): Build then builds when pressed.
+  // A question already open, or pages already said, asks nothing (engine/askfirst.mjs studioOpen)
+  function askAtPlan() {
+    if (!leads() || A.asking || !A.d?.studio.idea || A.plannedAsk === A.pid) return
+    A.plannedAsk = A.pid
+    const pid = A.pid
+    post(at('/ask'), {}).then(j => {
+      if (pid !== A.pid || A.asking || j?.ask?.next !== 'pages') return
+      A.asking = 'pages'
+      sw.say?.(j.ask.text)
+    }).catch(() => {})
   }
   function press(el) {
     const key = el.dataset.key
@@ -517,6 +547,9 @@ export function makeScaffold({ sw, C, root }) {
       post(at('/idea'), { idea: text }).then(() => { A.prepared = null; return load() }).catch(fail)
     }
     sw.talk.start({ kind: CHAT_KIND[d.studio.kind] || 'site', chat: d.studio.chat, blank: true, said: d.studio.idea ? [{ who: 'you', text: d.studio.idea }] : [], heard, build: brief => (k.build ? build(brief) : openBrand()) })
+    // no Hermes: the walk opens all the same (it builds nothing), and the chat says why Build will wait, with what
+    // to do and Check again (#541)
+    sw.hermesReady?.().then(off => { if (off && pid === A.pid && A.on) sw.hermesSays?.(off) }).catch(() => {})
     if (!d.studio.idea) return sw.say?.('What are you making?')
     // a kit with prepare() posts its own planner line
     const st = k.prepare ? null : startOf()
@@ -572,7 +605,8 @@ export function makeScaffold({ sw, C, root }) {
     // first build, then the pictures (also the board's Pictures card). The build goes on from the answer.
     if (leads()) {
       const j = await post(at('/ask'), { building: true }).catch(() => null)
-      const next = j?.ask?.next || (c.state.pictures ? null : 'pictures')
+      // the server's word stands: Setup's pictures count as said (server/studio.mjs), so they are not asked again
+      const next = j ? j.ask?.next || null : (c.state.pictures ? null : 'pictures')
       if (next) {
         A.wantsBuild = true
         A.asking = next

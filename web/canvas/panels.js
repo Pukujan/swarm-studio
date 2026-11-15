@@ -264,8 +264,25 @@ export function stoppedMsg(e) {
       if (!h) return botMsg('Hermes is connected. Send the message again to build.')
       hermesSays(h)
     }
+  } else if (why && !total) {
+    // stopped before any page was planned (the model failed, it timed out): the same build again (#541)
+    acts.innerHTML = '<button class="primary">Try again</button>'
+    // @ts-ignore
+    acts.firstChild.onclick = () => { acts.remove(); againRun(run) }
   } else return
   item.append(acts)
+}
+// the same build again, in the same project: the run's own words (a Studio project's Build asks nothing more)
+export async function againRun(run) {
+  const events = await api(`/api/runs/${encodeURIComponent(run)}/events`).then(r => (r.ok ? r.json() : [])).catch(() => [])
+  const brief = events.find(e => e.type === 'run:start')?.brief
+  if (!brief) return feed(null, "Couldn't find what this build was asked to make.", 'err')
+  const project = window.swarmCosmos?.project || undefined
+  const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, ...(project ? { project } : {}) }) }).catch(() => null)
+  const j = res ? await res.json().catch(() => ({})) : {}
+  if (res?.status === 503 && j.hermes) return hermesSays(j)
+  if (!res?.ok) return feed(null, `Couldn't start it again: ${j.error || res?.status || 'no server'}`, 'err')
+  showRun(j.run, { started: true })
 }
 export async function resumeRun(run) {
   if (hermesResume === run) hermesResume = null
@@ -314,11 +331,15 @@ export function hermesSays(h) {
   return item
 }
 
+// a reply on its way with no words yet ('…') is a skeleton of her lines, marked busy: Hermia's cursor shows she is
+// working while it waits (web/pet.js PET_NEAR, #392); it is removed when the reply comes
 export function botMsg(text, working = false) {
   const item = document.createElement('div')
+  const replying = working && text === '…'
   item.className = `item bot${working ? ' working' : ''}`
-  item.innerHTML = `<b>${HERMIA}Hermia<small>planner</small></b><span class="txt"></span>`
-  item.querySelector('.txt').textContent = text
+  item.innerHTML = `<b>${HERMIA}Hermia<small>planner</small></b><span class="txt"></span>${replying ? '<span class="sk-lines" aria-hidden="true"><i></i><i></i></span>' : ''}`
+  if (replying) item.setAttribute('aria-busy', 'true')
+  else item.querySelector('.txt').textContent = text
   push(els.feed, item)
   return item
 }

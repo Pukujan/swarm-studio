@@ -55,9 +55,10 @@ async function deckKitApi(ctx, path, body, method = 'POST') {
   if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
   return j
 }
-const deckKitKey = ctx => ctx.project || 'draft'
+// the project's id: the Studio passes the project ({ id, name, … }), an older caller its id (web/kit-video.js pidOf)
+const deckKitPid = ctx => (typeof ctx.project === 'string' ? ctx.project : ctx.project?.id) || '', deckKitKey = ctx => deckKitPid(ctx) || 'draft'
 const deckKitOf = ctx => deckKitState.get(deckKitKey(ctx)) || deckKitState.set(deckKitKey(ctx), { deck: null, looks: [], all: [], sel: null, shots: new Map(), saving: null, asked: new Set() }).get(deckKitKey(ctx))
-const deckKitWho = ctx => ({ project: ctx.project || undefined, chat: ctx.chat?.id || undefined })
+const deckKitWho = ctx => ({ project: deckKitPid(ctx) || undefined, chat: ctx.chat?.id || undefined })
 
 // a change to the deck: kept, drawn again, and saved to the project a moment later
 function deckKitSet(ctx, deck) {
@@ -66,7 +67,7 @@ function deckKitSet(ctx, deck) {
   ctx.refresh?.()
   clearTimeout(st.saving)
   st.saving = setTimeout(async () => {
-    try { if (ctx.project) await deckKitApi(ctx, `/api/kit/deck/${encodeURIComponent(ctx.project)}`, { deck: st.deck, looks: st.looks }) } catch (err) { ctx.board?.toast?.(err.message) }
+    try { if (deckKitPid(ctx)) await deckKitApi(ctx, `/api/kit/deck/${encodeURIComponent(deckKitPid(ctx))}`, { deck: st.deck, looks: st.looks }) } catch (err) { ctx.board?.toast?.(err.message) }
   }, 400)
 }
 
@@ -164,11 +165,11 @@ function deckKitWire(ctx, el, what, i) {
 
 // Export: written into the project from the person's press; Present opens the HTML on its own, where its keys work
 async function deckKitExport(ctx, format) {
-  if (!ctx.project) return ctx.board?.toast?.('Make the project first')
+  if (!deckKitPid(ctx)) return ctx.board?.toast?.('Make the project first')
   const st = deckKitOf(ctx)
   clearTimeout(st.saving)
-  await deckKitApi(ctx, `/api/kit/deck/${encodeURIComponent(ctx.project)}`, { deck: st.deck, looks: st.looks })
-  return deckKitApi(ctx, `/api/kit/deck/${encodeURIComponent(ctx.project)}/export`, { format: format === 'pdf' ? 'pdf' : 'html', ...deckKitWho(ctx) })
+  await deckKitApi(ctx, `/api/kit/deck/${encodeURIComponent(deckKitPid(ctx))}`, { deck: st.deck, looks: st.looks })
+  return deckKitApi(ctx, `/api/kit/deck/${encodeURIComponent(deckKitPid(ctx))}/export`, { format: format === 'pdf' ? 'pdf' : 'html', ...deckKitWho(ctx) })
 }
 // the exported file, fetched with the studio's token
 async function deckKitFile(ctx, format) {
@@ -222,8 +223,8 @@ export const deckKit = {
     const st = deckKitOf(ctx)
     if (!st.all.length) st.all = (await deckKitApi(ctx, '/api/kit/deck/looks').catch(() => ({ looks: [] }))).looks
     if (st.deck) return st
-    if (ctx.project) {
-      const saved = await deckKitApi(ctx, `/api/kit/deck/${encodeURIComponent(ctx.project)}`).catch(() => null)
+    if (deckKitPid(ctx)) {
+      const saved = await deckKitApi(ctx, `/api/kit/deck/${encodeURIComponent(deckKitPid(ctx))}`).catch(() => null)
       if (saved?.deck) { st.deck = saved.deck; st.looks = saved.looks?.length ? saved.looks : [saved.deck.look]; return st }
     }
     const idea = ctx.studio?.idea || ctx.chat?.turns?.find(t => t.who === 'person')?.text || ''
@@ -290,7 +291,7 @@ export const deckKit = {
   async build(spec, ctx) {
     const d = spec?.kits?.deck?.deck
     if (!d) throw new Error('lock the deck first')
-    if (!ctx.project) throw new Error('Make the project first')
+    if (!deckKitPid(ctx)) throw new Error('Make the project first')
     deckKitOf(ctx).deck = d
     const html = await deckKitExport(ctx, 'html')
     const pdf = await deckKitExport(ctx, 'pdf').catch(() => null)

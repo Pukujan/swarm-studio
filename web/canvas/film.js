@@ -1,7 +1,7 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the promo video and the film's outside services.
 import { S, api, ico, store, els, commandOps } from './core.js'
-import { viewing, openRun, claimed } from './replay.js'
+import { viewing, openRun, claimed, startedRuns } from './replay.js'
 import { feed, setText } from './panels.js'
 import { autoM } from './auto.js'
 import { view } from './rooms.js'
@@ -30,6 +30,7 @@ export function runNow() {
 /** @param {any} id @param {{ started?: boolean, room?: any }} [opts] */
 export function showRun(id,{ started = false, room } = {}) {
   const studio = window.swarmCosmos
+  if (started) startedRuns.add(id)
   if (!studio?.nav) return openRun(id)
   if (!started) return studio.open(id)
   const v = studio.nav.view, here = v.room === 'brand' ? v.from : v.room
@@ -122,7 +123,8 @@ function renderVideo() {
   const body = video.src && !video.busy
     ? `${cuts}<video data-src="${esc(src)}" controls playsinline></video><div class="vfoot"><span>Saved to ${esc(String(file || 'video/promo.mp4').replace(/^\/(Users|home)\/[^/]+/, '~'))}</span><span class="vacts"><a class="vdl" href="${esc(src)}" download="${esc(cut?.name || 'promo.mp4')}">Download</a><button class="vreveal">Show in Finder</button><button class="vbig">⛶ Big screen</button></span></div>${opts}<div class="vfoot"><span></span><button class="vagain">Make a new cut</button></div>`
     : video.busy
-      ? `${liveOn ? `<div class="vlive"><iframe sandbox="allow-scripts" src="/video/${encodeURIComponent(video.run)}/live/index.html?v=${video.liveAt}" aria-label="The video, playing while it renders" scrolling="no"></iframe><span class="vlive-tag">● live: the agents' cut, rendering</span></div>` : ''}<div class="vbar"><i style="width:${Math.max(3, video.pct)}%"></i></div><div class="vstage">${esc(stage)}${video.pct ? ` ${video.pct | 0}%` : ''}</div>`
+      // before the live cut plays, a skeleton in the film's shape, marked busy: Hermia works on it (web/pet.js, #392)
+      ? `${liveOn ? `<div class="vlive"><iframe sandbox="allow-scripts" src="/video/${encodeURIComponent(video.run)}/live/index.html?v=${video.liveAt}" aria-label="The video, playing while it renders" scrolling="no"></iframe><span class="vlive-tag">● live: the agents' cut, rendering</span></div>` : '<div class="vskel wait-in" role="status" aria-busy="true" aria-label="The film, on its way"></div>'}<div class="vbar"><i style="width:${Math.max(3, video.pct)}%"></i></div><div class="vstage">${esc(stage)}${video.pct ? ` ${video.pct | 0}%` : ''}</div>`
       : video.message
         ? `<div class="vstage err">${esc(video.message)}</div><div class="vfoot"><span></span><button class="vagain">Try again</button></div>`
         : `${opts}<div class="vfoot"><span></span><button class="vagain">Make the film</button></div>`
