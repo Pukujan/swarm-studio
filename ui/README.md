@@ -2,7 +2,8 @@
 
 The Studio, moving to Vite, React 19, TypeScript (strict), XState and React Aria one screen at a time
 ([decision 0013](../docs/decisions/0013-react-ui-coexists.md), issue #404). The plugin's server serves the
-build, `ui/dist/`, at **`/next/`**, beside the current Studio at `/`. Installing the plugin builds and
+build, `ui/dist/`, at **`/`** and **`/next/`**; the classic Studio is at `/classic/`, and at `/` for someone who
+chose it ([decision 0024](../docs/decisions/0024-the-next-ui-is-the-studio.md)). Installing the plugin builds and
 downloads nothing for it.
 
 ## Work on it
@@ -63,8 +64,8 @@ SITEMAP, REQUIREMENTS) first, and the screen's spec in `docs/specs/`.
    (`makeNav({ search: '?project=…&version=…' })` in a `NavProvider`, as `src/App.stories.tsx` does), plus a
    story for each state the screen draws differently (empty, loading, error, full). These are the Storybook
    mock-ups, one of the six design artifacts.
-6. **List it.** Add the component to `SCREENS` in `src/screens/index.ts`. Until it is there, `/next/` shows the
-   screen's name and a button to the current Studio at the same address.
+6. **List it.** Add the component to `SCREENS` in `src/screens/index.ts`. Until it is there, the screen opens in the
+   classic Studio (`/classic/`) at the same address.
 7. **The gates pass after**, on `/next/` at the same addresses: give the screen a `nextReady` selector in
    `tools/dev/audit/audit.spec.mjs` and run `AUDIT_APP=next npm run --prefix tools/dev audit:update`. Its entries in
    `.ui-audit-known-violations.next.json` may be fewer than step 1's, never more. Run

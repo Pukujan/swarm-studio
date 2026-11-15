@@ -636,6 +636,16 @@ body.view-video .viewport, body.view-app .viewport { visibility: hidden; }
 /* the left column: the steps, and under them Hermia's dock */
 .app-side { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--line); }
 .app-side .app-steps { flex: 1; min-height: 0; border-right: 0; }
+/* the app's versions (issue #542): what each change asked, and one press back to it */
+.app-versions { flex: 0 1 auto; max-height: 40%; overflow: auto; border-top: 1px solid var(--line); padding: 10px 10px 52px; background: var(--panel); font-size: 12px; }
+.app-versions h3 { margin: 0 0 6px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.app-versions .av { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+.app-versions .av:first-of-type { border-top: 0; }
+.app-versions .av span { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--text); }
+.app-versions .av small { display: block; color: var(--muted); }
+.app-versions .av em { font-style: normal; font-size: 11px; color: var(--muted); }
+.app-versions .av button { flex: none; font: inherit; font-size: 11px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--text); cursor: pointer; }
+.app-versions .av button:disabled { opacity: .5; cursor: default; }
 .app-hermia { flex: none; position: relative; height: var(--ah-h, 240px); display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--line); background: var(--panel); }
 .app-hermia[hidden] { display: none; }
 .app-hermia.min { height: auto; }
@@ -682,6 +692,10 @@ body.cosmos .ah-feed { padding-bottom: 56px; }
 .app-steps .ask { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin-bottom: 4px; color: var(--text); }
 .app-main { position: relative; min-width: 0; min-height: 0; display: flex; }
 .app-stagearea { flex: 1; display: flex; justify-content: center; align-items: stretch; padding: 14px; background: var(--void); min-width: 0; position: relative; }
+/* a change running over the app (issue #542): the app stays, this says what is changing */
+.app-changing { position: absolute; left: 50%; top: 22px; transform: translateX(-50%); z-index: 4; max-width: min(640px, calc(100% - 48px)); padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--text); font-size: 12px; box-shadow: 0 4px 14px rgb(var(--shade-rgb) / .25); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-changing::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--text); vertical-align: 1px; animation: pulse 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .app-changing::before { animation: none; } }
 .app-shell { width: 100%; max-width: 100%; transition: width .3s ease; display: flex; }
 .app-shell.dev { border-radius: 22px; border: 8px solid var(--line-2); overflow: hidden; }
 .app-shell iframe { flex: 1; border: 0; background: var(--text); border-radius: 6px; }

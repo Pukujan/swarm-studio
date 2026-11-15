@@ -31,6 +31,8 @@ export function MakeBox({ inputRef }: { inputRef: React.RefObject<HTMLInputEleme
   const make = makeOf(kindKey)
   const [text, setText] = useState('')
   const [pop, setPop] = useState<Pop>(null)
+  // why a build waits while Hermes is not there, under the box until it is (#541, web/hermesline.js)
+  const [off, setOff] = useState<{ text: string, again: () => void } | null>(null)
   const [menu, setMenu] = useState<null | 'kind' | { ways: MakeWay[], pick: string, text: string }>(null)
   const form = useRef<HTMLFormElement>(null), kindBtn = useRef<HTMLButtonElement>(null), makeBtn = useRef<HTMLButtonElement>(null)
 
@@ -61,12 +63,16 @@ export function MakeBox({ inputRef }: { inputRef: React.RefObject<HTMLInputEleme
 
   async function begin(way: MakeWay, words: string) {
     // no Hermes to answer the model: one calm line and what to do, before anything starts (the words stay)
+    // A Studio builds nothing, so it opens, and its chat says the same (StudioFirst)
     const h = await api<{ needed?: boolean, health?: { ok?: boolean, message?: string, action?: string } }>('/api/hermes?ready=1').catch(() => null)
-    if (h?.needed && h.health && !h.health.ok) return toast(`${h.health.message} ${String(h.health.action || '').replace(/`/g, '')}`, { action: 'Check again', onAction: () => begin(way, words) })
+    const down = !!(h?.needed && h.health && !h.health.ok) && !(way.k === 'studio' && make.k !== 'game')
+    setOff(down ? { text: `${h!.health!.message} ${String(h!.health!.action || '').replace(/`/g, '')}`, again: () => void begin(way, words) } : null)
+    if (down) return
     store.set(`home.mode.${make.k}`, way.k)
     if (way.k === 'now') return setPop({ k: 'brief', text: words, back: null })
-    // a game's Studio is its Plan board, where its talk asks (spec 27)
-    if (make.k === 'game') return go({ type: 'plan' })
+    // a game's Studio is its Plan board, where its talk asks (spec 27). The talk is the classic Studio's for now
+    // (PlanBoard.tsx): it opens there with these words (web/gametalk.js, decision 0024)
+    if (make.k === 'game') return location.assign(`/classic/?game=${encodeURIComponent(words)}`)
     // Studio: a Studio project, opened on the step the kind starts with
     try {
       const j = await post<{ project: { id: string } }>('/api/studio', { kind: make.k, idea: words, mode: way.k, depth: store.get<string>('home.depth', 'light') === 'thorough' ? 'thorough' : 'light', steps: way.steps || KIT_STEPS[make.k] })
@@ -115,6 +121,11 @@ export function MakeBox({ inputRef }: { inputRef: React.RefObject<HTMLInputEleme
         {EXAMPLES[make.k] && <IconButton icon="idea" label="Examples" aria-haspopup="dialog" on={pop?.k === 'examples'} onPress={examples} />}
         <Button ref={makeBtn} role="primary" type="submit" aria-haspopup="menu"><Icon name="up" size={16} />Make</Button>
       </form>
+      {off && (
+        <p role="status" className="mx-auto -mt-4 mb-6 flex max-w-[760px] items-center justify-center gap-3 text-center text-[13px] text-muted">
+          <span>{off.text}</span><Button role="ghost" className="min-h-8 px-3 text-xs" onPress={off.again}>Check again</Button>
+        </p>
+      )}
 
       <MenuAt name="What to make" triggerRef={kindBtn} isOpen={menu === 'kind'} onClose={() => setMenu(null)} placement="bottom start"
         onAction={k => { setKind(makeOf(k).k); setPop(null); inputRef.current?.focus() }}>

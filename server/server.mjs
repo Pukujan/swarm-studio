@@ -75,6 +75,7 @@ import { pictureMessages, linksIn, readPage, pageRead, withRefs } from '../engin
 import { refStore } from '../engine/refs.mjs'
 import { workshopRoutes } from './workshops.mjs'
 import { setupRoutes } from './setup.mjs'
+import { uiChoice, UIS } from './uichoice.mjs'
 import { pictureRun, isPictures } from '../engine/setup.mjs'
 import { ckffPaint, ckffCreds } from '../engine/ckff.mjs'
 import { chooseImage, paintWithBackup } from '../engine/paintretry.mjs'
@@ -106,6 +107,8 @@ const webDir = join(root, 'web')
 const uiDist = join(root, 'ui', 'dist')
 const runsDir = process.env.SWARM_RUNS_DIR || join(root, 'runs')
 const dataDir = process.env.SWARM_DATA_DIR || root
+// which Studio `/` opens: the next UI unless the person chose the classic one (decision 0024)
+const ui = uiChoice({ dataDir })
 const argPort = process.argv.indexOf('--port')
 // 0: the system picks a free one when the server listens (tests and check scripts: a port picked beforehand and
 // let go can be taken by another process before this one binds it); `port` is the real one from then on
@@ -3009,14 +3012,37 @@ const server = createServer((req, res) => {
     }
   }
 
-  if (url.pathname === '/' || url.pathname === '/index.html') {
+  // the person's choice of Studio (decision 0024, server/uichoice.mjs)
+  if (url.pathname === '/api/ui') {
+    if (req.method === 'GET') return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ui: ui.get() }))
+    if (req.method === 'POST') {
+      let body = ''
+      req.on('data', c => { body += c; if (body.length > 1000) req.destroy() })
+      req.on('end', () => {
+        let want = ''
+        try { want = JSON.parse(body || '{}').ui } catch {}
+        if (!UIS.includes(want)) return void res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: `ui is one of ${UIS.join(', ')}` }))
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ui: ui.set(want) }))
+      })
+      return
+    }
+  }
+
+  // `/` is the next UI (decision 0024), unless the person chose the classic Studio or there is no next UI built
+  // (decision 0018); `/classic/` is always the classic Studio, at the same address
+  const classic = url.pathname === '/classic/' || url.pathname === '/classic/index.html'
+  if (url.pathname === '/classic') return void res.writeHead(302, { location: `/classic/${url.search}` }).end()
+  if (url.pathname === '/' || url.pathname === '/index.html' || classic) {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
     // the code changed under this server (an update): the page's parts would no longer fit. With no work
     // running, a new server takes over and the page opens again on it
     if (replaceSelf()) return res.end('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="2"><title>Swarm Studio</title><body style="margin:0;background:#0f0f0f">')
-    res.end(canvasPage())
+    const next = !classic && ui.get() === 'next' ? nextPage(uiDist, { token }) : null
+    res.end(next || canvasPage())
     return
   }
+  // the classic page's own files beside it (its brand mark): the same files as at /
+  if (url.pathname.startsWith('/classic/')) url.pathname = url.pathname.slice('/classic'.length)
 
   // the Studio's next UI, its screens moving over one at a time (docs/decisions/0013-react-ui-coexists.md). Same
   // address as /: ?project=…&version=…&room=… opens the same place in either
@@ -4135,7 +4161,7 @@ const server = createServer((req, res) => {
     return
   }
 
-  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|map|stop|open|scripts|seen|deploy|tell|idle|ask))?$/)
+  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|map|versions|back|stop|open|scripts|seen|deploy|tell|idle|ask))?$/)
   if (runApp && RUN_ID.test(runApp[1])) {
     const [, id, sub] = runApp
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
@@ -4143,6 +4169,8 @@ const server = createServer((req, res) => {
     if (req.method === 'GET') {
       // map: the plan as diagrams for the app build wall (spec 44); null when the run kept no plan, which is not an error
       if (sub === 'map') return void apps().then(a => reply(200, a.map(id))).catch(fail)
+      // the app's versions: its first build and each change, with the one it is at (issue #542)
+      if (sub === 'versions') return void apps().then(a => reply(200, a.versions(id))).catch(fail)
       // the app's state carries its project's name, for the app build wall's breadcrumb (spec 44)
       apps().then(a => reply(200, sub === 'files' ? a.files(id, url.searchParams.get('path')) : { ...a.state(id), name: nameFor(id)?.name || null })).catch(fail)
       return
@@ -4159,6 +4187,8 @@ const server = createServer((req, res) => {
         if (sub === 'ask') return askApp(a, id, input.text, { chart: input.chart === true })
         if (sub === 'tell') return tellBuilder(a, id, input.text, { who: input.who, on: input.on, confirm: typeof input.confirm === 'string' ? input.confirm.slice(0, 1200) : '', now: input.now === true })
         if (sub === 'open') return a.open(id, input)
+        // back to one of the app's versions, as one more commit (issue #542)
+        if (sub === 'back') return a.back(id, typeof input.rev === 'string' ? input.rev.slice(0, 64) : '')
         // a brought-in project's install scripts: the person's own answer, typed in the chat (docs/specs/45-intake.md)
         if (sub === 'scripts') return a.scripts(id, input.allow === true)
         if (sub === 'seen') return a.seen(id)
@@ -4431,7 +4461,7 @@ const server = createServer((req, res) => {
     res.end(body)
     return
   }
-  const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|snap|kept-\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2}|(?:game|peek|lib|idle)-[a-z0-9-]{1,56})\.(png|jpe?g|webp))$/)
+  const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|snap|app|kept-\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2}|(?:game|peek|lib|idle)-[a-z0-9-]{1,56})\.(png|jpe?g|webp))$/)
   if (img) {
     const file = join(runsDir, img[1], 'img', img[2])
     if (!existsSync(file)) return res.writeHead(404).end('not found')

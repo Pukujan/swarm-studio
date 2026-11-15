@@ -28,6 +28,8 @@ export const alias: AliasOptions = [
   { find: '@studio/crew', replacement: fileURLToPath(new URL('../web/crew.js', import.meta.url)) },
   // the ways to make something, the same file as the current Studio's (src/studio/)
   { find: '@studio/makeways', replacement: fileURLToPath(new URL('../web/makeways.js', import.meta.url)) },
+  // what Hermia says as the Studio's walk goes (web/walkline.js, #541): the same words in both apps
+  { find: '@studio/walkline', replacement: fileURLToPath(new URL('../web/walkline.js', import.meta.url)) },
   // by path: a bare 'xstate' would be looked up from web/, which has no node_modules
   { find: /^(\.\.?\/)+vendor\/xstate\/xstate\.mjs$/, replacement: fileURLToPath(import.meta.resolve('xstate')) },
   // the sanitiser the current deck runs on every section before a frame shows it (web/clean.js): the Design deck's

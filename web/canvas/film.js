@@ -1,7 +1,7 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the promo video and the film's outside services.
 import { S, api, ico, store, els, commandOps } from './core.js'
-import { viewing, openRun, claimed } from './replay.js'
+import { viewing, openRun, claimed, startedRuns } from './replay.js'
 import { feed, setText } from './panels.js'
 import { autoM } from './auto.js'
 import { view } from './rooms.js'
@@ -30,6 +30,7 @@ export function runNow() {
 /** @param {any} id @param {{ started?: boolean, room?: any }} [opts] */
 export function showRun(id,{ started = false, room } = {}) {
   const studio = window.swarmCosmos
+  if (started) startedRuns.add(id)
   if (!studio?.nav) return openRun(id)
   if (!started) return studio.open(id)
   const v = studio.nav.view, here = v.room === 'brand' ? v.from : v.room

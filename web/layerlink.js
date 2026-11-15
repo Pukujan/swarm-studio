@@ -1,3 +1,4 @@
+// @ts-check
 // Drag a layer into the chat (docs/specs/29-chats-references-marks.md, "Drag a layer into the chat").
 // A layer dragged from the Layers list, the Overview's section list or a picked section's outline onto
 // the left chat becomes a chip in the message box, and a thin line joins the chip to the layer where it
@@ -46,14 +47,14 @@ export function layerLink({ form, feed, rect, open = () => {}, files = null }) {
     paint()
   }
   box.addEventListener('click', e => {
-    const b = e.target.closest('button'), chip = e.target.closest('.lchip')
+    const t = /** @type {Element} */ (e.target), b = t.closest('button'), chip = /** @type {HTMLElement | null} */ (t.closest('.lchip'))
     if (!b || !chip) return
     const i = chips.findIndex(c => c.key === chip.dataset.key)
     if (i >= 0) chips.splice(i, 1)
     if (hot === chip.dataset.key) hot = null
     paint()
   })
-  box.addEventListener('mouseover', e => { const k = e.target.closest('.lchip')?.dataset.key || null; if (k !== hot) { hot = k; wake() } })
+  box.addEventListener('mouseover', e => { const k = /** @type {HTMLElement | null} */ (/** @type {Element} */ (e.target).closest('.lchip'))?.dataset.key || null; if (k !== hot) { hot = k; wake() } })
   box.addEventListener('mouseleave', () => { hot = null; wake() })
 
   // the drop: anywhere on the left chat
@@ -88,7 +89,7 @@ export function layerLink({ form, feed, rect, open = () => {}, files = null }) {
   // layer's left edge, a gentle curve; a layer off screen ends at the edge of the screen
   function lines() {
     const out = []
-    for (const el of box.querySelectorAll('.lchip:not(.ref)')) out.push({ from: el, key: el.dataset.key, hot: el.dataset.key === hot })
+    for (const el of /** @type {NodeListOf<HTMLElement>} */ (box.querySelectorAll('.lchip:not(.ref)'))) out.push({ from: el, key: el.dataset.key, hot: el.dataset.key === hot })
     if (hover?.isConnected) for (const key of hover.dataset.layers.split(' ').filter(Boolean)) out.push({ from: hover, key, hot: true })
     return out
   }
@@ -113,15 +114,16 @@ export function layerLink({ form, feed, rect, open = () => {}, files = null }) {
       const d = `M${ax.toFixed(1)},${ay.toFixed(1)} C${(ax + dx).toFixed(1)},${ay.toFixed(1)} ${(bx - dx).toFixed(1)},${by.toFixed(1)} ${bx.toFixed(1)},${by.toFixed(1)}`
       const id = `l${i}`
       keep.add(id)
-      let g = svg.querySelector(`g[data-id="${id}"]`)
-      if (!g) { g = document.createElementNS(LL_NS, 'g'); g.dataset.id = id; g.innerHTML = '<path/><circle r="3"/>'; svg.append(g) }
+      let g = /** @type {SVGGElement | null} */ (svg.querySelector(`g[data-id="${id}"]`))
+      if (!g) { g = /** @type {SVGGElement} */ (document.createElementNS(LL_NS, 'g')); g.dataset.id = id; g.innerHTML = '<path/><circle r="3"/>'; svg.append(g) }
       g.setAttribute('class', `${l.hot ? 'hot' : ''}${edge ? ' edge' : ''}`)
       g.dataset.key = l.key
-      g.firstChild.setAttribute('d', d)
-      g.lastChild.setAttribute('cx', bx.toFixed(1))
-      g.lastChild.setAttribute('cy', by.toFixed(1))
+      const [path, dot] = /** @type {Element[]} */ ([...g.children])
+      path.setAttribute('d', d)
+      dot.setAttribute('cx', bx.toFixed(1))
+      dot.setAttribute('cy', by.toFixed(1))
     }
-    for (const g of [...svg.children]) if (!keep.has(g.dataset.id)) g.remove()
+    for (const g of /** @type {SVGGElement[]} */ ([...svg.children])) if (!keep.has(g.dataset.id)) g.remove()
     // keep following the canvas while anything is drawn (it pans and zooms under the lines)
     if (list.length) raf = requestAnimationFrame(draw)
   }

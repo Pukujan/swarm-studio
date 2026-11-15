@@ -63,7 +63,21 @@ export function useStudio(pid: string | null) {
 
   // the Studio's own `sw`, as much of it as the kits use: the server, escaping, the chat's one line (there is no
   // chat here: the talk has not moved, so the line is shown as a toast)
-  const sw = useMemo(() => ({ api: fetcher, esc, base: window.SWARM?.base || '', say: (text: string) => fail(text) }), [fetcher, fail])
+  // `submit` is the current Studio's (web/canvas/hook.js) as a website's Build uses it: a build of this project,
+  // resolving to the new run's id, or null with the reason said (Hermia's question first, the crew still busy, no Hermes)
+  const sw = useMemo(() => {
+    const say = (text: string) => fail(text)
+    const submit = async (brief: string, _auto = false, project: string | null = null, from: string | null = null, opts: { chat?: string | null } = {}) => {
+      const r = await fetcher('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, ...(project ? { project } : {}), ...(from ? { from } : {}), ...(opts.chat ? { chat: opts.chat } : {}) }) }).catch(() => null)
+      const j = await r?.json().catch(() => ({})) as { run?: string, error?: string, text?: string, message?: string } | undefined
+      if (r?.ok && j?.run) return j.run
+      say(r?.status === 409 && j?.error === 'ask' ? j.text || 'Hermia has a question first: answer it in the chat.'
+        : r?.status === 409 ? 'The crew are still on the last change.'
+        : j?.message || j?.error || "Couldn't start the build. Is the studio server running?")
+      return null
+    }
+    return { api: fetcher, esc, base: window.SWARM?.base || '', say, submit }
+  }, [fetcher, fail])
 
   const select = useCallback((key: string | null) => {
     setSel(key)

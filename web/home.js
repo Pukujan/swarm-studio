@@ -9,6 +9,8 @@ import { openSettings } from './settings.js'
 import { makeWays, makeModeOf, makeStudioStep } from './makeways.js'
 import { templatePicker } from './templatepick.js'
 import { bringEntry } from './bringin.js'
+import { hermesLine } from './hermesline.js'
+import { takeGameTalk } from './gametalk.js'
 
 const KIND = { site: 'site', app: 'code', game: 'game', film: 'film' }
 const KIND_NAME = { site: 'Site', app: 'App', game: 'Game', film: 'Film' }
@@ -783,9 +785,10 @@ export function makeHome({ sw, C, root }) {
     document.querySelector('.hm-menu button.on, .hm-menu button')?.focus({ preventScroll: true })
   }
   async function begin(way, text) {
-    // no Hermes to answer the model: one calm line and what to do, before anything starts (the words stay)
+    // no Hermes to answer the model: a build waits, with why and what to do under the box until Hermes is there (the
+    // words stay; web/hermesline.js). A Studio builds nothing, so it opens, and its chat says the same (#541)
     const off = !sw.hermesReady ? null : await sw.hermesReady()
-    if (off) return toast(`<span>${esc(off.message)} ${esc(String(off.action || '').replace(/`/g, ''))}</span>`, 'Check again', () => begin(way, text))
+    if (hermesLine(form, off && !(way.k === 'studio' && make.k !== 'game') ? off : null, () => begin(way, text))) return
     G.sheet = false
     store.set(`home.mode.${make.k}`, way.k)
     if (way.k === 'now') return buildNow(text)
@@ -1007,7 +1010,7 @@ export function makeHome({ sw, C, root }) {
       { k: 'sound', icon: 'sound', label: 'Crew sound', on: sound === 'on', run: () => sw.sound?.(sound === 'on' ? 'muted' : 'on') },
       ...(hosted() ? [] : [{ k: 'models', icon: 'sliders', label: 'Models', run: () => sw.models?.(who) }, { k: 'setup', ...($('.hm-who').classList.contains('warn') ? { icon: 'alert' } : { icon: 'check' }), label: 'Setup', run: () => setup.open() },
         // what the studio is connected to and where its data goes (docs/specs/25-connections.md)
-        { k: 'settings', icon: 'link', label: 'Settings', run: () => openSettings({ sw, esc }) }])
+        { k: 'settings', icon: 'link', label: 'Settings', run: () => openSettings({ sw, esc }) }, { k: 'next', icon: 'chr', label: 'Use the new Studio', run: () => post('/api/ui', { ui: 'next' }).catch(() => {}).then(() => location.assign(`/${location.search}`)) }])
     ], who)
   }
 
@@ -1068,7 +1071,7 @@ export function makeHome({ sw, C, root }) {
     show() {
       root.hidden = false
       H.on = true
-      if (!H.me) loadMe()
+      if (!H.me) loadMe(); takeGameTalk(C)
       refresh()
       if (given) setTimeout(handover, 0) // after this view change has finished
       if (!setupAsked && !hosted()) { setupAsked = true; setup.first() }

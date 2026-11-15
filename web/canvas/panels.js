@@ -264,8 +264,25 @@ export function stoppedMsg(e) {
       if (!h) return botMsg('Hermes is connected. Send the message again to build.')
       hermesSays(h)
     }
+  } else if (why && !total) {
+    // stopped before any page was planned (the model failed, it timed out): the same build again (#541)
+    acts.innerHTML = '<button class="primary">Try again</button>'
+    // @ts-ignore
+    acts.firstChild.onclick = () => { acts.remove(); againRun(run) }
   } else return
   item.append(acts)
+}
+// the same build again, in the same project: the run's own words (a Studio project's Build asks nothing more)
+export async function againRun(run) {
+  const events = await api(`/api/runs/${encodeURIComponent(run)}/events`).then(r => (r.ok ? r.json() : [])).catch(() => [])
+  const brief = events.find(e => e.type === 'run:start')?.brief
+  if (!brief) return feed(null, "Couldn't find what this build was asked to make.", 'err')
+  const project = window.swarmCosmos?.project || undefined
+  const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, ...(project ? { project } : {}) }) }).catch(() => null)
+  const j = res ? await res.json().catch(() => ({})) : {}
+  if (res?.status === 503 && j.hermes) return hermesSays(j)
+  if (!res?.ok) return feed(null, `Couldn't start it again: ${j.error || res?.status || 'no server'}`, 'err')
+  showRun(j.run, { started: true })
 }
 export async function resumeRun(run) {
   if (hermesResume === run) hermesResume = null
