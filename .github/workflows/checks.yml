@@ -189,8 +189,16 @@ jobs:
           if [ "${{ runner.environment }}" = self-hosted ]; then
             for c in "$(command -v hermes || true)" "$HOME/.hermes/hermes-agent/.hermes/bin/hermes" /opt/homebrew/bin/hermes /usr/local/bin/hermes; do
               if [ -n "$c" ] && [ -x "$c" ]; then
-                echo "reusing the Hermes this Mac has: $c ($("$c" --version 2>&1 | head -1)); the release pinned below is what the hosted runner installs"
-                echo "$(dirname "$c")" >> "$GITHUB_PATH"; mkdir -p "$HERMES_HOME"; exit 0
+                # Hermes's launcher finds its Python and code under $HERMES_HOME, so the temp home gets links to the Mac's
+                # own (read only: the plugin is installed into the temp home's plugins/, nothing in the Mac's)
+                home=${c%/hermes-agent/.hermes/bin/hermes}
+                mkdir -p "$HERMES_HOME"
+                if [ "$home" != "$c" ] && [ -d "$home/tools" ] && [ -d "$home/hermes-agent" ]; then
+                  ln -s "$home/tools" "$HERMES_HOME/tools"; ln -s "$home/hermes-agent" "$HERMES_HOME/hermes-agent"
+                  echo "$HERMES_HOME/hermes-agent/.hermes/bin" >> "$GITHUB_PATH"
+                  echo "reusing the Hermes this Mac has: $home ($("$HERMES_HOME/hermes-agent/.hermes/bin/hermes" --version 2>&1 | head -1)); the hosted runner installs the release pinned below"
+                  exit 0
+                fi
               fi
             done
             echo 'no Hermes on this Mac: installing the pinned release into the temp Hermes home'
