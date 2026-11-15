@@ -1,5 +1,5 @@
 {
-  "why": "The game scene's address (?version=<game>&room=game, no run) now opens the Game room it names (#560, #571): before, the room move was dropped and the scene showed the game build's Overview with Hermia working on it. The Game room draws the radio line to the crew, and Hermia is not on its stage.",
-  "gained": ["page @radio-dash endless path"],
+  "why": "The game scene's address (?version=<game>&room=game, no run) now opens the Game room it names (#560, #571): before, the room move was dropped and the scene showed the game build's Overview with Hermia working on it. Hermia is not on the Game room's stage. (Its radio line runs only while she gives an order, #578.)",
+  "gained": [],
   "lost": ["page @pet-dot endless i", "page @pet-tap endless span.pet-body", "page ~opacity span.pet-dots"]
 }

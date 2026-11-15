@@ -5,11 +5,6 @@
     "why": "The App room is spec 44's four-window build wall (#477), a new design rather than the current room's code wall, so its entrance and Hermia's work on its loading window differ."
   },
   {
-    "key": "app only in /: page @radio-dash endless 800ms linear",
-    "label": "later (#529)",
-    "why": "Hermia's radio line to the crew over the App room; the /next/ build wall draws no crew cursor yet, a later slice of spec 44."
-  },
-  {
     "key": "app only in /next/: page @pet-dot endless 1000ms ease-in-out",
     "label": "intended (spec 44)",
     "why": "The App room is spec 44's four-window build wall (#477), a new design rather than the current room's code wall, so its entrance and Hermia's work on its loading window differ."
@@ -43,11 +38,6 @@
     "key": "brand reduced cursor Hermia: differs",
     "label": "intended (decision 0015)",
     "why": "The chat docks along the bottom (decision 0015), so the Studio's board starts about 300 px further left than in the current Studio, where the chat takes the left column; Hermia rests beside the same card, which is that much further left."
-  },
-  {
-    "key": "deck only in /: page @radio-dash endless 800ms linear",
-    "label": "later (#530)",
-    "why": "Hermia's dotted radio line to the agent she last spoke to (web/canvas/start.js:272-280); the /next/ deck draws none yet."
   },
   {
     "key": "deck only in /next/: page @in 300ms x1 ease-out",
@@ -95,11 +85,6 @@
     "why": "A saved build that stopped half way: the deck's spec has the pill read Stopped (openspec/specs/design-deck/spec.md:66, 75-77), so /next/ keeps still; the current deck pulses and shimmers as if the crew still worked."
   },
   {
-    "key": "mid-build only in /: page @radio-dash endless 800ms linear",
-    "label": "later (#530)",
-    "why": "Hermia's dotted radio line to the agent she last spoke to (web/canvas/start.js:272-280); the /next/ deck draws none yet."
-  },
-  {
     "key": "mid-build only in /: page @shimmer endless 1400ms linear",
     "label": "intended (spec design-deck)",
     "why": "A saved build that stopped half way: the deck's spec has the pill read Stopped (openspec/specs/design-deck/spec.md:66, 75-77), so /next/ keeps still; the current deck pulses and shimmers as if the crew still worked."
@@ -140,11 +125,6 @@
     "why": "With reduced motion the current Studio puts Hermia 300 px further right (665,176) than it does in normal motion (365,176), on another page skeleton; the next UI keeps her normal-motion spot (365,179) in both. The current Studio's reduced-motion spot is the odd one out."
   },
   {
-    "key": "play only in /: page @radio-dash endless 800ms linear",
-    "label": "later (#530)",
-    "why": "Hermia's dotted radio line to the agent she last spoke to (web/canvas/start.js:272-280); the /next/ deck draws none yet."
-  },
-  {
     "key": "play only in /next/: page @in 300ms x1 ease-out",
     "label": "intended (decision 0015)",
     "why": "The chat docks open along the bottom of the deck (decision 0015, #458 and #472), so its lines show and arrive with the chat's fade; in the current Studio the deck's chat starts shut, so none show."
@@ -173,11 +153,6 @@
     "key": "publish only in /: page @pop 200ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
     "label": "drift",
     "why": "Slice 5b (Publish, Share, Export) has landed (#441), so this is no longer work to come: /next/'s Publish should move as the current one does."
-  },
-  {
-    "key": "publish only in /: page @radio-dash endless 800ms linear",
-    "label": "later (#530)",
-    "why": "Hermia's dotted radio line to the agent she last spoke to (web/canvas/start.js:272-280); the /next/ deck draws none yet."
   },
   {
     "key": "publish only in /: page ~background-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
@@ -265,11 +240,6 @@
     "why": "The /next/ deck draws the reviewer's cursor too (#540, web/canvas/auto.js rvMove and rvSpot), but its replay reaches review:start about half a second later, so at a given step it is on screen in one deck only, or in both at another place."
   },
   {
-    "key": "replay only in /: page @radio-dash endless 800ms linear",
-    "label": "later (#530)",
-    "why": "Hermia's dotted radio line to the agent she last spoke to (web/canvas/start.js:272-280); the /next/ deck draws none yet."
-  },
-  {
     "key": "replay only in /next/: page @in 300ms x1 ease-out",
     "label": "intended (decision 0015)",
     "why": "The chat docks open along the bottom of the deck (decision 0015, #458 and #472), so its lines show and arrive with the chat's fade; in the current Studio the deck's chat starts shut, so none show."
@@ -313,11 +283,6 @@
     "key": "studio reduced cursor Hermia: differs",
     "label": "intended (decision 0015)",
     "why": "The chat docks along the bottom (decision 0015), so the Studio's board starts about 300 px further left than in the current Studio, where the chat takes the left column; Hermia rests beside the same card, which is that much further left."
-  },
-  {
-    "key": "visitor only in /: page @radio-dash endless 800ms linear",
-    "label": "later (#530)",
-    "why": "Hermia's dotted radio line to the agent she last spoke to (web/canvas/start.js:272-280); the /next/ deck draws none yet."
   },
   {
     "key": "visitor only in /next/: page @in 300ms x1 ease-out",
