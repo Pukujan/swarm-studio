@@ -1009,7 +1009,7 @@ export function makeHome({ sw, C, root }) {
       { k: 'sound', icon: 'sound', label: 'Crew sound', on: sound === 'on', run: () => sw.sound?.(sound === 'on' ? 'muted' : 'on') },
       ...(hosted() ? [] : [{ k: 'models', icon: 'sliders', label: 'Models', run: () => sw.models?.(who) }, { k: 'setup', ...($('.hm-who').classList.contains('warn') ? { icon: 'alert' } : { icon: 'check' }), label: 'Setup', run: () => setup.open() },
         // what the studio is connected to and where its data goes (docs/specs/25-connections.md)
-        { k: 'settings', icon: 'link', label: 'Settings', run: () => openSettings({ sw, esc }) }])
+        { k: 'settings', icon: 'link', label: 'Settings', run: () => openSettings({ sw, esc }) }, { k: 'next', icon: 'chr', label: 'Use the new Studio', run: () => post('/api/ui', { ui: 'next' }).catch(() => {}).then(() => location.assign(`/${location.search}`)) }])
     ], who)
   }
 
