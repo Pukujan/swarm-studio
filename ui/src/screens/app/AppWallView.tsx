@@ -7,13 +7,15 @@
 //   3 Code      the file being written now, and the app's files to open one
 //   4 Shipped   the last thing finished and the next screen in the plan; after a deploy, the live address
 // A question naming one of the crew is theirs, answered over their window; any other is Hermia's, over the wall.
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Button, LinkButton } from '../../primitives/Button'
 import { TextField } from '../../primitives/TextField'
 import { ToggleGroup } from '../../primitives/ToggleGroup'
 import { MermaidDiagram } from '../../shared/MermaidDiagram'
 import { Wall, type WallWindow } from '../../shared/Wall'
+import { AppCrew, HermiaStrip } from './AppCrew'
 import { markedFlow, nextScreen, nowScreen, type AppModel } from './model'
+import { FRESH, heard, NO_RADIO, type Radio } from './radio'
 
 export const WINDOWS = ['Map', 'Live app', 'Code', 'Shipped'] as const
 type Device = 'phone' | 'tablet' | 'desktop'
@@ -23,12 +25,14 @@ export type Said = { at: number, who: string, text: string } | null
 const quiet = (text: string) => <p className="p-4 font-monospace text-sm text-muted">{text}</p>
 const time = (t?: number) => (t ? new Date(t).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '')
 
-export function AppWallView({ model, said, onAsk, onOpen, onFile, onBack, going = '', docked = false }: {
+export function AppWallView({ model, said, onAsk, onOpen, onFile, onBack, going = '', docked = false, radio = NO_RADIO }: {
   model: AppModel
   // the last answer: over window `at` (0–3), or over the wall (-1) when it was Hermia's
   said: Said
   // the room's chat is docked along the bottom (issue #542, one box): the wall's own ask field steps aside
   docked?: boolean
+  // the crew's radio (radio.ts): Hermia's orders, what each helper is doing, their replies (#529)
+  radio?: Radio
   onAsk: (text: string) => void
   onOpen: () => void
   // a file to read, or null to go back to the list (a narrow wall shows one or the other)
@@ -45,7 +49,13 @@ export function AppWallView({ model, said, onAsk, onOpen, onFile, onBack, going 
   const now = building ? nowScreen(model.map, writing) : null
   const next = nextScreen(model.map, model.done, now)
   const live = building && !!a?.url
-  const say = (i: number) => (said && said.at === i ? { who: said.who, text: said.text } : null)
+  // a window's bubble: the answer to a question asked of it, else its helper's reply on the radio while fresh
+  const say = (i: number) => {
+    if (said && said.at === i) return { who: said.who, text: said.text }
+    const n = model.crew[i], r = n ? radio.says[n] : undefined
+    return n && r && heard(r, FRESH.say) ? { who: n, text: r.text.slice(0, 160) } : null
+  }
+  const wall = useRef<HTMLDivElement>(null), av = useRef<HTMLSpanElement>(null)
   const versions = model.versions || [], last = versions[0], before = versions[1]
   const onScreen = (u: string) => { try { return last?.now && last.screen ? new URL(last.screen, u).href : u } catch { return u } }
 
@@ -168,7 +178,11 @@ export function AppWallView({ model, said, onAsk, onOpen, onFile, onBack, going 
         <Button role="secondary" type="submit" isDisabled={!ask.trim()}>Ask</Button>
       </form>}
       {!docked && said && said.at < 0 && <p role="status" className="mx-3 mt-2 max-w-[640px] rounded-[4px_12px_12px_12px] border border-line bg-deep px-3 py-2 font-monospace text-xs"><b className="mr-1.5">{said.who}</b>{said.text}</p>}
-      <Wall label="App build" windows={[map, liveWin, code, shipped]} start={building ? 1 : 3} />
+      <HermiaStrip radio={radio} avatar={av} />
+      <div ref={wall} className="relative flex min-h-0 flex-1 flex-col">
+        <Wall label="App build" windows={[map, liveWin, code, shipped]} start={building ? 1 : 3} />
+        <AppCrew names={model.crew} radio={radio} host={wall} avatar={av} building={building} />
+      </div>
     </div>
   )
 }
