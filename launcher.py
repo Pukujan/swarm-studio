@@ -197,7 +197,7 @@ def _ensure_server() -> dict:
 
     node = os.environ.get("SWARM_STUDIO_NODE") or shutil.which("node")
     if not node:
-        return {"running": False, "error": "Node.js 20+ is required (no `node` on PATH)."}
+        return {"running": False, "error": "Node.js 24 or newer is required (no `node` on PATH)."}
 
     # A minimal environment: the child gets its own settings, not every secret Hermes holds.
     # On Windows, Node also needs the system folders (SYSTEMROOT for its sockets and
