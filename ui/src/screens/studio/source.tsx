@@ -5,7 +5,6 @@ import { createContext, useContext, type ReactNode } from 'react'
 
 export type Fetch = (path: string, init?: RequestInit) => Promise<Response>
 
-declare global { interface Window { SWARM?: { token?: string, base?: string } } }
 
 export const serverFetch: Fetch = (path, init = {}) =>
   fetch((window.SWARM?.base || '') + path, { ...init, headers: { ...init.headers, 'x-swarm-token': window.SWARM?.token || '' } })

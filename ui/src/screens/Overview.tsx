@@ -21,6 +21,7 @@ import { Dock } from './overview/Dock'
 import { FilesPanel } from './overview/FilesPanel'
 import { Inspector } from './overview/Inspector'
 import { download, findItem, groups as groupOf, opening, projectName, type Act, type Item, type Project, type Ref, type Section, type Sending, type Upload } from './overview/model'
+import { PlayPublish } from './overview/PlayPublish'
 import { ProjectCrumb } from './overview/ProjectCrumb'
 import { Stage, type StageHandle } from './overview/Stage'
 import { useOverview } from './overview/useOverview'
@@ -230,6 +231,8 @@ function OverviewScreen() {
       {x && <Inspector x={x} theme={o.board?.theme} onClose={() => setSel(null)} onAct={act} onUseFor={useFor} />}
       <Dock ref={ask} text={text} onText={setText} onSubmit={send} files={files} onFiles={() => setFiles(!files)}
         onFrame={() => stage.current?.frameAll()} onNewPage={newPage} onUpload={() => fileIn.current?.click()} onChat={() => { location.href = studioAt }} />
+      {/* Play and Publish in the top bar, as the classic Overview has them */}
+      <PlayPublish run={o.run} />
       {dropping > 0 && <div className="ov-drop" aria-hidden />}
       <input ref={fileIn} type="file" multiple hidden onChange={e => {
         const fs = [...(e.target.files || [])]
