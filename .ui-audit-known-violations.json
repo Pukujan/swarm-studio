@@ -188,10 +188,6 @@
     "detail": "reads \"Projects › New game\", should read \"Home › Projects › New game › Plan\""
   },
   {
-    "key": "plan@1440 loading",
-    "detail": "nothing showed it was loading while /api/talk were held"
-  },
-  {
     "key": "plan@390 axe label",
     "detail": "Form elements must have labels: .dcolor"
   },
@@ -202,10 +198,6 @@
   {
     "key": "plan@390 breadcrumb",
     "detail": "reads \"New game\", should read \"Home › Projects › New game › Plan\""
-  },
-  {
-    "key": "plan@390 loading",
-    "detail": "nothing showed it was loading while /api/talk were held"
   },
   {
     "key": "projects@1440 axe label",
