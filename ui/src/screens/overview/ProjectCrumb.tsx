@@ -19,8 +19,9 @@ export function ProjectCrumb({ name, project, run, onProjects, onRename, onDupli
   const versions = project?.versions || []
   return (
     <span className="flex min-w-0 items-center gap-1">
-      <PlainButton className={`${CRUMB} font-medium text-muted`} onPress={onProjects}>Projects</PlainButton>
-      <span aria-hidden className="text-muted"><Icon name="chr" size={14} /></span>
+      {/* on a phone the logo is the way to Projects: the project's name gets the room */}
+      <PlainButton className={`${CRUMB} font-medium text-muted max-[760px]:hidden`} onPress={onProjects}>Projects</PlainButton>
+      <span aria-hidden className="text-muted max-[760px]:hidden"><Icon name="chr" size={14} /></span>
       {renaming ? (
         <input autoFocus defaultValue={name} maxLength={80} aria-label="Project name"
           onFocus={e => e.currentTarget.select()}
