@@ -53,7 +53,7 @@ test('--no-gate-frame shows the ratio and does not fail on it', () => {
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 
-test('a count that takes one of two values on the same code (the Overview's layers, 15 or 20) is held to the base's highest', () => {
+test("a count that takes one of two values on the same code (the Overview's layers, 15 or 20) is held to the base's highest", () => {
   // two of three base recordings drew 15 layers, the head's drew 20: the same code, a different mode
   const base = [rec(1, 1, 15), rec(1, 1, 15), rec(1, 1, 20)], head = [rec(1, 1, 20), rec(1, 1, 20), rec(1, 1, 20)]
   assert.equal(run(base, head).code, 0)
