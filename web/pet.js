@@ -428,9 +428,9 @@ export function makePet({ sw, C, doc = document }) {
   // the address: a new screen loads; a Studio step reached (or skipped)
   function onView(v) {
     if (!v) return
-    // a replay is a build from its first frame to its last: she is away the whole time the view plays one, and
-    // back when it stops (its own run:done, and the finished build the classic deck opens whole before it plays,
-    // are not the end of it)
+    // a replay is a build from its first frame: she is away as soon as the view plays one, and the finished build
+    // the classic deck opens whole before it plays (its run:done) does not bring her back; the replay's own run:done
+    // does, or the view leaving the replay
     if (!!v.replay !== P.replay) {
       P.replay = !!v.replay
       P.building = P.replay
@@ -461,8 +461,9 @@ export function makePet({ sw, C, doc = document }) {
   // the canvas's events: a build starts (she hands over) and ends (she says so)
   sw?.on?.(e => {
     if (e.type === 'run:start') { P.building = true; P.buildAt = Date.now(); away() }
-    // (while the view plays a replay, the build's events are the replay's: its end is the view's)
-    if (P.replay) return
+    // (during a replay, an end that comes with its start, the finished build the classic deck opens whole before it
+    // plays, is not the replay's end)
+    if (P.replay && Date.now() - P.buildAt < 1000) return
     if (e.type === 'run:done' || e.type === 'run:stopped' || e.type === 'reset') {
       const was = P.building && Date.now() - P.buildAt > 5000
       P.building = false
