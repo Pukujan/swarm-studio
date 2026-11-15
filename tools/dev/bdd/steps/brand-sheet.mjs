@@ -4,6 +4,7 @@
 // opens one of a project made for it, from the scaffold's Brand card as a person does; what a model writes (the
 // brief under a chat, a palette from the person's words) is a Manual line in the spec.
 import { bind, open, problems, step } from '../kit.mjs'
+import { studio as newStudio } from '../../../../scripts/walkthrough-fixtures.mjs'
 
 const wait = (page, ms = 1000) => page.waitForTimeout(ms)
 const BASE = ({ studio, app }) => `${studio.BASE}${app ? '/next/' : '/'}`
@@ -40,16 +41,23 @@ const samples = page => page.evaluate(() => [...document.querySelectorAll('.ab[d
 }))
 const inspectorText = page => page.evaluate(() => [...document.querySelectorAll('aside, [aria-label="Inspector"]')].filter(e => e.getClientRects().length).map(e => e.innerText).join(' '))
 
+// a project whose sheet is opened (and picked, and locked) shows on Projects as a card in that state, so a scenario that
+// makes one does it in a Studio of its own: the shared Studio's Projects (which the Projects scenarios' axe reads) stays as it was
+const own = fn => async fx => {
+  const o = await newStudio()
+  try { await o.api('/api/setup', { seen: true }); fx.studio = o; await fn(fx) } finally { try { o.stop() } catch { /* its folder may be held a moment on Windows */ } }
+}
+
 const BIND = {
   'brand-sheet › Breadcrumb › Going back where it came from': [
-    step('the sheet opened from the scaffold\'s Brand step, Esc with nothing selected', async fx => {
+    step('the sheet opened from the scaffold\'s Brand step, Esc with nothing selected', own(async fx => {
       await fromScaffold(fx)
       // the stage's bottom corner, where nothing is drawn
       await fx.page.mouse.click(1420, 880); await wait(fx.page, 500)
       await fx.page.keyboard.press('Escape'); await wait(fx.page, 2000)
       fx.seen.room = roomOf(fx.page); fx.seen.step = stepOf(fx.page)
       fx.seen.steps = await fx.page.locator('nav[aria-label="Steps"] button').count()
-    }),
+    })),
     step('the scaffold shows again on its Brand step', async ({ seen }) => problems([
       seen.room !== 'studio' && `Esc leaves the address's room at ${seen.room}, not the scaffold`,
       seen.room === 'studio' && !seen.steps && 'the scaffold\'s step path does not show',
@@ -77,14 +85,14 @@ const BIND = {
     ]))
   ],
   'brand-sheet › Options side by side › Picking a palette': [
-    step('the second palette clicked', async fx => {
+    step('the second palette clicked', own(async fx => {
       await fromScaffold(fx)
       fx.seen.before = { picks: await picks(fx.page), samples: await samples(fx.page) }
       await card(fx.page, 'palette:p2').click({ timeout: 5000 }); await wait(fx.page, 900)
       fx.seen.pressed = await card(fx.page, 'palette:p2').getAttribute('aria-pressed')
       fx.seen.after = { picks: await picks(fx.page), samples: await samples(fx.page) }
       fx.seen.inspector = await inspectorText(fx.page)
-    }),
+    })),
     step('it is picked, every type sample redraws, the inspector shows its colours', async ({ seen }) => problems([
       seen.pressed !== 'true' && `the palette's aria-pressed is ${seen.pressed}, not true`,
       seen.after.picks.palette !== 'p2' && `the picked palette is ${seen.after.picks.palette}, not the second`,
@@ -93,14 +101,14 @@ const BIND = {
     ]))
   ],
   'brand-sheet › Options side by side › A pack in part': [
-    step('a pack selected and Type pressed in the inspector', async fx => {
+    step('a pack selected and Type pressed in the inspector', own(async fx => {
       await fromScaffold(fx)
       await card(fx.page, 'palette:p2').click({ timeout: 5000 }); await wait(fx.page, 700)
       fx.seen.before = await picks(fx.page)
       await card(fx.page, 'pack:od-cafe').click({ timeout: 5000 }); await wait(fx.page, 700)
       await fx.page.getByRole('button', { name: /^type$/i }).filter({ visible: true }).first().click({ timeout: 5000 }); await wait(fx.page, 900)
       fx.seen.after = await picks(fx.page)
-    }),
+    })),
     step('only the type pairing changes to the pack\'s', async ({ seen }) => problems([
       seen.after.type === seen.before.type && 'the type pairing does not change',
       seen.after.palette !== seen.before.palette && `the palette changes too (${seen.before.palette} to ${seen.after.palette})`,
@@ -109,7 +117,7 @@ const BIND = {
     ]))
   ],
   'brand-sheet › Lock › Locking from the Studio': [
-    step('Lock pressed on a sheet opened from the scaffold', async fx => {
+    step('Lock pressed on a sheet opened from the scaffold', own(async fx => {
       await fromScaffold(fx)
       await card(fx.page, 'palette:p2').click({ timeout: 5000 }); await wait(fx.page, 700)
       await fx.page.getByRole('button', { name: /^lock$/i }).filter({ visible: true }).first().click({ timeout: 5000 }); await wait(fx.page, 3000)
@@ -119,7 +127,7 @@ const BIND = {
         const b = [...document.querySelectorAll('nav[aria-label="Steps"] button')].find(b => b.innerText.replace(/^\s*\+\s*/, '').trim() === 'Brand')
         return b?.querySelector('[role="img"]')?.getAttribute('aria-label') || null
       })
-    }),
+    })),
     step('the scaffold again, its Brand card showing the colours and type, the dot Done', async ({ seen }) => problems([
       seen.room !== 'studio' && `the address's room is ${seen.room}, not the scaffold`,
       !seen.card && 'the Brand card is not on the scaffold',
@@ -129,12 +137,12 @@ const BIND = {
     ]))
   ],
   'brand-sheet › Empty state › The options could not be made': [
-    step('the sheet opened with the brand request failing', async fx => {
+    step('the sheet opened with the brand request failing', own(async fx => {
       await fromScaffold(fx, { ready: false, before: page => page.route(url => /^\/api\/projects\/[^/]+\/brand$/.test(new URL(url).pathname), route => route.fulfill({ status: 500, json: { error: 'the model did not answer' } })) })
       await wait(fx.page, 4000)
       fx.seen.toast = await fx.page.evaluate(() => [...document.querySelectorAll('[role="status"], [role="alert"], .toast, .tst')].filter(e => e.getClientRects().length && e.getAttribute('aria-busy') !== 'true').map(e => e.innerText.trim()).filter(Boolean))
       fx.seen.busy = await fx.page.evaluate(() => [...document.querySelectorAll('[aria-busy="true"]')].filter(e => e.getClientRects().length && !e.matches('#app-loading, .app-loading, .app-skel')).map(e => String(e.className).slice(0, 24)))
-    }),
+    })),
     step('a one-line toast says what failed, the stage no longer busy', async ({ seen }) => problems([
       !seen.toast.length && 'no toast says what failed',
       seen.toast.some(t => t.split('\n').length > 2) && 'the toast is more than one line',
