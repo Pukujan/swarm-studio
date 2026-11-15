@@ -88,6 +88,12 @@ export function lookSays(was, ref) {
 export const foundSaid = f => [f?.what, f?.who && `for ${f.who}`, f?.pages?.length && `${f.pages.length} pages`].filter(Boolean).join(' · ')
 
 /**
+ * What the crew takes from a reference (the server's `taken`, issue #543), as one line: "Taken: style, colours, type"
+ * or, when nothing reaches the crew, why. Empty when the server did not say.  @param {any} t
+ */
+export const takenSaid = t => (!t ? '' : t.what?.length ? `Taken: ${t.what.join(', ')}` : t.not || '')
+
+/**
  * The block's HTML. built: the project has a build to compare.
  * @param {any} ref  @param {{ base?: string, built?: boolean }} [o]
  */

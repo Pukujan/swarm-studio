@@ -7,7 +7,7 @@ import { tmpdir, homedir } from 'node:os'
 import { join } from 'node:path'
 import http from 'node:http'
 import { compareTokens, scoreOf, colourGap, judgeMatch, matchMessages, MATCH_RULES, walkBuild, fixText } from '../engine/lookmatch.mjs'
-import { lookWorker, lookReader, workLine, workHtml, lookPhase, lookSays, matchHtml, lookBusy, foundSaid } from '../web/lookmatch.js'
+import { lookWorker, lookReader, workLine, workHtml, lookPhase, lookSays, matchHtml, lookBusy, foundSaid, takenSaid } from '../web/lookmatch.js'
 import { refStore } from '../engine/refs.mjs'
 import { refRoutes } from '../server/refs.mjs'
 import { puppeteer } from '../engine/pageshots.mjs'
@@ -193,4 +193,10 @@ test('a document being read has the crew on its card, and Hermia says when it st
   // a document already read when the Studio opens says nothing
   assert.equal(lookSays(lookPhase(ready), ready), '')
   assert.equal(foundSaid({}), '')
+})
+
+test('takenSaid: what the crew takes from a reference, or why nothing', () => {
+  assert.equal(takenSaid({ what: ['style', 'colours', 'type'], not: 'Never its words.' }), 'Taken: style, colours, type')
+  assert.equal(takenSaid({ what: [], not: 'Not read yet.' }), 'Not read yet.')
+  assert.equal(takenSaid(null), '')
 })
