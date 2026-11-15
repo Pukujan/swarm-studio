@@ -193,31 +193,12 @@ jobs:
       - id: hermes
         if: ${{ !cancelled() }}
         run: |
-          pin=v0.23.1-3b42157
-          install() { # $1: the home to install into
-            curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/v0.23.1/scripts/install.sh -o "$RUNNER_TEMP/hermes-install.sh"
-            bash "$RUNNER_TEMP/hermes-install.sh" --commit 3b421578588243f920886e6fe79a6faa87ea026e --hermes-home "$1" --skip-setup --skip-browser --skip-computer-use
-          }
-          if [ "${{ runner.environment }}" = self-hosted ]; then
-            # the install (2.8 GB) is made once per pinned release, in a folder the runner keeps, and each job gets a
-            # copy-on-write clone of it as its own Hermes home (APFS clones share the blocks: no extra disk, and the
-            # job's plugin, data and logs stay in its own home). A new pin installs afresh and the old one goes.
-            cache="$(cd "$RUNNER_TEMP/../.." && pwd)/_cache"
-            mkdir -p "$cache"
-            if [ ! -f "$cache/hermes-$pin/.installed" ]; then
-              rm -rf "$cache"/hermes-*
-              install "$cache/hermes-$pin" && touch "$cache/hermes-$pin/.installed"
-            fi
-            rm -rf "$HERMES_HOME"
-            if cp -cR "$cache/hermes-$pin" "$HERMES_HOME" && "$HERMES_HOME/hermes-agent/.hermes/bin/hermes" --version; then
-              echo "using the install kept for $pin ($(du -sh "$cache/hermes-$pin" | cut -f1) once, cloned)"
-            else
-              echo "::warning::the kept install cannot be cloned here: installing into this job's home"
-              rm -rf "$HERMES_HOME"; install "$HERMES_HOME"
-            fi
-          else
-            install "$HERMES_HOME"
-          fi
+          # Installed into this job's own home, on the self-hosted Mac too: Hermes records the absolute path of its
+          # dependency environment, so a copy or clone of a kept install elsewhere is "outside this install" and
+          # refuses to run (tried: an install kept per pinned release and cloned into each job's home). 2.8 GB, gone
+          # when the job ends; the first step stops the job early where the disk could not hold it.
+          curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/v0.23.1/scripts/install.sh -o "$RUNNER_TEMP/hermes-install.sh"
+          bash "$RUNNER_TEMP/hermes-install.sh" --commit 3b421578588243f920886e6fe79a6faa87ea026e --hermes-home "$HERMES_HOME" --skip-setup --skip-browser --skip-computer-use
           echo "$HERMES_HOME/hermes-agent/.hermes/bin" >> "$GITHUB_PATH"
           du -sh "$HERMES_HOME" | tail -1; df -h "$RUNNER_TEMP" | tail -1
       - if: ${{ !cancelled() && steps.hermes.outcome == 'failure' }}
@@ -290,6 +271,7 @@ jobs:
         run: |
           if [ -n "$HERMES_HOME" ]; then pkill -f "$HERMES_HOME" || true; fi
           pkill -f "$RUNNER_TEMP/pw" || true
+          rm -rf "$(cd "$RUNNER_TEMP/../.." && pwd)"/_cache/hermes-*
           rm -rf "$HERMES_HOME" "$RUNNER_TEMP/pw" "$RUNNER_TEMP/npm" "$RUNNER_TEMP/pip" "$RUNNER_TEMP/uv" "$RUNNER_TEMP/xdg" "$RUNNER_TEMP/venv" "$RUNNER_TEMP/hermes-install.sh" "$RUNNER_TEMP/plugins.txt" test-results
           rm -rf "${TMPDIR:-/tmp}"/swarm-walk-* "${TMPDIR:-/tmp}"/swarm-video-* "${TMPDIR:-/tmp}"/swarm-ff-* "${TMPDIR:-/tmp}"/swarm-images-*
           df -h "$RUNNER_TEMP" | tail -1
