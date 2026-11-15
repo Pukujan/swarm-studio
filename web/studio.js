@@ -9,6 +9,7 @@ import { makeBrand } from './brand.js'
 import { makeScaffold } from './scaffold.js'
 import { makeNav, toAddress } from './nav.js'
 import { MODES, modeOf, studioMode, modesShown } from './modes.js'
+import { toNewStudio } from './uiswitch.js'
 const sw = window.swarm
 const W = window
 const body = document.body
@@ -257,7 +258,7 @@ C.load = run => {
   return Promise.resolve(sw.openRun(run)).finally(() => { if (C.opening === run) C.opening = null })
 }
 // anything that answers Esc itself (a panel, a menu, the player, a selection) goes first
-const OPEN = '.game-pop, .models-pop, .export-pop, .show-sum, .fmenu, .ui-overlay, .ui-popover, .combo-list, .player:not([hidden]), .slash-pop:not([hidden]), .hm-menu, #more-menu:not([hidden]), #pub-menu:not([hidden]), .dpick, .finfo-wrap, .video-big, .cbox.open'
+const OPEN = '.av-compare, .game-pop, .models-pop, .export-pop, .show-sum, .fmenu, .ui-overlay, .ui-popover, .combo-list, .player:not([hidden]), .slash-pop:not([hidden]), .hm-menu, #more-menu:not([hidden]), #pub-menu:not([hidden]), .dpick, .finfo-wrap, .video-big, .cbox.open'
 function escUp(e) {
   if (e.key !== 'Escape' || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return
   if (e.target.closest?.('input, textarea, select, [contenteditable="true"]') || document.fullscreenElement) return
@@ -287,14 +288,14 @@ function chrome() {
   const menu = $('#more-menu')
   if (menu) {
     menu.insertAdjacentHTML('beforeend', `<div class="cosmos-sep" role="separator"></div>
-      <button class="toggle cosmos-only" id="cosmos-sound" aria-pressed="false">${ico('sound')}<span>Crew sound</span></button>
+      <button class="toggle cosmos-only" id="cosmos-sound" aria-pressed="false">${ico('sound')}<span>Crew sound</span></button><button class="toggle cosmos-only" id="cosmos-next">${ico('chr')}<span>Use the new Studio</span></button>
 `)
     // the crew's voices and sounds (web/chatter.js): the same switch and words as the user menu's; ✓ while on
     const sound = $('#cosmos-sound')
     const paint = () => { const on = sw.sound?.() === 'on'; sound.classList.toggle('on', on); sound.setAttribute('aria-pressed', String(on)) }
     sound.onclick = () => { sw.sound?.(sw.sound() === 'on' ? 'muted' : 'on'); paint() }
     $('#more-btn')?.addEventListener('click', paint)
-    paint()
+    paint(); toNewStudio(document.getElementById('cosmos-next'), sw)
   }
   modeMenu()
   // in a room, the chat column comes back with one button

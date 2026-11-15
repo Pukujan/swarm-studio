@@ -25,6 +25,7 @@ The sheet SHALL show a breadcrumb that reads `Home › Projects › <project> �
 - **WHEN** the person presses Brand sheet under a chat's brief, before any project exists
 - **THEN** the breadcrumb reads `Home › Projects › Chat › Brand sheet`
 - Gate: `manual`
+- Manual: the brief under a chat, with its Brand sheet button, is written by the planner's model; the test Studio has no model
 
 #### Scenario: Going back where it came from
 - **WHEN** the sheet was opened from the scaffold's Brand step and the person presses Esc with nothing selected

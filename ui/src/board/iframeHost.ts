@@ -6,6 +6,8 @@ import type { BoardHost, BoardItem, LiveReason, PageMessage, Tier } from './host
 export interface IframeHost extends BoardHost {
   // a page's frame, from when it mounts until it goes; returns the detach
   attach(id: string, frame: HTMLIFrameElement): () => void
+  // a page's mounted frame (null when it has none): what a picture of the page is taken from (web/capture.js)
+  frame(id: string): HTMLIFrameElement | null
   // the wishes held for a page (what a tier manager would weigh)
   wishes(id: string): ReadonlySet<LiveReason>
 }
@@ -39,6 +41,7 @@ export function iframeHost(): IframeHost {
     requestLive(id, why) { (wishes.get(id) ?? wishes.set(id, new Set()).get(id)!).add(why) },
     releaseLive(id, why) { wishes.get(id)?.delete(why) },
     wishes: id => wishes.get(id) ?? new Set(),
+    frame: id => frames.get(id) ?? null,
     post(id, msg) {
       const w = frames.get(id)?.contentWindow
       if (!w) return false

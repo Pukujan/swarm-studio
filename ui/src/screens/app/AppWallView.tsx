@@ -7,13 +7,15 @@
 //   3 Code      the file being written now, and the app's files to open one
 //   4 Shipped   the last thing finished and the next screen in the plan; after a deploy, the live address
 // A question naming one of the crew is theirs, answered over their window; any other is Hermia's, over the wall.
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Button, LinkButton } from '../../primitives/Button'
 import { TextField } from '../../primitives/TextField'
 import { ToggleGroup } from '../../primitives/ToggleGroup'
 import { MermaidDiagram } from '../../shared/MermaidDiagram'
 import { Wall, type WallWindow } from '../../shared/Wall'
+import { AppCrew, HermiaStrip } from './AppCrew'
 import { markedFlow, nextScreen, nowScreen, type AppModel } from './model'
+import { FRESH, heard, NO_RADIO, type Radio } from './radio'
 
 export const WINDOWS = ['Map', 'Live app', 'Code', 'Shipped'] as const
 type Device = 'phone' | 'tablet' | 'desktop'
@@ -23,14 +25,21 @@ export type Said = { at: number, who: string, text: string } | null
 const quiet = (text: string) => <p className="p-4 font-monospace text-sm text-muted">{text}</p>
 const time = (t?: number) => (t ? new Date(t).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '')
 
-export function AppWallView({ model, said, onAsk, onOpen, onFile }: {
+export function AppWallView({ model, said, onAsk, onOpen, onFile, onBack, going = '', docked = false, radio = NO_RADIO }: {
   model: AppModel
   // the last answer: over window `at` (0–3), or over the wall (-1) when it was Hermia's
   said: Said
+  // the room's chat is docked along the bottom (issue #542, one box): the wall's own ask field steps aside
+  docked?: boolean
+  // the crew's radio (radio.ts): Hermia's orders, what each helper is doing, their replies (#529)
+  radio?: Radio
   onAsk: (text: string) => void
   onOpen: () => void
   // a file to read, or null to go back to the list (a narrow wall shows one or the other)
   onFile: (path: string | null) => void
+  // back to one of the app's versions (issue #542); the one being gone back to, while it is
+  onBack?: (rev: string) => void
+  going?: string
 }) {
   const [device, setDevice] = useState<Device>('desktop')
   const [reload, setReload] = useState(0)
@@ -40,7 +49,15 @@ export function AppWallView({ model, said, onAsk, onOpen, onFile }: {
   const now = building ? nowScreen(model.map, writing) : null
   const next = nextScreen(model.map, model.done, now)
   const live = building && !!a?.url
-  const say = (i: number) => (said && said.at === i ? { who: said.who, text: said.text } : null)
+  // a window's bubble: the answer to a question asked of it, else its helper's reply on the radio while fresh
+  const say = (i: number) => {
+    if (said && said.at === i) return { who: said.who, text: said.text }
+    const n = model.crew[i], r = n ? radio.says[n] : undefined
+    return n && r && heard(r, FRESH.say) ? { who: n, text: r.text.slice(0, 160) } : null
+  }
+  const wall = useRef<HTMLDivElement>(null), av = useRef<HTMLSpanElement>(null)
+  const versions = model.versions || [], last = versions[0], before = versions[1]
+  const onScreen = (u: string) => { try { return last?.now && last.screen ? new URL(last.screen, u).href : u } catch { return u } }
 
   const map: WallWindow = {
     id: 'map', title: WINDOWS[0], say: say(0), busy: model.map === undefined,
@@ -66,12 +83,12 @@ export function AppWallView({ model, said, onAsk, onOpen, onFile }: {
     ) : building ? <div className="h-full" /> : a?.photo ? (
       <div className="relative h-full">
         <img src={a.photo} alt="The app as built" className="h-full w-full object-cover object-top" />
-        <div className="absolute right-3 bottom-3">{a.url ? <LinkButton role="primary" href={a.url} target="_blank">Open</LinkButton> : <Button role="primary" onPress={onOpen}>Open</Button>}</div>
+        <div className="absolute right-3 bottom-3">{a.url ? <LinkButton role="primary" href={onScreen(a.url)} target="_blank">Open</LinkButton> : <Button role="primary" onPress={onOpen}>Open</Button>}</div>
       </div>
     ) : a?.hasApp ? (
       <div className="grid h-full place-content-center justify-items-center gap-3 p-4">
         <b className="font-label text-sm font-semibold uppercase tracking-[.07em]">Built</b>
-        {a.url ? <LinkButton role="primary" href={a.url} target="_blank">Open</LinkButton> : <Button role="primary" onPress={onOpen}>Open</Button>}
+        {a.url ? <LinkButton role="primary" href={onScreen(a.url)} target="_blank">Open</LinkButton> : <Button role="primary" onPress={onOpen}>Open</Button>}
       </div>
     ) : quiet('No app yet.')
   }
@@ -105,13 +122,43 @@ export function AppWallView({ model, said, onAsk, onOpen, onFile }: {
     id: 'shipped', title: WINDOWS[3], say: say(3),
     content: (
       <div className="flex flex-col gap-4 p-4">
+        {!building && last?.changed?.length ? (
+          <section aria-label="Last change">
+            <b className="font-label text-xs font-semibold uppercase tracking-[.07em] text-muted">Last change</b>
+            <p className="mt-1 text-sm">{last.what}</p>
+            <p className="mt-0.5 font-monospace text-xs text-muted">Changed {last.changed.slice(0, 4).map(f => f.split('/').pop()).join(', ')}{last.changed.length > 4 ? ` and ${last.changed.length - 4} more` : ''}{last.screen ? ` · on ${last.screen}` : ''}</p>
+            {last.photo && (
+              <div className="mt-2 grid max-w-[720px] grid-cols-2 gap-2">
+                {[['Before', before?.photo], ['After', last.photo]].map(([label, src]) => src ? (
+                  <figure key={label} className="m-0">
+                    <img src={src} alt={`${label}: ${last.screen || 'the app'}`} className="aspect-video w-full rounded-[8px] border border-edge bg-paper object-contain object-top" />
+                    <figcaption className="mt-0.5 text-xs text-muted">{label}</figcaption>
+                  </figure>
+                ) : <div key={label} />)}
+              </div>
+            )}
+          </section>
+        ) : null}
         <section aria-label="Last finished">
-          <b className="font-label text-xs font-semibold uppercase tracking-[.07em] text-muted">Last finished</b>
-          {a?.result ? (
+          <b className="font-label text-xs font-semibold uppercase tracking-[.07em] text-muted">{building ? 'Working on' : 'Last finished'}</b>
+          {a?.result && !building ? (
             <p className="mt-1 font-monospace text-sm">{a.result.turns ?? 0} turn{a.result.turns === 1 ? '' : 's'} · {a.result.files ?? 0} files · checks {a.result.gatesPassed ? 'passed' : 'not passed'}</p>
           ) : <p className="mt-1 font-monospace text-sm text-muted">{lastTurn?.text || (building ? a?.stage || 'starting' : 'Nothing yet.')}</p>}
-          {a?.photo && !building && <img src={a.photo} alt="" className="mt-2 aspect-video w-full max-w-[360px] rounded-[8px] border border-edge object-cover object-top" />}
+          {a?.photo && !building && !last?.photo && <img src={a.photo} alt="" className="mt-2 aspect-video w-full max-w-[360px] rounded-[8px] border border-edge object-cover object-top" />}
         </section>
+        {versions.length > 1 && (
+          <section aria-label="Versions">
+            <b className="font-label text-xs font-semibold uppercase tracking-[.07em] text-muted">Versions</b>
+            <ul className="mt-1 flex flex-col">
+              {versions.slice(0, 12).map(v => (
+                <li key={v.rev} className="flex min-h-10 items-center gap-3 border-t border-edge py-1.5 first:border-t-0">
+                  <span className="min-w-0 flex-1 text-sm">{v.what}<small className="block font-monospace text-xs text-muted">{time(v.t)}{v.changed?.length ? ` · ${v.changed.slice(0, 3).map(f => f.split('/').pop()).join(', ')}` : ''}</small></span>
+                  {v.now ? <span className="font-monospace text-xs text-muted">Now</span> : onBack && <Button role="ghost" isDisabled={!!going || building} onPress={() => onBack(v.rev)}>{going === v.rev ? 'Going back…' : 'Go back to this'}</Button>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         {next && <section aria-label="Next"><b className="font-label text-xs font-semibold uppercase tracking-[.07em] text-muted">Next</b><p className="mt-1 font-monospace text-sm">{next.name}</p></section>}
         {a?.deployed && (
           <section aria-label="Live">
@@ -125,13 +172,17 @@ export function AppWallView({ model, said, onAsk, onOpen, onFile }: {
 
   return (
     // the wall fills the screen under the top bar (h-14), as the boards do; its windows scroll inside
-    <div className="flex h-[calc(100dvh-3.5rem)] min-h-0 flex-col">
-      <form className="flex items-end gap-2 px-3 pt-3" onSubmit={e => { e.preventDefault(); const t = ask.trim(); if (t) { onAsk(t); setAsk('') } }}>
+    <div className={`flex min-h-0 flex-col ${docked ? 'h-[calc(100dvh-3.5rem-var(--chat-h,0px))]' : 'h-[calc(100dvh-3.5rem)]'}`}>
+      {!docked && <form className="flex items-end gap-2 px-3 pt-3" onSubmit={e => { e.preventDefault(); const t = ask.trim(); if (t) { onAsk(t); setAsk('') } }}>
         <div className="max-w-[520px] flex-1"><TextField label="Ask the crew" placeholder="Pip, what are you on?" value={ask} onChange={setAsk} /></div>
         <Button role="secondary" type="submit" isDisabled={!ask.trim()}>Ask</Button>
-      </form>
-      {said && said.at < 0 && <p role="status" className="mx-3 mt-2 max-w-[640px] rounded-[4px_12px_12px_12px] border border-line bg-deep px-3 py-2 font-monospace text-xs"><b className="mr-1.5">{said.who}</b>{said.text}</p>}
-      <Wall label="App build" windows={[map, liveWin, code, shipped]} start={building ? 1 : 3} />
+      </form>}
+      {!docked && said && said.at < 0 && <p role="status" className="mx-3 mt-2 max-w-[640px] rounded-[4px_12px_12px_12px] border border-line bg-deep px-3 py-2 font-monospace text-xs"><b className="mr-1.5">{said.who}</b>{said.text}</p>}
+      <HermiaStrip radio={radio} avatar={av} />
+      <div ref={wall} className="relative flex min-h-0 flex-1 flex-col">
+        <Wall label="App build" windows={[map, liveWin, code, shipped]} start={building ? 1 : 3} />
+        <AppCrew names={model.crew} radio={radio} host={wall} avatar={av} building={building} />
+      </div>
     </div>
   )
 }

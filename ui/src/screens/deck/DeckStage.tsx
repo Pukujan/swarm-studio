@@ -118,6 +118,8 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
   const worldW = model.pages.length ? model.pages.length * FRAME_W + (model.pages.length - 1) * GAP : FRAME_W
   const worldH = LABEL + Math.max(700, ...heights)
 
+  // the person (or a page asked for) has moved the camera: the automatic fits leave it
+  const moved = useRef(false)
   // fit a box of the world into the stage, never past 1:1
   const frame = useCallback((x: number, w: number, h: number) => {
     const s = stage.current
@@ -127,9 +129,10 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
     setCam({ k, x: 24 + Math.max(0, (vw - w * k) / 2) - x * k, y: 24 })
   }, [])
   const fit = useCallback(() => frame(0, worldW, worldH), [frame, worldW, worldH])
+  // a page asked for (Layers, the Overview's Open) keeps the camera: the fits below no longer take it back
   const focusPage = useCallback((id: string) => {
     const p = model.pages.find(x => x.id === id)
-    if (p) frame(frameX(p), FRAME_W, LABEL + 900)
+    if (p) { moved.current = true; frame(frameX(p), FRAME_W, LABEL + 900) }
   }, [frame, model.pages])
   useImperativeHandle(ref, () => ({ fit, focusPage }), [fit, focusPage])
 
@@ -157,7 +160,6 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
   }, [follow, model, geo])
 
   // the first look fits every page; a page added later is fitted in until the person moves the camera
-  const moved = useRef(false)
   // (while Follow is on, it is Follow that frames the crew)
   useEffect(() => { if (!moved.current && !follow) fit() }, [fit, model.pages.length, follow])
   useEffect(() => {

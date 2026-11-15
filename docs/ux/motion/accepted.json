@@ -1,5 +1,5 @@
 {
-  "why": "The App room opens with its chat open (issue #542, one box: the chat is where a change to the app is asked for), so the App scene now shows the chat's lines fading in as they come, as they do in every room where the chat is open.",
-  "gained": ["page @in 0.3s 1 div.item<#feed"],
-  "lost": []
+  "why": "The game scene's address (?version=<game>&room=game, no run) now opens the Game room it names (#560, #571): before, the room move was dropped and the scene showed the game build's Overview with Hermia working on it. Hermia is not on the Game room's stage. (Its radio line runs only while she gives an order, #578.)",
+  "gained": [],
+  "lost": ["page @pet-dot endless i", "page @pet-tap endless span.pet-body", "page ~opacity span.pet-dots"]
 }

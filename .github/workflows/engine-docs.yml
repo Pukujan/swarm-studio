@@ -6,6 +6,10 @@ on:
     types: [opened, synchronize, reopened, edited]
 permissions:
   contents: read
+# a new push to a pull request stops the run of the push before it; a push to main is never stopped
+concurrency:
+  group: engine-docs-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   engine-docs:
     runs-on: ubuntu-latest

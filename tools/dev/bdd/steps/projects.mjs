@@ -115,7 +115,7 @@ const BIND = {
       fx.seen.empty = {}
       for (const v of ['Recent', 'All projects']) {
         await side(fx.page, v).click()
-        await fx.page.getByRole('button', { name: 'Make something' }).first().waitFor({ timeout: 5000 }).catch(() => {})
+        await fx.page.getByRole('button', { name: 'Make something' }).first().waitFor({ timeout: 15_000 }).catch(() => {})
         fx.seen.empty[v] = await fx.page.evaluate(() => {
           // (upper-cased by the page's CSS, so innerText reads MAKE SOMETHING)
           const btn = [...document.querySelectorAll('button, a')].find(b => b.innerText.trim().toLowerCase() === 'make something' && b.getClientRects().length)

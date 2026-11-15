@@ -11,6 +11,8 @@ import { studio } from '../../../scripts/walkthrough-fixtures.mjs'
 import { parse, key } from '../../../tests/bdd/gen.mjs'
 
 export const ROOT = fileURLToPath(new URL('../../..', import.meta.url))
+// the audit's known lists (docs/ux/AUDIT.md, "Known violations"): one list serves both the audit and these scenarios'
+// gate checks, so an entry the audit calls fixed can still be what a scenario excuses
 const known = app => JSON.parse(readFileSync(`${ROOT}.ui-audit-known-violations${app ? `.${app}` : ''}.json`, 'utf8')).map(k => k.key)
 
 export const test = base.extend({

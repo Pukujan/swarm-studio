@@ -99,8 +99,25 @@ const LOG = `(() => {
   // is not counted: whether a frame was drawn in between is the machine's timing, not the page's
   const live = e => e.target.getAnimations?.().some(a => e.type === 'animationstart' ? a.animationName === e.animationName : a.transitionProperty === e.propertyName)
   const css = e => { if (!live(e)) return; const cs = getComputedStyle(e.target); if (e.type === 'animationstart' && cs.animationIterationCount.split(',').every(v => v.trim() === 'infinite')) return; log.push((e.type === 'animationstart' ? '@' + e.animationName + ' ' + cs.animationDuration + ' ' + cs.animationIterationCount : '~' + e.propertyName) + ' ' + name(e.target)) }
-  addEventListener('animationstart', css, true)
-  addEventListener('transitionrun', css, true)
+  // The scroll reveal (engine/motion.mjs: m-t, then m-in two frames later) is logged by its class change, not by the
+  // transition it starts: whether the browser drew a frame between the two, and whether the transition was still
+  // running when its start was heard, is the machine's timing (the clock is the page's, the frames are real), and it
+  // made a heading's reveal seen in one recording and not in the next. So its own transitions are left out of css()
+  // below, and what the reveal does is one line: the element, and how long it takes.
+  const reveal = e => e.target.classList && (e.target.classList.contains('m-t') || e.target.classList.contains('m-in'))
+  const seen = new WeakSet()
+  const watch = () => new MutationObserver(list => {
+    for (const m of list) {
+      const el = m.target
+      if (!el.classList || !el.classList.contains('m-in') || seen.has(el)) continue
+      seen.add(el)
+      const other = [...el.classList].filter(c => c !== 'm-t' && c !== 'm-in').slice(0, 2).map(c => '.' + c).join('')
+      log.push('reveal ' + getComputedStyle(el).getPropertyValue('--m-ms').trim() + ' ' + el.tagName.toLowerCase() + other)
+    }
+  }).observe(document, { subtree: true, attributes: true, attributeFilter: ['class'] })
+  watch()
+  addEventListener('animationstart', e => { if (!reveal(e)) css(e) }, true)
+  addEventListener('transitionrun', e => { if (!reveal(e)) css(e) }, true)
   const animate = Element.prototype.animate
   Element.prototype.animate = function (k, o) { const a = animate.call(this, k, o); const t = a.effect.getTiming(); log.push('js:animate ' + ms(t.duration) + 'ms x' + t.iterations + ' ' + name(this)); return a }
 })()`

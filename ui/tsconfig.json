@@ -30,7 +30,8 @@
       "@studio/kits": ["./src/legacy/studio-kits.d.ts"],
       "@studio/pet": ["./src/legacy/studio-pet.d.ts"],
       "@studio/video": ["./src/primitives/studio-video.d.ts"],
-      "@studio/setup-parts": ["./src/screens/setup/studio-setup-parts.d.ts"]
+      "@studio/setup-parts": ["./src/screens/setup/studio-setup-parts.d.ts"],
+      "@studio/capture": ["./src/board/studio-capture.d.ts"]
     }
   },
   "include": ["src", ".storybook", "vite.config.ts"]

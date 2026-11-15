@@ -101,5 +101,201 @@
    "why": "after a page is clicked on the stage, the first Esc goes to Projects instead of closing the inspector (from the Files list it closes the inspector)",
    "match": "the first Esc left the Overview"
   }
+ },
+ "studio › Breadcrumb › Esc goes up one step": {
+  "current": {
+   "why": "Esc leaves the Studio for Projects at once: it does not go up one step first",
+   "match": "the first Esc"
+  }
+ },
+ "studio › Step path › Removing and bringing back a step": {
+  "next": {
+   "why": "the next UI's step path has What you have where the current Studio has References: there is no References step to remove or bring back",
+   "match": "no References chip"
+  }
+ },
+ "studio › Step path › A project with only its Plan step": {
+  "next": {
+   "why": "the next UI's step path has What you have where the current Studio has References: there is no References step to remove or bring back (its path starts with What you have, which stays)",
+   "match": [
+    "no References chip",
+    "the path shows",
+    "the + chips"
+   ]
+  }
+ },
+ "studio › Empty steps › A new project": {
+  "next": {
+   "why": "the next UI's step path has What you have where the current Studio has References: there is no References step to remove or bring back",
+   "match": [
+    "References's dot",
+    "References does not show"
+   ]
+  }
+ },
+ "studio › The chat leads a website's Studio › Build with nothing said": {
+  "current": {
+   "why": "pressing Build leaves the focus on the Build button; typing \"build\" puts it in the chat box",
+   "match": "pressed Build: the focus"
+  },
+  "next": {
+   "why": "Build, pressed or typed, goes on to the deck and the planner (which answers with the model error in the test Studio), or does nothing, and does not ask which pages first; the focus stays off the chat box",
+   "match": [
+    "the chat does not ask which pages",
+    "the focus is on",
+    "the Studio moved on"
+   ]
+  }
+ },
+ "studio › 390 px › Layers as a sheet": {
+  "current": {
+   "why": "the Layers sheet has no × button to close it",
+   "match": "×"
+  }
+ },
+ "make › 390 px › Menus at 390": {
+  "current": {
+   "why": "the Make menu's items are 34 px tall at 390, under the 44 px a target needs",
+   "match": "px tall"
+  }
+ },
+ "setup-settings › Settings, one level per tap › Opening Crew": {
+  "current": {
+   "why": "Settings has You, Setup, Lite mode, Background and Data: no Crew group",
+   "match": "Settings has no Crew group"
+  }
+ },
+ "setup-settings › Settings, one level per tap › Esc goes up one level": {
+  "current": {
+   "why": "Esc closes Settings at once from inside a group, instead of going up to the groups first",
+   "match": "the first Esc closes Settings"
+  }
+ },
+ "setup-settings › Loading › Slow connections": {
+  "current": {
+   "why": "with the connections held, no row of Settings shows a busy marker",
+   "match": "shows no busy marker"
+  }
+ },
+ "setup-settings › Closing › One sheet at a time": {
+  "current": {
+   "why": "Settings has no Models row (and so no Change) to open Setup from: Setup opens from its own menu item",
+   "match": "Settings has no Models row"
+  }
+ },
+ "brand-sheet › Options side by side › A pack in part": {
+  "current": {
+   "why": "selecting a pack takes its palette too: Type then changes nothing the pack had not already changed",
+   "match": "the palette changes too"
+  },
+  "next": {
+   "why": "selecting a pack takes its palette too: Type then changes nothing the pack had not already changed",
+   "match": "the palette changes too"
+  }
+ },
+ "brand-sheet › Empty state › The options could not be made": {
+  "current": {
+   "why": "when the brand request fails nothing says so: no toast shows",
+   "match": "no toast"
+  },
+  "next": {
+   "why": "when the brand request fails nothing says so: no toast shows",
+   "match": "no toast"
+  }
+ },
+ "plan-board › Breadcrumb › The plan menu": {
+  "current": {
+   "why": "the plan's menu has no × to close it",
+   "match": "the menu has no"
+  },
+  "next": {
+   "why": "the plan's name is not a button: there is no menu to open",
+   "match": "the plan's name is not a button"
+  }
+ },
+ "plan-board › Loading › A saved plan opening": {
+  "current": {
+   "why": "a saved plan lands eight cards (Cast, Moves, Enemies, World, Progression, Look, Money, Systems), not nine",
+   "match": "cards land, not nine"
+  },
+  "next": {
+   "why": "a saved plan lands eight cards (Cast, Moves, Enemies, World, Progression, Look, Money, Systems), not nine, and four waiting cards show while it is held, not three",
+   "match": [
+    "cards land, not nine",
+    "waiting cards show while"
+   ]
+  }
+ },
+ "plan-board › Empty state › A fresh talk": {
+  "next": {
+   "why": "the next UI's Plan board shows no cards, waiting or named, for a talk that has answered nothing",
+   "match": "the board shows no cards"
+  }
+ },
+ "publish › One place to publish › Nothing to publish yet": {
+  "current": {
+   "why": "Publish is not disabled while the build is not done, and its page says nothing about why",
+   "match": [
+    "Publish is not disabled",
+    "its menu says nothing"
+   ]
+  }
+ },
+ "publish › Website › Checking hosts": {
+  "current": {
+   "why": "Website never reads Checking…: the current Studio does not ask the hosts' states (/api/publish) before showing it",
+   "match": "nothing reads Checking"
+  }
+ },
+ "design-deck › Breadcrumb › Back": {
+  "next": {
+   "why": "Esc leaves the Design deck for Projects, not the Overview",
+   "match": "Esc leaves the project for Projects"
+  }
+ },
+ "design-deck › Empty states › A new chat": {
+  "next": {
+   "why": "the next UI opens a new chat as a stand-in (\"Open in the Studio\"), with no chat of its own to show",
+   "match": [
+    "Layers does not show",
+    "composer"
+   ]
+  }
+ },
+ "design-deck › Replay › Replaying": {
+  "next": {
+   "why": "the next UI's deck has no ☰ menu with Replay",
+   "match": "no ☰ menu"
+  }
+ },
+ "design-deck › 390 px › The chat at 390": {
+  "next": {
+   "why": "the next UI's chat has no × to fold it at 390",
+   "match": "no × to fold"
+  }
+ },
+ "design-deck › Talk and brief before building › The skip question": {
+  "next": {
+   "why": "Make in the next UI does not open a chat that asks the skip question",
+   "match": [
+    "does not ask to skip",
+    "Skip all, build now"
+   ]
+  }
+ },
+ "projects › Chats › Reopening a chat": {
+  "next": {
+   "why": "a chat in the next UI does not open into the Design deck's chat",
+   "match": [
+    "the Design deck",
+    "the chat does not show"
+   ]
+  }
+ },
+ "projects › Chats › A game's chat": {
+  "next": {
+   "why": "a game's chat in the next UI does not open the Plan board",
+   "match": "no Lock button"
+  }
  }
 }

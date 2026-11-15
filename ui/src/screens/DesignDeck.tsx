@@ -6,6 +6,7 @@
 // scripts/deck-walk.mjs uses each of them end to end.
 import { classicHref } from '../shell/classic'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { takeOpening } from '../nav/opening'
 import { Button, LinkButton } from '../primitives/Button'
 import { Icon } from '../primitives/Icon'
 import { search } from '../nav/address'
@@ -94,6 +95,15 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
   }, [sel, part, select, edits, view.player, tool, pressTool])
   const pickedLayer = sel ? model.layers[sel.key] : undefined
   useEffect(() => { setPicked(null); setFollow(true) }, [model.run, view.replay])
+  // opened on a page (the Overview's Open): that page is picked and the camera goes to it, once it is in the build
+  const opening = useRef(takeOpening())
+  useEffect(() => {
+    const want = opening.current
+    if (!want || !model.pages.some(p => p.id === want)) return
+    opening.current = null
+    setPicked(want); setFollow(false)
+    requestAnimationFrame(() => stage.current?.focusPage(want))
+  }, [model.pages, model.run])
   // a crew at work: a saved build that stopped before it finished has agents still holding sections, but none is
   // working, so there is nothing to Follow (as web/canvas/deck.js bboxActive skips a stalled build's)
   const working = (model.state === 'planning' || model.state === 'building') && !unfinished

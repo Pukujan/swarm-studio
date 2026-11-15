@@ -7,7 +7,7 @@ import { tmpdir, homedir } from 'node:os'
 import { join } from 'node:path'
 import http from 'node:http'
 import { compareTokens, scoreOf, colourGap, judgeMatch, matchMessages, MATCH_RULES, walkBuild, fixText } from '../engine/lookmatch.mjs'
-import { lookWorker, lookReader, workLine, workHtml, lookPhase, lookSays, matchHtml } from '../web/lookmatch.js'
+import { lookWorker, lookReader, workLine, workHtml, lookPhase, lookSays, matchHtml, lookBusy, foundSaid, takenSaid } from '../web/lookmatch.js'
 import { refStore } from '../engine/refs.mjs'
 import { refRoutes } from '../server/refs.mjs'
 import { puppeteer } from '../engine/pageshots.mjs'
@@ -171,4 +171,32 @@ test('Hermia says one line when a reading or a comparing starts and one when it 
   assert.equal(lookSays(lookPhase(checking), link({ state: 'ready', from, match: { state: 'ready', score: 100, diffs: [] } })), 'Ren compared your build with obvious.com: 100 of 100, the style matches.')
   assert.equal(lookSays(lookPhase(checking), link({ state: 'ready', from, match: { state: 'failed', note: 'that build is gone' } })), 'Ren could not compare: that build is gone.')
   assert.equal(lookSays('', { id: 'f', kind: 'image' }), '')
+})
+
+test('a document being read has the crew on its card, and Hermia says when it starts and what was found (#543)', () => {
+  const doc = { id: 'rdoc1', kind: 'file', name: 'brief.pdf' }
+  const reading = { ...doc, found: { state: 'reading' } }
+  assert.equal(lookBusy(reading), true)
+  const w = lookWorker(reading)
+  assert.equal(w.name, lookReader(doc)); assert.equal(w.job, 'read')
+  assert.equal(workLine(w), `${lookReader(doc)} · Reading brief.pdf`)
+  assert.match(workHtml(reading), /aria-busy="true"/)
+  // a picture or a document with nothing going on: nobody at work
+  assert.equal(lookWorker({ id: 'r1', kind: 'image', name: 'a.png' }), null)
+  assert.equal(lookBusy({ ...doc, found: { state: 'ready' } }), false)
+  // one line when the reading starts, one when it is done, nothing in between
+  assert.equal(lookSays(lookPhase(doc), reading), `${lookReader(doc)} is reading brief.pdf.`)
+  assert.equal(lookSays(lookPhase(reading), reading), '')
+  const ready = { ...doc, found: { state: 'ready', what: 'Cedar Cafe brief', who: 'locals', pages: ['Home', 'Menu'] } }
+  assert.equal(lookSays(lookPhase(reading), ready), `${lookReader(doc)} read brief.pdf: Cedar Cafe brief · for locals · 2 pages.`)
+  assert.equal(lookSays(lookPhase(reading), { ...doc, found: { state: 'failed', note: 'the PDF has no text in it (a scan?)' } }), `${lookReader(doc)} could not read brief.pdf: the PDF has no text in it (a scan?).`)
+  // a document already read when the Studio opens says nothing
+  assert.equal(lookSays(lookPhase(ready), ready), '')
+  assert.equal(foundSaid({}), '')
+})
+
+test('takenSaid: what the crew takes from a reference, or why nothing', () => {
+  assert.equal(takenSaid({ what: ['style', 'colours', 'type'], not: 'Never its words.' }), 'Taken: style, colours, type')
+  assert.equal(takenSaid({ what: [], not: 'Not read yet.' }), 'Not read yet.')
+  assert.equal(takenSaid(null), '')
 })

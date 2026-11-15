@@ -40,24 +40,16 @@
     "detail": "nothing showed it was loading while /api/models, /api/auto, /api/work, /api/runs/2026-11-01T12-00-00-000Z/events were held"
   },
   {
-    "key": "brand@1440 axe color-contrast",
-    "detail": "Elements must meet minimum color contrast ratio thresholds: div[data-key=\"pack:bold-event\"] > .br-pk-row > .br-btn, div[data-key=\"pack:playful-community\"] > .br-pk-row > .br-btn"
-  },
-  {
     "key": "brand@1440 axe label",
     "detail": "Form elements must have labels: .dcolor"
   },
   {
     "key": "brand@1440 axe label-content-name-mismatch",
-    "detail": "Elements must have their visible text as part of their accessible name: div[data-key=\"pack:warm-editorial\"], div[data-key=\"pack:od-cafe\"], div[data-key=\"pack:clean-product\"], div[data-key=\"pack:bold-event\"], div[data-key=\"pack:quiet-portfolio\"], div[data-key=\"pack:playful-community\"] and 8 more"
+    "detail": "Elements must have their visible text as part of their accessible name: div[data-key=\"pack:warm-editorial\"], div[data-key=\"pack:od-cafe\"], div[data-key=\"pack:clean-product\"], div[data-key=\"story:what\"], div[data-key=\"story:pages\"], div[data-key=\"palette:p1\"] and 5 more"
   },
   {
     "key": "brand@1440 breadcrumb",
-    "detail": "reads \"Studio › Brand sheet\", should read \"Home › Projects › Cedar Cafe › Brand sheet\""
-  },
-  {
-    "key": "brand@390 axe color-contrast",
-    "detail": "Elements must meet minimum color contrast ratio thresholds: div[data-key=\"pack:bold-event\"] > .br-pk-row > .br-btn, div[data-key=\"pack:playful-community\"] > .br-pk-row > .br-btn"
+    "detail": "reads \"Projects › Cedar Cafe › Brand\", should read \"Home › Projects › Cedar Cafe › Brand sheet\""
   },
   {
     "key": "brand@390 axe label",
@@ -65,11 +57,11 @@
   },
   {
     "key": "brand@390 axe label-content-name-mismatch",
-    "detail": "Elements must have their visible text as part of their accessible name: div[data-key=\"pack:warm-editorial\"], div[data-key=\"pack:od-cafe\"], div[data-key=\"pack:clean-product\"], div[data-key=\"pack:bold-event\"], div[data-key=\"pack:quiet-portfolio\"], div[data-key=\"pack:playful-community\"] and 8 more"
+    "detail": "Elements must have their visible text as part of their accessible name: div[data-key=\"pack:warm-editorial\"], div[data-key=\"pack:od-cafe\"], div[data-key=\"pack:clean-product\"], div[data-key=\"story:what\"], div[data-key=\"story:pages\"], div[data-key=\"palette:p1\"] and 5 more"
   },
   {
     "key": "brand@390 breadcrumb",
-    "detail": "reads \"Brand sheet\", should read \"Home › Projects › Cedar Cafe › Brand sheet\""
+    "detail": "reads \"Cedar Cafe › Brand\", should read \"Home › Projects › Cedar Cafe › Brand sheet\""
   },
   {
     "key": "deck@1440 axe label",
@@ -77,7 +69,7 @@
   },
   {
     "key": "deck@1440 axe label-content-name-mismatch",
-    "detail": "Elements must have their visible text as part of their accessible name: .brand"
+    "detail": "Elements must have their visible text as part of their accessible name: .brand, div[aria-label=\"Page 1 Alpha Tea\"], div[aria-label=\"Page 2 Plans\"], div[aria-label=\"Page 3 Gift boxes\"]"
   },
   {
     "key": "deck@1440 breadcrumb",
@@ -133,31 +125,51 @@
   },
   {
     "key": "film@390 loading",
-    "detail": "nothing showed it was loading while /api/models, /api/auto, /api/work, /api/runs/2026-11-01T14-00-00-000Z/events, /api/media, /api/runs/2026-11-01T14-00-00-000Z/cuts were held"
+    "detail": "nothing showed it was loading while /api/models, /api/auto, /api/work, /api/runs/2026-11-01T14-00-00-000Z/events, /api/media were held"
   },
   {
-    "key": "game@1440 axe aria-required-children",
-    "detail": "Certain ARIA roles must contain particular children: .pj-tabs, .pj-list"
+    "key": "game@1440 axe aria-prohibited-attr",
+    "detail": "Elements must only use permitted ARIA attributes: #app-open"
   },
   {
     "key": "game@1440 axe label",
     "detail": "Form elements must have labels: .dcolor"
   },
   {
+    "key": "game@1440 axe label-content-name-mismatch",
+    "detail": "Elements must have their visible text as part of their accessible name: .brand"
+  },
+  {
     "key": "game@1440 breadcrumb",
-    "detail": "reads \"Projects › Lantern Run\", should read \"Home › Projects › Lantern Run › Game\""
+    "detail": "reads \"no breadcrumb; the file name reads \"LANTERN RUN\"\", should read \"Home › Projects › Lantern Run › Game\""
+  },
+  {
+    "key": "game@1440 loading",
+    "detail": "nothing showed it was loading while /api/models, /api/auto, /api/work, /api/runs/2026-11-01T13-00-00-000Z/events were held"
+  },
+  {
+    "key": "game@390 axe aria-prohibited-attr",
+    "detail": "Elements must only use permitted ARIA attributes: #app-open"
   },
   {
     "key": "game@390 axe label",
     "detail": "Form elements must have labels: .dcolor"
   },
   {
+    "key": "game@390 axe label-content-name-mismatch",
+    "detail": "Elements must have their visible text as part of their accessible name: .brand"
+  },
+  {
     "key": "game@390 breadcrumb",
-    "detail": "reads \"Lantern Run\", should read \"Home › Projects › Lantern Run › Game\""
+    "detail": "reads \"no breadcrumb\", should read \"Home › Projects › Lantern Run › Game\""
+  },
+  {
+    "key": "game@390 loading",
+    "detail": "nothing showed it was loading while /api/models, /api/auto, /api/work, /api/runs/2026-11-01T13-00-00-000Z/events were held"
   },
   {
     "key": "overview@1440 axe aria-required-children",
-    "detail": "Certain ARIA roles must contain particular children: .pj-tabs, .pj-list"
+    "detail": "Certain ARIA roles must contain particular children: .pj-side[aria-label=\"Files\"] > .pj-tabs[role=\"tablist\"], .pj-list"
   },
   {
     "key": "overview@1440 axe label",
@@ -188,10 +200,6 @@
     "detail": "reads \"Projects › New game\", should read \"Home › Projects › New game › Plan\""
   },
   {
-    "key": "plan@1440 loading",
-    "detail": "nothing showed it was loading while /api/talk were held"
-  },
-  {
     "key": "plan@390 axe label",
     "detail": "Form elements must have labels: .dcolor"
   },
@@ -204,20 +212,16 @@
     "detail": "reads \"New game\", should read \"Home › Projects › New game › Plan\""
   },
   {
-    "key": "plan@390 loading",
-    "detail": "nothing showed it was loading while /api/talk were held"
-  },
-  {
     "key": "projects@1440 axe label",
     "detail": "Form elements must have labels: .dcolor"
   },
   {
     "key": "projects@1440 axe label-content-name-mismatch",
-    "detail": "Elements must have their visible text as part of their accessible name: .brand, .hm-logo, .hm-who, .hm-kind, div[data-id=\"s-mwenlqgqa8mz\"], div[data-id=\"2026-11-01T15-00-00-000Z\"] and 4 more"
+    "detail": "Elements must have their visible text as part of their accessible name: .brand, .hm-logo, .hm-who, .hm-kind, div[data-id=\"s-mwh3as3ks19w\"], div[data-id=\"2026-11-01T15-00-00-000Z\"] and 4 more"
   },
   {
     "key": "projects@1440 axe nested-interactive",
-    "detail": "Interactive controls must not be nested: div[data-id=\"s-mwenlqgqa8mz\"], div[data-id=\"2026-11-01T15-00-00-000Z\"], div[data-id=\"2026-11-01T14-00-00-000Z\"], div[data-id=\"2026-11-01T13-00-00-000Z\"], div[data-id=\"2026-11-01T12-00-00-000Z\"], div[data-id=\"2026-11-01T10-00-00-000Z\"]"
+    "detail": "Interactive controls must not be nested: div[data-id=\"s-mwh3as3ks19w\"], div[data-id=\"2026-11-01T15-00-00-000Z\"], div[data-id=\"2026-11-01T14-00-00-000Z\"], div[data-id=\"2026-11-01T13-00-00-000Z\"], div[data-id=\"2026-11-01T12-00-00-000Z\"], div[data-id=\"2026-11-01T10-00-00-000Z\"]"
   },
   {
     "key": "projects@1440 breadcrumb",
@@ -229,11 +233,11 @@
   },
   {
     "key": "projects@390 axe label-content-name-mismatch",
-    "detail": "Elements must have their visible text as part of their accessible name: .brand, div[data-id=\"s-mwenmtngu2t3\"], div[data-id=\"2026-11-01T15-00-00-000Z\"], div[data-id=\"2026-11-01T14-00-00-000Z\"], div[data-id=\"2026-11-01T13-00-00-000Z\"], div[data-id=\"2026-11-01T12-00-00-000Z\"] and 1 more"
+    "detail": "Elements must have their visible text as part of their accessible name: .brand, div[data-id=\"s-mwh3bibdfbg6\"], div[data-id=\"2026-11-01T15-00-00-000Z\"], div[data-id=\"2026-11-01T14-00-00-000Z\"], div[data-id=\"2026-11-01T13-00-00-000Z\"], div[data-id=\"2026-11-01T12-00-00-000Z\"] and 1 more"
   },
   {
     "key": "projects@390 axe nested-interactive",
-    "detail": "Interactive controls must not be nested: div[data-id=\"s-mwenmtngu2t3\"], div[data-id=\"2026-11-01T15-00-00-000Z\"], div[data-id=\"2026-11-01T14-00-00-000Z\"], div[data-id=\"2026-11-01T13-00-00-000Z\"], div[data-id=\"2026-11-01T12-00-00-000Z\"], div[data-id=\"2026-11-01T10-00-00-000Z\"]"
+    "detail": "Interactive controls must not be nested: div[data-id=\"s-mwh3bibdfbg6\"], div[data-id=\"2026-11-01T15-00-00-000Z\"], div[data-id=\"2026-11-01T14-00-00-000Z\"], div[data-id=\"2026-11-01T13-00-00-000Z\"], div[data-id=\"2026-11-01T12-00-00-000Z\"], div[data-id=\"2026-11-01T10-00-00-000Z\"]"
   },
   {
     "key": "projects@390 breadcrumb",
@@ -245,7 +249,7 @@
   },
   {
     "key": "studio@1440 axe label-content-name-mismatch",
-    "detail": "Elements must have their visible text as part of their accessible name: div[data-key=\"page:0\"], div[data-key=\"page:1\"], div[data-key=\"page:2\"]"
+    "detail": "Elements must have their visible text as part of their accessible name: div[aria-label=\"Brand\"], div[aria-label=\"References\"], div[aria-label=\"Assets\"], .pg.open[aria-label=\"Plan\"], div[aria-label=\"Lock\"]"
   },
   {
     "key": "studio@1440 breadcrumb",

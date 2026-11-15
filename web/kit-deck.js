@@ -18,19 +18,21 @@ const DECK_KIT_LAYOUTS = [['title', 'Title'], ['section', 'Section'], ['points',
 // a slide is drawn at 1920 × 1080 and shown at this size on the board
 const DECK_KIT_W = 240, DECK_KIT_K = DECK_KIT_W / 1920
 
+// The kit's cards are Plan board cards too (.ab.pcard, 210 x 118), so their rules say .ab.pcard.dk-* to take their own
+// size over that; the outline grows with its slides. They are filled as panels are (--deep; --surface is no token).
 function deckKitStyle() {
   if (document.getElementById('dk-style')) return
   const st = document.createElement('style')
   st.id = 'dk-style'
   st.textContent = `
-.dk-slide { width: ${DECK_KIT_W}px; padding: 0; background: none; border: 0; display: flex; flex-direction: column; gap: 6px; }
+.ab.pcard.dk-slide, .dk-slide { width: ${DECK_KIT_W}px; height: auto; padding: 0; background: none; border: 0; display: flex; flex-direction: column; justify-content: flex-start; gap: 6px; }
 .dk-shot { position: relative; width: ${DECK_KIT_W}px; height: ${DECK_KIT_W * 9 / 16}px; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); background: var(--surface-2); }
 .dk-shot iframe { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; border: 0; transform: scale(${DECK_KIT_K}); transform-origin: 0 0; pointer-events: none; }
 .dk-slide em { font: 500 12px var(--body); font-style: normal; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dk-outline { width: 320px; min-height: 120px; padding: 14px 16px; background: var(--surface); }
+.ab.pcard.dk-outline, .dk-outline { width: 320px; height: auto; min-height: 120px; padding: 14px 16px; display: block; overflow: hidden; background: var(--deep); }
 .dk-outline ol { margin: 0; padding-left: 22px; font: 13px/1.7 var(--body); color: var(--text); }
 .dk-outline li.key { font-weight: 600; }
-.dk-card { width: 190px; min-height: 96px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; background: var(--surface); }
+.ab.pcard.dk-card, .dk-card { width: 190px; height: auto; min-height: 96px; padding: 12px 14px; display: flex; flex-direction: column; justify-content: flex-start; gap: 6px; background: var(--deep); }
 .dk-card b { font: 600 15px var(--body); color: var(--text); }
 .dk-card span { font: 13px var(--body); color: var(--muted); }
 .dk-look.on .dk-shot { outline: 2px solid var(--accent); outline-offset: 2px; }

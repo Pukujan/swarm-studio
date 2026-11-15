@@ -76,6 +76,8 @@ body.cosmos-studio .crew-layer, body.cosmos-studio .cbox { display: none; }
 .lk-row { margin: 0; display: grid; grid-template-columns: 56px 1fr; gap: 8px; font: 13px/1.45 var(--body); color: var(--text); }
 .lk-row b { font-weight: 500; color: var(--muted); }
 .lk-state, .lk-from { margin: 0; font: 13px var(--body); color: var(--muted); }
+/* under a document: what the crew read in it (issue #543); the same line as /next/'s (ui/src/screens/studio/importer.css) */
+.ab.sc-thumb > .sc-found { position: absolute; left: 0; top: calc(100% + 24px); width: 100%; font: 400 12px/1.35 var(--body); color: var(--muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 .lk-from a { color: var(--text); }
 
 /* the inspector's actions */

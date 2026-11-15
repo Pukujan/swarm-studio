@@ -13,6 +13,7 @@ import { setAuto } from './deck.js'
 import { navOf, followPlayer } from './player.js'
 import { review } from './marks.js'
 import { shownRun } from './film.js'
+import { revealLabel } from '../reveal.js'
 
 // ---------- files: every saved run is a file with its own canvas
 // `viewing` is null while following the live stream, or the id of a saved run
@@ -171,7 +172,7 @@ export function fileInfo(f) {
       ${row('Video', f.video ? `video/promo.mp4${f.videoSeconds ? ` · ${Math.round(f.videoSeconds)}s` : ''}` : '')}
       ${row('ID', `<code>${esc(f.id)}</code>`)}
     </dl>
-    <div class="fi-foot"><button class="fi-reveal">Show in Finder</button><button class="fi-save">Save</button></div>
+    <div class="fi-foot"><button class="fi-reveal">${revealLabel()}</button><button class="fi-save">Save</button></div>
   </div>`
   document.body.append(wrap)
   const $q = c => wrap.querySelector(c)
@@ -229,6 +230,8 @@ export async function openRun(id) {
     if (S.kind === 'game') setView('app')
     else if (stop) stoppedMsg(stop)
     else if (!events.some(e => e.type === 'layer:done' && e.html)) botMsg('This file was saved before Swarm Studio kept finished sections, so only its plan is shown.')
+    // an App room the address named (a reload, Back, a link) was entered before its build was here: it reads the app now
+    if (S.kind !== 'game' && view === 'app') setView('app')
   }
   setAuto(true)
   // a player the address names (a reload, Back) opens once its build is here

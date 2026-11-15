@@ -3,8 +3,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { indexRows, pickRow, library } from '../engine/library.mjs'
+import { join, resolve } from 'node:path'
+import { indexRows, pickRow, library, RAW, RIZZ_SHA, rizzDir, safeRel, inside } from '../engine/library.mjs'
 
 const row = (pack, category, subcategory, subject, description = '') => ({ path: `assets/${pack}/${category}/${subcategory}/${subject}.png`, category, subcategory, subject, style_pack: pack, tags: [category, subject, pack], description })
 const rows = [
@@ -65,4 +65,42 @@ test('the catalog is fetched once and each picture is kept locally', async () =>
 test('a library that cannot be reached gives nothing, without throwing', async () => {
   const lib = library({ dataDir: mkdtempSync(join(tmpdir(), 'lib-')), fetchImpl: async () => ({ ok: false, status: 503 }) })
   assert.equal(await lib.pick(icon('Spring boots'), 'anime-cel'), null)
+})
+
+// The catalog is remote data: it may never choose where a file is written (catalog review of e8ae13c4)
+const HOSTILE = [
+  '../escape.png', 'assets/../../escape.png', 'assets/cel_shaded_anime/icons/../../../../escape.png',
+  '/etc/escape.png', 'C:/escape.png', 'C:\\escape.png', 'assets\\..\\..\\escape.png', '\\\\host\\share\\escape.png',
+  'assets//icons/escape.png', 'assets/./escape.png', 'assets/icons/', '', 'assets/icons/esc\u0000ape.png'
+]
+
+test('everything is fetched from one pinned commit, never a branch', () => {
+  assert.match(RIZZ_SHA, /^[0-9a-f]{40}$/)
+  assert.equal(RAW, `https://raw.githubusercontent.com/mojomast/assetrizz/${RIZZ_SHA}/`)
+  assert.ok(rizzDir('/data').includes(RIZZ_SHA.slice(0, 12)), 'its files are kept in a folder of their own')
+})
+
+test('a catalog path is kept only when it stays inside the library folder', () => {
+  assert.equal(safeRel('assets/cel_shaded_anime/icons/misc/spring_boots.png'), true)
+  for (const p of HOSTILE) assert.equal(safeRel(p), false, JSON.stringify(p))
+  for (const p of [null, undefined, 42, { path: 'a' }]) assert.equal(safeRel(p), false)
+  const dir = mkdtempSync(join(tmpdir(), 'lib-'))
+  assert.equal(inside(dir, 'assets/a.png'), resolve(dir, 'assets/a.png'))
+  for (const p of HOSTILE) assert.equal(inside(dir, p), null, JSON.stringify(p))
+})
+
+test('a hostile catalog is never fetched from or written outside the library folder', async () => {
+  const base = mkdtempSync(join(tmpdir(), 'lib-')), dataDir = join(base, 'data')
+  const evil = HOSTILE.map(p => ({ ...row('cel_shaded_anime', 'icons', 'misc', 'spring_boots'), path: p }))
+  const got = []
+  const fetchImpl = async url => {
+    got.push(url)
+    if (url.endsWith('manifest.jsonl')) return { ok: true, text: async () => evil.map(r => JSON.stringify(r)).join('\n') }
+    return { ok: true, arrayBuffer: async () => new TextEncoder().encode('png').buffer }
+  }
+  assert.equal(indexRows(evil).length, 0, 'no hostile row is indexed')
+  const lib = library({ dataDir, fetchImpl })
+  assert.equal(await lib.pick(icon('Spring boots'), 'anime-cel'), null)
+  assert.deepEqual(got.filter(u => !u.endsWith('manifest.jsonl')), [], 'no picture is fetched')
+  assert.ok(!existsSync(join(base, 'escape.png')) && !existsSync(join(dataDir, 'escape.png')))
 })

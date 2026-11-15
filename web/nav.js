@@ -218,7 +218,8 @@ export function fromAddress(search = '') {
   /** @type {NavEvent[]} */
   const events = [{ type: 'home' }, { type: 'open.project', project: get('project'), version }]
   const room = q.get('room')
-  if (room === 'game') events.push({ type: 'room', room, run: get('version') ? get('run') : null })
+  // a game's own version is its game run: ?version=<game>&room=game opens it (a game made from a site names both)
+  if (room === 'game') events.push({ type: 'room', room, run: get('run') || version })
   else if (room && room !== 'overview') events.push({ type: 'room', room })
   const play = q.get('play')
   if (play === 'prototype') events.push({ type: 'play', page: get('page') })

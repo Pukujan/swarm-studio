@@ -3,7 +3,7 @@
 // wall a source of their own, so a mock-up needs no server. (The Design deck's source, screens/deck/source.ts, reads
 // the same stream; the two can share one once the deck's open slices have landed.)
 import { createContext } from 'react'
-import type { AppMap, AppState, RunEvent } from './model'
+import type { AppMap, AppState, RunEvent, AppVersion } from './model'
 
 export interface AppSource {
   state(run: string): Promise<AppState>
@@ -18,7 +18,12 @@ export interface AppSource {
   open?(run: string): Promise<AppState>
   // a question to the crew, or to one of them about the window they are on; their answer
   tell?(run: string, text: string, who?: string, on?: string): Promise<{ answer?: string }>
+  // one more change to the app (web/canvas/rooms.js appAsk): the words, and the design's finished sections it is made from
+  change?(run: string, ask: string, sections: { key: string, html: string }[]): Promise<AppState>
   stream?(on: (e: RunEvent) => void): () => void
+  // the app's versions, and back to one as one more version (issue #542)
+  versions?(run: string): Promise<{ versions: AppVersion[] }>
+  back?(run: string, rev: string): Promise<AppState & { versions?: AppVersion[] }>
 }
 
 const token = () => window.SWARM?.token ?? ''
@@ -45,6 +50,9 @@ export const serverAppSource: AppSource = {
   seen: run => post(`${base(run)}/app/seen`).then(() => {}),
   open: run => post(`${base(run)}/app/open`),
   tell: (run, text, who, on) => post(`${base(run)}/app/tell`, { text, ...(who ? { who, on } : {}) }),
+  versions: run => get(`${base(run)}/app/versions`),
+  back: (run, rev) => post(`${base(run)}/app/back`, { rev }),
+  change: (run, ask, sections) => post(`${base(run)}/app`, { ask, sections }),
   stream(on) {
     const es = new EventSource(`/events?k=${encodeURIComponent(token())}`)
     es.onmessage = m => { try { on(JSON.parse(m.data) as RunEvent) } catch { /* a keep-alive or a torn line */ } }

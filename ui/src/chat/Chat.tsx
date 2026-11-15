@@ -159,7 +159,7 @@ export function Chat(props: ChatProps) {
           <Chats api={api} project={project} from={from} current={talk.on ? talk.chat : null} onOpen={id => { setTab('chat'); void talk.openChat(id) }} onNew={() => { setTab('chat'); talk.newChat(); box.current?.focus() }} />
         </div>
         <TabPanel id="chat" className="flex min-h-0 flex-1 flex-col outline-none">
-          <Feed lines={feed} acts={acts} label="Messages" empty={talk.on ? undefined : EMPTY} onHover={setHover} />
+          <Feed lines={feed} acts={acts} label="Messages" empty={talk.on ? undefined : props.box?.empty ?? EMPTY} onHover={setHover} />
           <form className="composer relative flex flex-col gap-1.5 px-2 pb-2" onSubmit={e => { e.preventDefault(); send() }}>
             {chips.length > 0 && (
               <div className="flex flex-wrap gap-1.5" onMouseLeave={() => setHot(null)}>
@@ -184,7 +184,7 @@ export function Chat(props: ChatProps) {
                 ))}
               </div>
             )}
-            <TextArea ref={box} aria-label="Message" rows={2} autoComplete="off" value={text} placeholder={talk.on ? 'Tell Hermia…' : 'Describe a product'}
+            <TextArea ref={box} aria-label="Message" rows={2} autoComplete="off" value={text} placeholder={talk.on ? 'Tell Hermia…' : props.box?.placeholder ?? 'Describe a product'}
               aria-controls={matches.length ? 'chat-slash' : undefined} aria-activedescendant={matches.length ? `chat-slash-${matches[at]?.name}` : undefined}
               onChange={e => { setText(e.target.value); setSlashAt(0); setSlashOff(false) }}
               onBlur={() => setTimeout(() => setSlashOff(true), 150)}
@@ -208,7 +208,7 @@ export function Chat(props: ChatProps) {
               <ChipSelect name="Agents" options={agentList.map(n => ({ id: String(n), label: `${n} agents` }))} value={agents} onChange={setAgents} className="flex-none" />
               <ChipSelect name="Build model" options={model.options} value={model.value} className="min-w-0 max-w-56 shrink"
                 onChange={id => { if (id === OTHER) onMoreModels?.(); else void model.pick(id) }} />
-              <Button type="submit" role="primary" className="flex-none">{talk.on ? 'Send' : 'Build'}</Button>
+              <Button type="submit" role="primary" className="flex-none">{talk.on ? 'Send' : props.box?.action ?? 'Build'}</Button>
             </div>
           </form>
         </TabPanel>

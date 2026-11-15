@@ -53,6 +53,12 @@ is the screen, the width, the check and, for axe, the rule. Its detail says what
 
 - **A new violation fails the run.** Fix it. If the owner accepts it, run the update below.
 - **A known violation that no longer happens** is printed as `fixed:` and the run passes. Delete its entry.
+- **The BDD scenarios read the same lists** (`tools/dev/bdd/kit.mjs`): a scenario's gate check excuses a problem whose
+  key is listed here. The two can measure different things: the audit's `loading` passes when anything on the screen
+  shows it is busy (Hermia's reply skeleton in the chat counts), while a scenario may ask for one surface's own
+  skeleton (the Plan section's three waiting cards). So before deleting a `fixed:` entry, run
+  `npm run --prefix tools/dev bdd` too; if a scenario fails without it, the surface is still missing its loading
+  state, and the fix is that state, not the entry.
 - **Update the list** after a fix or an accepted change. Run the whole suite, not a part:
 
   ```

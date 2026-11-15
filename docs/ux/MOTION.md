@@ -37,6 +37,7 @@ run of the replay: the pictures differed because the pages themselves were in di
 - **Real-clock work is waited for.** Taking a resting page's picture runs on the real clock, not the page's. The
   check now waits for it before it moves the clock again (`window.swarm.photographing`), as it already waits for
   requests and fonts, so a page becomes a picture at the same step in every run. `motion-parity` waits the same way.
+- **The scroll reveal is logged by its class change.** `engine/motion.mjs` adds `m-t`, then `m-in` two frames later, and the transition between them is real-clock work: whether the browser drew a frame between the two, and whether the transition was still running when its start was heard, made a heading's reveal (`frame ~opacity h1.m-t`) seen in one recording and not the next (play, "ran before, not after" and the other way, on pull requests that did not touch it). The recording now leaves the reveal's own transitions out and logs one line per revealed element when it gets `m-in`: `reveal 750ms h1`, its duration and its tag and classes. Eight recordings of the Play scene read the same.
 - **The rest step.** Past its time a scene's clock runs on, 500 ms at a time, while the deck's camera is still
   gliding (`.world.moving`) or the picture is not yet the one of the step before, for at most 5 s more
   (`REST_MS`). The picture kept is the first one at rest. A scene that has not come to rest by then says so in the

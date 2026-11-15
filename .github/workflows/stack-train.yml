@@ -19,6 +19,10 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+# a new push to a pull request stops the run of the push before it; a push to main is never stopped
+concurrency:
+  group: stack-train-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   manifest:
     runs-on: ubuntu-latest

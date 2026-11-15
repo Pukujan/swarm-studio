@@ -40,9 +40,11 @@ export function refRoutes({ refs, head = () => null, comment = null, walk = null
     const m = url.pathname.match(/^\/api\/projects\/([\w-]{1,64})\/refs(?:\/(link)|\/(r[0-9a-z]{4,16})\/(remove|restore|use|look|match|fix))?$/)
     if (!m) return false
     const [, pid, link, id, op] = m
-    const out = ref => ({ ref, refs: refs.list(pid) })
-    const brought = r => (read && r.source === 'import' ? read(pid, r) || r : r)
-    if (req.method === 'GET' && !link && !id) { json(res, 200, { refs: refs.list(pid) }); return true }
+    const out = ref => ({ ref, refs: refs.shown(pid) })
+    // what a reference says is read when it was brought to the first step, and when it is a file given anywhere
+    // (a PDF, a text or Markdown file): its words reach the crew's brief (issue #543)
+    const brought = r => (read && (r.source === 'import' || r.kind === 'file') ? read(pid, r) || r : r)
+    if (req.method === 'GET' && !link && !id) { json(res, 200, { refs: refs.shown(pid) }); return true }
     if (req.method !== 'POST') { json(res, 405, { error: 'GET or POST' }); return true }
     if (!link && !id) {
       body(req, 60e6).then(buf => json(res, 200, out(brought(refs.addFile(pid, { name: url.searchParams.get('name'), use: url.searchParams.get('use'), source: url.searchParams.get('source') || 'upload' }, buf))))).catch(err => fail(res, err))
@@ -75,7 +77,7 @@ export function refRoutes({ refs, head = () => null, comment = null, walk = null
         return json(res, 200, { ...out(refs.list(pid).find(x => x.id === id)), sent: true })
       }
       const use = String(input.use || '').trim()
-      if (!use) throw Object.assign(new Error('say which part it is for'), { status: 400 })
+      if (!use && input.send) throw Object.assign(new Error('say which part it is for'), { status: 400 })
       const r = refs.setUse(pid, id, use)
       let sent = false
       if (input.send && comment) {

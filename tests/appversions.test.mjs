@@ -6,7 +6,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
-import { appJobs, appVersions } from '../engine/appjob.mjs'
+import { appJobs, appVersions, screenOf } from '../engine/appjob.mjs'
 
 test('versions: the first build, then each change by what was asked, newest first; an older app by its commits', () => {
   const events = [
@@ -52,5 +52,41 @@ test('back: the app\'s files as that version had them, as one more commit; the n
     assert.equal(readFileSync(join(dir, 'src', 'Tasks.tsx'), 'utf8'), '<h1>Today</h1>\n')
     assert.ok(existsSync(join(dir, 'src', 'Settings.tsx')))
     await assert.rejects(a.back(RUN, 'deadbeef'), /no such version/)
+  } finally { rmSync(runsDir, { recursive: true, force: true }) }
+})
+
+test('screenOf: the route of the page a change touched, read from the app\'s router', () => {
+  const routes = '<Routes>\n  <Route path="/" element={<SignIn />} />\n  <Route path="/tasks" element={<Tasks user={u} />} />\n  <Route element={<Settings />} path="/settings" />\n  <Route path="*" element={<NotFound />} />\n</Routes>'
+  // a page before a component it uses, whatever order the files came in
+  assert.equal(screenOf(routes, ['src/components/TaskRow.tsx', 'src/pages/Tasks.tsx']), '/tasks')
+  assert.equal(screenOf(routes, ['src\\pages\\Settings.tsx']), '/settings')
+  // nothing routed: the app's own first screen
+  assert.equal(screenOf(routes, ['src/index.css']), null)
+  assert.equal(screenOf('', ['src/pages/Tasks.tsx']), null)
+})
+
+test('a version names the files its change touched (never the build stamp), its screen and its own photo', () => {
+  const runsDir = mkdtempSync(join(tmpdir(), 'swarm-changed-'))
+  const RUN = '2026-11-14T12-00-00-000Z', dir = join(runsDir, RUN, 'app')
+  const g = (...a) => execFileSync('git', ['-c', 'core.autocrlf=false', ...a], { cwd: dir, encoding: 'utf8' }).trim()
+  const commit = msg => { g('add', '-A'); g('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', msg); return g('rev-parse', 'HEAD') }
+  try {
+    mkdirSync(join(dir, 'src', 'pages'), { recursive: true })
+    g('init', '-q')
+    writeFileSync(join(dir, 'src', 'App.tsx'), '<Route path="/tasks" element={<Tasks />} />')
+    writeFileSync(join(dir, 'src', 'pages', 'Tasks.tsx'), '<h1>My tasks</h1>')
+    const first = commit('first')
+    writeFileSync(join(dir, 'src', 'pages', 'Tasks.tsx'), '<h1>Today</h1>')
+    writeFileSync(join(dir, '.swarm-built.json'), '{"sig":"y"}')
+    const second = commit('change')
+    mkdirSync(join(runsDir, RUN, 'img'), { recursive: true })
+    writeFileSync(join(runsDir, RUN, 'img', `app-${second.slice(0, 7)}.jpg`), 'x')
+    const events = [{ type: 'app:start', t: 1, fresh: true }, { type: 'app:done', t: 2, rev: first }, { type: 'app:start', t: 3, ask: 'Call it Today' }, { type: 'app:done', t: 4, rev: second }]
+    const a = appJobs({ runsDir, record() {}, broadcast() {}, readEvents: () => events, provider: () => ({}), modelFor: () => '', sweepEvery: 1e9 })
+    const [now, was] = a.versions(RUN).versions
+    assert.deepEqual(now.changed, ['src/pages/Tasks.tsx'])
+    assert.equal(now.screen, '/tasks')
+    assert.match(now.photo, new RegExp(`^/img/${RUN}/app-${second.slice(0, 7)}\\.jpg\\?v=`))
+    assert.deepEqual([was.changed, was.photo], [[], null])
   } finally { rmSync(runsDir, { recursive: true, force: true }) }
 })
