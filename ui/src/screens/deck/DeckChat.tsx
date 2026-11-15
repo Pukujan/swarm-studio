@@ -6,7 +6,7 @@
 //                                     person wants to build now or talk first (engine/talkplan.mjs)
 //   no build                          a new build
 // A talk (the Chat's own) ends in a brief; its Build starts the build here. A new build takes the deck over.
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { routeMessage } from '@studio/route'
 import { Chat, type BuildRoute, type ChatCommand, type ChatGo, type ChatLine, type ChatTalk } from '../../chat'
 import { useNav } from '../../nav/NavProvider'
@@ -68,6 +68,13 @@ export function DeckChat({ model, picked, onCommand }: {
     if (r?.ok && j?.project?.id) return go({ type: 'studio', project: j.project.id, step: start })
     note('err', j?.error || 'The Studio did not open. Say it again.')
   }, [build, go])
+
+  // a build that stopped for a reason before any page was planned (the model failed, Hermes was gone): its own
+  // words come back as the brief, so Build starts it again, once per build (#541). Hermia's line says why.
+  useEffect(() => {
+    if (!run || model.state !== 'stopped' || !model.stopped || model.planned || !model.brief) return
+    setTalk(t => (t?.id === `again:${run}` ? t : { id: `again:${run}`, kind: 'site', brief: model.brief }))
+  }, [run, model.state, model.stopped, model.planned, model.brief])
 
   const comment = async (text: string, body: { target?: string | null, targets?: string[] }) => {
     const r = await post(`/api/runs/${encodeURIComponent(run!)}/comment`, { text, sections: doneSections(model).map(s => ({ ...s, role: model.layers[s.key]?.role })), ...body }).catch(() => null)

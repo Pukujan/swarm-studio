@@ -49,6 +49,9 @@ export async function studio({ quiet = true, noHermes = false, root = ROOT, setu
   const data = mkdtempSync(join(tmpdir(), 'swarm-walk-'))
   const runs = join(data, 'runs')
   mkdirSync(runs)
+  // the suites address the classic Studio at / and the next UI at /next/ (decision 0024 makes / the next UI by
+  // default; this throwaway Studio keeps the classic one there, as a person who chose it would)
+  writeFileSync(join(data, 'ui.json'), JSON.stringify({ ui: 'classic' }))
   const ids = { site: rid(0), site2: rid(1), app: rid(2), game: rid(3), film: rid(4), mid: rid(5), old: rid(6) }
   site(runs, ids.site, { brief: 'Alpha Tea, a tea subscription for night-shift workers', name: 'Alpha Tea', t: T0, pages: [['home', 'Alpha Tea'], ['plans', 'Plans'], ['about', 'About']] })
   site(runs, ids.site2, { brief: 'Alpha Tea, a tea subscription for night-shift workers, with gift boxes', name: 'Alpha Tea', t: T0 + 3600e3, pages: [['home', 'Alpha Tea'], ['plans', 'Plans'], ['gifts', 'Gift boxes']] })

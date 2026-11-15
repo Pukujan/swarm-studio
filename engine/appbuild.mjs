@@ -8,7 +8,7 @@
 
 import { spawn, execFileSync, appEnv } from './proc.mjs'
 import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, readdirSync, statSync, watch } from 'node:fs'
-import { join, dirname, relative, delimiter } from 'node:path'
+import { join, dirname, relative, delimiter, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
 
@@ -275,10 +275,11 @@ export function appFiles(dir) {
   const out = []
   const walk = d => {
     for (const n of readdirSync(d)) {
-      if (/^(node_modules|\.git|dist|\.engine|\.output|\.nitro|\.dyad|\.vercel)$/.test(n) || n === 'pnpm-lock.yaml') continue
+      // Swarm's own build stamp (engine/appjob.mjs serveBuilt) is not the app's
+      if (/^(node_modules|\.git|dist|\.engine|\.output|\.nitro|\.dyad|\.vercel)$/.test(n) || n === 'pnpm-lock.yaml' || n === '.swarm-built.json') continue
       const f = join(d, n), st = statSync(f)
       if (st.isDirectory()) walk(f)
-      else if (/\.(tsx?|jsx?|css|json|md|html|ya?ml)$/.test(n) && st.size < 200000) out.push({ path: relative(dir, f), size: st.size })
+      else if (/\.(tsx?|jsx?|css|json|md|html|ya?ml)$/.test(n) && st.size < 200000) out.push({ path: relative(dir, f).split(sep).join('/'), size: st.size })
     }
   }
   if (existsSync(dir)) walk(dir)
