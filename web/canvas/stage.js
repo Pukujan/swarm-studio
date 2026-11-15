@@ -50,9 +50,12 @@ export function stageOffers(b) {
 /**
  * What the stage shows when nobody chose: the crew while it builds, else the live app (or its "Starting"
  * skeleton while its server comes up), else a game's art sheet, else the room's card (start, stopped, failed).
+ * A change to an app that works keeps the app on the stage while it runs (issue #542: a one-word change turned
+ * the room into the game's wall and the app was gone until it ended); the wall is on the switch.
  * @param {StageBuild} b  @returns {StageView | 'card'}
  */
 export function stageAuto(b) {
+  if (b.working && b.kind !== 'game' && b.hasApp && liveOk(b)) return 'live'
   return b.working ? 'crew' : liveOk(b) || (canOpen(b) && b.opening) ? 'live' : sheetFirst(b) ? 'art' : 'card'
 }
 

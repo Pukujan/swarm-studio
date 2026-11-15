@@ -682,6 +682,10 @@ body.cosmos .ah-feed { padding-bottom: 56px; }
 .app-steps .ask { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin-bottom: 4px; color: var(--text); }
 .app-main { position: relative; min-width: 0; min-height: 0; display: flex; }
 .app-stagearea { flex: 1; display: flex; justify-content: center; align-items: stretch; padding: 14px; background: var(--void); min-width: 0; position: relative; }
+/* a change running over the app (issue #542): the app stays, this says what is changing */
+.app-changing { position: absolute; left: 50%; top: 22px; transform: translateX(-50%); z-index: 4; max-width: min(640px, calc(100% - 48px)); padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--text); font-size: 12px; box-shadow: 0 4px 14px rgb(var(--shade-rgb) / .25); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-changing::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--text); vertical-align: 1px; animation: pulse 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .app-changing::before { animation: none; } }
 .app-shell { width: 100%; max-width: 100%; transition: width .3s ease; display: flex; }
 .app-shell.dev { border-radius: 22px; border: 8px solid var(--line-2); overflow: hidden; }
 .app-shell iframe { flex: 1; border: 0; background: var(--text); border-radius: 6px; }

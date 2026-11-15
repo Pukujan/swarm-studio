@@ -11,6 +11,8 @@ import { Icon } from '../primitives/Icon'
 import { MenuAt, MenuRow, MenuSeparator, Submenu } from '../primitives/Menu'
 import { useToast } from '../primitives/Toast'
 import { useNav } from '../nav/NavProvider'
+import { classicHref, openClassic } from '../shell/classic'
+import { useSheets } from './setup/Sheets'
 import { api, post, raw, said, useStored } from './projects/api'
 import { MakeBox } from './projects/MakeBox'
 import {
@@ -54,6 +56,7 @@ function None({ icon, line, make, onMake }: { icon: string, line: string, make?:
 export function Projects() {
   const { go } = useNav()
   const toast = useToast()
+  const sheets = useSheets()
   const [view, setView] = useStored<View>('home.view', 'recent')
   const [folder, setFolder] = useStored<string | null>('home.folder', null)
   const [sort, setSort] = useStored<Sort>('home.sort', 'edited')
@@ -416,6 +419,8 @@ export function Projects() {
               if (key === 'theme') { const t = light ? 'dark' : 'light'; document.documentElement.dataset.theme = t; try { localStorage.setItem('swarm-theme', t) } catch { /* this page */ } }
               // the crew's voices and sounds (web/chatter.js): the same keys as the current Studio's switch
               if (key === 'sound') { const on = crew !== 'on'; try { localStorage.setItem('swarm.crew', on ? 'on' : 'muted'); localStorage.setItem('swarm.chatter', JSON.stringify({ ...JSON.parse(localStorage.getItem('swarm.chatter') || '{}'), on })) } catch { /* this page */ } }
+              if (key === 'setup' || key === 'settings') sheets.open(key)
+              if (key === 'classic') void openClassic()
               return
             }
             if (menu.k === 'version') {
@@ -474,10 +479,14 @@ export function Projects() {
             <MenuRow key="t" id="theme" icon={light ? 'moon' : 'sun'} label={light ? 'Dark' : 'Light'} />,
             <MenuRow key="s" id="sound" icon="sound" label="Crew sound" on={crew === 'on'} />,
             <MenuSeparator key="-" />,
-            // Models, Setup and Settings are sheets of the current Studio, which have not moved: they open there
-            <MenuRow key="m" id="models" icon="sliders" label="Models" href="/" />,
-            <MenuRow key="u" id="setup" icon="check" label="Setup" href="/" />,
-            <MenuRow key="c" id="settings" icon="link" label="Settings" href="/" />
+            // Models is a sheet of the classic Studio, which has not moved: it opens there. Setup and Settings are this
+            // app's sheets (screens/setup)
+            <MenuRow key="m" id="models" icon="sliders" label="Models" href={classicHref()} />,
+            <MenuRow key="u" id="setup" icon="check" label="Setup" />,
+            <MenuRow key="c" id="settings" icon="link" label="Settings" />,
+            <MenuSeparator key="--" />,
+            // the classic Studio stays one click away (decision 0024)
+            <MenuRow key="k" id="classic" icon="chl" label="Use the classic Studio" />
           ]}
         </MenuAt>
       )}

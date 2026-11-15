@@ -368,6 +368,13 @@ function renderApp() {
   // a build that failed before it ever worked shows the failure, not the empty starter's blank page
   // what fills the stage: it follows the build, or holds the view pinned in the bar's switch (web/canvas/stage.js)
   const now = stageOf(), empty = now.empty, sheet = now.sheet && !!shownRun()
+  // a change running over the app on the stage: what is asked, and where the crew is (issue #542)
+  const changing = /** @type {HTMLElement | null} */ ($('#app-changing'))
+  if (changing) {
+    const on = working && now.shown === 'live' && appv.kind !== 'game'
+    changing.hidden = !on
+    if (on) setText(changing, `Changing: ${appv.steps.findLast(s => s.kind === 'ask')?.text || 'the app'}${appv.stage && appv.stage !== 'starting' ? ` · ${appv.stage}` : ''}`)
+  }
   stageSwitch($('#app-stageview'), now, v => stageSet(stagePick(stagePin.v, v)))
   if (shownRun() && appv.run === shownRun()) mapLoad(shownRun(), false)
   mapStage(now.shown === 'map')

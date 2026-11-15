@@ -1,5 +1,5 @@
 {
-  "why": "None: list here the animation kinds a change means to gain or lose (docs/ux/MOTION.md, \"A change that changes the motion\").",
-  "gained": [],
+  "why": "The App room opens with its chat open (issue #542, one box: the chat is where a change to the app is asked for), so the App scene now shows the chat's lines fading in as they come, as they do in every room where the chat is open.",
+  "gained": ["page @in 0.3s 1 div.item<#feed"],
   "lost": []
 }

@@ -96,10 +96,13 @@ export function studioRoutes({ studios, assets, refs, projects, chats, builtOf =
     const building = input.building === true
     if (studio.kind !== 'site') return { ...whole(pid), ask: { read: false, set: {}, text: '', next: null, build: building, building: false } }
     const said = typeof input.said === 'string' ? input.said.trim().slice(0, 2000) : ''
+    // Setup already asked about pictures (its Pictures row; a pick, else what it recommends): that counts as said
+    // until the Studio's own Pictures card says otherwise, so the walk never asks it again (#541)
+    const setupPictures = await Promise.resolve(picturesDefault()).catch(() => 'painted')
     const out = studioTurn({
-      said, asked: input.asked, state: studio.kit || {}, building,
+      said, asked: input.asked, state: { pictures: setupPictures, ...(studio.kit || {}) }, building,
       planSkipped: studio.steps?.plan === 'skipped', built: !!builtOf(pid), look: !!brand?.lockedAt,
-      defaults: { pictures: await Promise.resolve(picturesDefault()).catch(() => 'painted') }
+      defaults: { pictures: setupPictures }
     })
     if (out.read && Object.keys(out.set).length) studios.kit(pid, out.set)
     // the answer and the planner's line stay in the Studio's chat, so they are there when it is opened again

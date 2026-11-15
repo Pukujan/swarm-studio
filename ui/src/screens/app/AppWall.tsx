@@ -3,6 +3,7 @@
 // app:* event for this build reads its state again (a local call), a file written is read again. While it shows,
 // it tells the server a viewer is here every 30 s, so the app is not stopped under them (decision 0017).
 // A game's App room has not moved: it stays the stand-in.
+import { classicHref } from '../../shell/classic'
 import { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { search } from '../../nav/address'
 import { useNav } from '../../nav/NavProvider'
@@ -80,12 +81,14 @@ export function AppWall() {
     source.open?.(run).then(app => setModel(m => (m ? { ...m, app } : m))).catch(() => {})
   }, [run, source])
 
-  // a game's App room has not moved: its name and the way to the current Studio, at this address (as NotMovedYet,
-  // which this cannot import: it reads the screens' list, which lists this)
-  if (model?.app?.kind === 'game') return (
+  // a game's App room has not moved: it opens in the classic Studio at this address (decision 0024), with its name
+  // and the way there while it goes (as NotMovedYet, which this cannot import: it reads the screens' list, which lists this)
+  const game = model?.app?.kind === 'game'
+  useEffect(() => { if (game) location.replace(classicHref(search(view, location.search))) }, [game, view])
+  if (game) return (
     <section className="grid min-h-[60dvh] place-content-center justify-items-center gap-6 p-6 text-center">
       <h1 className="font-display text-5xl font-extrabold uppercase">Game room</h1>
-      <LinkButton role="primary" href={`/${search(view, location.search)}`}>Open in the Studio</LinkButton>
+      <LinkButton role="primary" href={classicHref(search(view, location.search))}>Open in the Studio</LinkButton>
     </section>
   )
   if (!model) return <section aria-label="App build" aria-busy="true" className="grid flex-1 grid-cols-2 grid-rows-2 gap-[10px] p-3">{WINDOWS.map(w => <div key={w} className="rounded-[12px] border border-edge bg-deep" />)}</section>

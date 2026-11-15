@@ -467,17 +467,37 @@ export function pictureSize(file) {
 const RASTER = /\.(jpe?g|png|webp|avif|gif)$/i
 const shareable = file => RASTER.test(file) && (s => !s || (s[0] >= 400 && s[1] >= 250))(pictureSize(file))
 
-// a headless Chrome for the page shot: SWARM_CHROME, a Playwright headless shell already
-// downloaded, installed Chrome or Chromium; null when there is none
+// a headless Chrome for the page shot, the site walk, a deck's PDF and the story cards: SWARM_CHROME, a
+// Playwright headless shell already downloaded, then an installed Chrome, Edge or Chromium; null when there is
+// none. Every path is checked to exist (a Windows path has no "/", and was once taken for a command name), and
+// Windows has its own places: Playwright's cache in %LOCALAPPDATA%, Chrome and Edge under Program Files.
+// For tests: env, platform, home, exists and onPath (a bare command found on PATH) are passed in.
 let chromeAt
-export function findChrome() {
-  if (chromeAt !== undefined) return chromeAt
-  const list = [process.env.SWARM_CHROME]
-  const cache = process.env.PLAYWRIGHT_BROWSERS_PATH || join(homedir(), process.platform === 'darwin' ? 'Library/Caches/ms-playwright' : '.cache/ms-playwright')
-  try { for (const d of readdirSync(cache).filter(d => /^chromium_headless_shell-\d+$/.test(d)).sort().reverse()) for (const sub of readdirSync(join(cache, d))) list.push(join(cache, d, sub, 'chrome-headless-shell')) } catch {}
-  list.push('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Chromium.app/Contents/MacOS/Chromium')
-  for (const n of ['google-chrome', 'chromium', 'chromium-browser']) if (has(n)) list.push(n)
-  return (chromeAt = list.find(f => f && (!f.includes('/') || existsSync(f))) || null)
+export const CHROME_MISSING = 'No Chrome or Edge on this computer to open it with. Install Chrome, or set SWARM_CHROME to it.'
+export function chromeCandidates({ env = process.env, platform = process.platform, home = homedir(), list: ls = d => readdirSync(d) } = {}) {
+  const win = platform === 'win32'
+  const out = [env.SWARM_CHROME]
+  const cache = env.PLAYWRIGHT_BROWSERS_PATH || (win ? join(env.LOCALAPPDATA || join(home, 'AppData', 'Local'), 'ms-playwright') : join(home, platform === 'darwin' ? 'Library/Caches/ms-playwright' : '.cache/ms-playwright'))
+  try { for (const d of ls(cache).filter(d => /^chromium_headless_shell-\d+$/.test(d)).sort().reverse()) for (const sub of ls(join(cache, d))) out.push(join(cache, d, sub, win ? 'chrome-headless-shell.exe' : 'chrome-headless-shell')) } catch {}
+  if (win) {
+    const roots = [env.PROGRAMFILES || env.ProgramFiles || 'C:\\Program Files', env['PROGRAMFILES(X86)'] || env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', env.LOCALAPPDATA]
+    for (const r of roots.filter(Boolean)) out.push(join(r, 'Google', 'Chrome', 'Application', 'chrome.exe'))
+    for (const r of roots.filter(Boolean)) out.push(join(r, 'Microsoft', 'Edge', 'Application', 'msedge.exe'))
+  } else if (platform === 'darwin') {
+    out.push('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/Applications/Chromium.app/Contents/MacOS/Chromium')
+  } else {
+    out.push('google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'microsoft-edge')
+  }
+  return out.filter(Boolean)
+}
+// a bare name ("google-chrome") is a command found on PATH; anything with a folder in it must exist as a file
+const isPath = f => /[/\\]/.test(f)
+export function findChrome(opts) {
+  if (!opts && chromeAt !== undefined) return chromeAt
+  const exists = opts?.exists || existsSync, onPath = opts?.onPath || has
+  const found = chromeCandidates(opts).find(f => (isPath(f) ? exists(f) : onPath(f))) || null
+  if (!opts) chromeAt = found
+  return found
 }
 
 // The top of the page as a share picture, for a site with no picture at all. The shot is cut
