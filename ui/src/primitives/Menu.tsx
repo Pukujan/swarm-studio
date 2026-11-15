@@ -4,7 +4,7 @@
 // MenuAt is the same menu opened by something other than its own button (Make's submit, a right-click at a point);
 // MenuRow is an item with its icon, a ✓ when it is the current one, and red for a step that removes something.
 import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
-import { Menu as AriaMenu, MenuItem as AriaMenuItem, MenuTrigger, Popover, Separator, SubmenuTrigger, type MenuItemProps, type MenuProps } from 'react-aria-components'
+import { Menu as AriaMenu, MenuItem as AriaMenuItem, MenuTrigger, Popover, Separator, SubmenuTrigger, type Key, type MenuItemProps, type MenuProps } from 'react-aria-components'
 import { Button, type Role } from './Button'
 import { Icon } from './Icon'
 
@@ -57,13 +57,14 @@ export function MenuRow({ icon, label, on, red, more, ...props }: Omit<MenuItemP
 
 export const MenuSeparator = () => <Separator className="my-1 border-t border-edge" />
 
-// an item that opens a list of its own beside it (Move to › the folders)
-export function Submenu({ icon, label, name, children }: { icon: string, label: string, name: string, children: ReactNode }) {
+// an item that opens a list of its own beside it (Move to › the folders). Its rows answer `onAction`: the root
+// menu's onAction never hears a row in a submenu
+export function Submenu({ icon, label, name, onAction, children }: { icon: string, label: string, name: string, onAction?: (key: Key) => void, children: ReactNode }) {
   return (
     <SubmenuTrigger>
       <MenuRow id={`sub:${label}`} icon={icon} label={label} more />
       <Popover offset={-4} className={POPOVER}>
-        <AriaMenu aria-label={name} className="outline-none">{children}</AriaMenu>
+        <AriaMenu aria-label={name} onAction={onAction} className="outline-none">{children}</AriaMenu>
       </Popover>
     </SubmenuTrigger>
   )

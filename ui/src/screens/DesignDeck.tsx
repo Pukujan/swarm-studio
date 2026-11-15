@@ -1,8 +1,9 @@
 // The Design deck (docs/ux/OBJECTS.md; the current one is web/canvas/): the crew watched at work on a build's pages,
 // in Figma's layout (PATTERNS.md). The open version comes from the machine (`view.run`, room `deck`); its events
-// are folded into the model the canvas and the panels draw. Slice 1 of the port (#404): the frame, the pages, the
-// crew's cursors, Pages and Layers, the toolbar, and the variables. The chat, editing, marks, Play and Publish
-// follow, and until then the current Studio has them at the same address.
+// are folded into the model the canvas and the panels draw: the pages, the crew's cursors, Pages and Layers, the
+// toolbar (the person's Move, Text and Comment), the variables, a picked section's Design tab (Open Design's Edit),
+// comments, the chat, Play and Watch a visitor, Replay, Publish and Post to Feed, and Export (#404).
+// scripts/deck-walk.mjs uses each of them end to end.
 import { classicHref } from '../shell/classic'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, LinkButton } from '../primitives/Button'
@@ -16,7 +17,8 @@ import { DesignTab } from './deck/DesignTab'
 import { useEdits } from './deck/edit'
 import { DeckBoard } from './deck/DeckBoard'
 import { boardMode, type BoardMode } from '../board/flag'
-import { LeftPanel, RightPanel, StatusPill, Toolbar } from './deck/DeckPanels'
+import { LeftPanel, RightPanel, StatusPill, Toolbar, type MyTool } from './deck/DeckPanels'
+import { swEdit } from '@studio/edit'
 import { ExportDialog } from './deck/ExportDialog'
 import { Player } from './deck/Player'
 import { PublishDialog } from './deck/PublishDialog'
@@ -43,7 +45,36 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
   const [sel, setSel] = useState<Picked | null>(null)
   const [part, setPart] = useState<string | null>(null)
   const edits = useEdits(model.run, model.layers)
-  const select = useCallback((p: Picked | null) => { setSel(p); setPart(null); if (p) setFollow(false) }, [])
+  // the person's tool (the toolbar's Move, Text, Comment): Text and Comment act on the picked section, or wait for
+  // the next one clicked, then hand back to Move (web/canvas/marks.js)
+  const [tool, setTool] = useState<MyTool>('move')
+  const [askComment, setAskComment] = useState(0)
+  const layersNow = useRef(model.layers)
+  layersNow.current = model.layers
+  const act = useCallback((t: MyTool, p: Picked | null): boolean => {
+    const l = p ? layersNow.current[p.key] : undefined
+    if (t === 'move' || !l || l.status !== 'done') return false
+    if (t === 'comment') { setAskComment(n => n + 1); return true }
+    const words = swEdit.tree(l.text, 60).find(r => swEdit.read(l.text, r.id)?.wordsEditable)
+    if (!words) return false
+    setPart(words.id)
+    // its Words field, once the Design tab shows the part
+    setTimeout(() => document.querySelector<HTMLElement>('section[aria-label="Design"] input')?.focus(), 50)
+    return true
+  }, [])
+  const toolNow = useRef(tool)
+  toolNow.current = tool
+  const select = useCallback((p: Picked | null) => {
+    setSel(p); setPart(null); setAskComment(0)
+    if (p) setFollow(false)
+    if (p && act(toolNow.current, p)) setTool('move')
+  }, [act])
+  const selNow = useRef(sel)
+  selNow.current = sel
+  const pressTool = useCallback((t: MyTool) => {
+    if (t !== 'move' && act(t, selNow.current)) { setTool('move'); return }
+    setTool(was => (was === t ? 'move' : t))
+  }, [act])
   useEffect(() => { select(null) }, [model.run, select])
   // Esc lets go of the part, then the section, before the frame's Esc (which goes up a level); ⌘Z and ⇧⌘Z undo
   // and redo, never inside a field
@@ -51,12 +82,16 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
     const key = (e: KeyboardEvent) => {
       if (e.defaultPrevented || view.player !== 'closed') return
       const field = e.target instanceof Element && !!e.target.closest('input, textarea, select, [contenteditable], [role="dialog"]')
+      if (e.key === 'Escape' && tool !== 'move' && !field) { e.preventDefault(); setTool('move'); return }
       if (e.key === 'Escape' && sel && !field) { e.preventDefault(); if (part) setPart(null); else select(null) }
+      // V, T and C press the person's tools (web/canvas/loop.js)
+      const k = e.key.toLowerCase()
+      if (!field && !e.metaKey && !e.ctrlKey && !e.altKey && (k === 'v' || k === 't' || k === 'c')) { e.preventDefault(); pressTool(k === 'v' ? 'move' : k === 't' ? 'text' : 'comment') }
       if (e.key.toLowerCase() === 'z' && (e.metaKey || e.ctrlKey) && !field) { e.preventDefault(); if (e.shiftKey) edits.redo(); else edits.undo() }
     }
     addEventListener('keydown', key, true)
     return () => removeEventListener('keydown', key, true)
-  }, [sel, part, select, edits, view.player])
+  }, [sel, part, select, edits, view.player, tool, pressTool])
   const pickedLayer = sel ? model.layers[sel.key] : undefined
   useEffect(() => { setPicked(null); setFollow(true) }, [model.run, view.replay])
   const working = model.state === 'planning' || model.state === 'building'
@@ -105,10 +140,11 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
               </div>
             : board === 'dom'
               ? <DeckStage ref={stage} model={model} onZoom={setZoom} follow={follow && working} onFollow={setFollow} selected={sel} onSelect={select}
-                pickExtra={sel && model.run ? <CommentPin model={model} target={sel.key} /> : null} />
+                pickExtra={sel && model.run ? <CommentPin model={model} target={sel.key} ask={askComment} /> : null} />
               // the image-first board, behind ?board=tiers until the gauge says (src/board/flag.ts); a picked section's page is live
-              : <DeckBoard ref={stage} model={model} mode={board} onZoom={setZoom} follow={follow && working} onFollow={setFollow} selected={sel?.page ?? picked ?? null} />}
-        {!loading && model.state !== 'empty' && <Toolbar model={model} />}
+              : <DeckBoard ref={stage} model={model} mode={board} onZoom={setZoom} follow={follow && working} onFollow={setFollow} selected={sel?.page ?? picked ?? null}
+                picked={sel} onSelect={select} pickExtra={sel && model.run ? <CommentPin model={model} target={sel.key} ask={askComment} /> : null} />}
+        {!loading && model.state !== 'empty' && <Toolbar model={model} tool={tool} onTool={pressTool} />}
       </div>
       <RightPanel model={model} zoom={zoom} onFit={() => stage.current?.fit()} canPlay={canPlay} onPlay={play} replay={replay}
         onPublish={() => setDialog('publish')} onExport={() => setDialog('export')} history={edits}
