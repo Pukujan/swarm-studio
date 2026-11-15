@@ -51,6 +51,8 @@ const focusedFrame = page => page.evaluate(() => {
     const r = frame && frame.getBoundingClientRect()
     return r && r.width > 0 ? [{ n: Number(n[1]) - 1, c: (r.left + r.right) / 2 }] : []
   })
+  // the next UI's deck draws no labels: every page is a live frame there
+  if (!pages.length) document.querySelectorAll('iframe').forEach((f, n) => { const r = f.getBoundingClientRect(); if (r.width > 0) pages.push({ n, c: (r.left + r.right) / 2 }) })
   pages.sort((x, y) => Math.abs(x.c - mid) - Math.abs(y.c - mid))
   return { index: pages[0]?.n ?? null, frames: pages.length }
 })
