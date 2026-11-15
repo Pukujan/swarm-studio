@@ -13,10 +13,13 @@
 import { publicUrl } from './chatmedia.mjs'
 import { walkGuard } from './walkguard.mjs'
 import { puppeteer, settle } from './pageshots.mjs'
-import { findChrome } from './seo.mjs'
+import { findChrome, CHROME_MISSING } from './seo.mjs'
 import { chromePath } from './footage.mjs'
 import { browserEnv } from './proc.mjs'
 import { scrubber } from './reference.mjs'
+
+// the walk drives the browser with the film tools' puppeteer-core (engine/footage.mjs), installed with the first film
+export const TOOLS_MISSING = 'Reading a site needs the film tools, which install with your first film. Make one, then Look again.'
 
 export const WALK = { pages: 3, shots: 3, view: { width: 1280, height: 800, deviceScaleFactor: 1 }, quality: 68, timeout: 20000 }
 const clip = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
@@ -134,13 +137,19 @@ export async function walkSite(url, { dataDir, pages = WALK.pages, shots = WALK.
   const check = u => (allowed(u) ? new URL(u) : publicUrl(u, lookup ? { lookup } : {}))
   const start = await check(url)
   const pp = launch ? null : puppeteer(dataDir), chrome = launch ? 'given' : findChrome() || chromePath()
-  if (!launch && (!pp || !chrome)) return { url: start.href, host: hostOf(start.href), pages: [], tokens: null, motion: null, note: 'no browser here to open the site with' }
+  // what is missing, said plainly with its fix: the browser driver comes with the film tools (decision 0022)
+  if (!launch && !pp) return { url: start.href, host: hostOf(start.href), pages: [], tokens: null, motion: null, note: TOOLS_MISSING }
+  if (!launch && !chrome) return { url: start.href, host: hostOf(start.href), pages: [], tokens: null, motion: null, note: CHROME_MISSING }
   const guard = await walkGuard({ allow: allow.filter(p => /^https?:/.test(p)), ...(lookup ? { lookup } : {}), ...(dial ? { dial } : {}) })
   const out = { url: start.href, host: hostOf(start.href), pages: [], refused: guard.refused }
   let browser
   try {
     browser = launch ? await launch({ args: guard.args }) : await pp.launch({ executablePath: chrome, headless: true, env: browserEnv(), args: ['--hide-scrollbars', '--disable-gpu-sandbox', '--mute-audio', '--enable-unsafe-swiftshader', ...guard.args] })
-  } catch (err) { await guard.close(); throw err }
+  } catch (err) {
+    await guard.close()
+    // a browser that is not there or will not start: one plain line and its fix, never the launcher's own words
+    throw /not found|ENOENT|Failed to launch|spawn/i.test(String(err?.message)) ? new Error(CHROME_MISSING) : err
+  }
   step(`Opening ${out.host || 'the page'}`)
   try {
     const queue = urls ? urls.slice(0, pages) : [start.href], seen = new Set()

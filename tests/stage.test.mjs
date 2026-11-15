@@ -43,6 +43,17 @@ test('by itself the stage follows the build, as it did before the switch', () =>
   assert.equal(stageAuto({ state: 'done', kind: 'site', hasApp: true, url: null, opening: true }), 'live', 'starting the app: its skeleton')
 })
 
+test('a change to an app that works keeps the app on the stage; the wall is on the switch (issue #542)', () => {
+  const change = { working: true, state: 'working', kind: 'site', hasApp: true, url: 'http://localhost:5174/', steps: 3 }
+  assert.equal(stageAuto(change), 'live')
+  assert.ok(stageOffers(change).includes('crew'), 'the crew\'s windows are one press away')
+  assert.deepEqual(pick(stageNow(change, 'crew')), { shown: 'crew', empty: false, sheet: false })
+  // its server not up yet, a first build, or a game: the wall, as before
+  assert.equal(stageAuto({ ...change, url: null }), 'crew')
+  assert.equal(stageAuto(appBuild), 'crew')
+  assert.equal(stageAuto(gameLive), 'crew')
+})
+
 test('under the wall lies what lay there before: the live app, the sheet, or the card', () => {
   assert.deepEqual(pick(stageNow(appBuild)), { shown: 'crew', empty: true, sheet: false })
   assert.deepEqual(pick(stageNow(gameArt)), { shown: 'crew', empty: true, sheet: true })

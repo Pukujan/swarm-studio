@@ -6,6 +6,7 @@ import { useNav } from '../nav/NavProvider'
 import { CRUMB_NAMES, SCREEN_NAMES } from '../screens'
 import { useSheets } from '../screens/setup/Sheets'
 import { useCrumb } from './crumb'
+import { openClassic } from './classic'
 import { useTrailShown } from './Trail'
 
 // the same key the current Studio's ☰ → Light / Dark writes (web/index.html reads it before the first paint)
@@ -40,11 +41,13 @@ export function TopBar() {
       </nav>
       {action && <span className="ml-auto flex-none">{action}</span>}
       <span aria-label="Next Studio" className={`${action ? '' : 'ml-auto '}flex-none rounded-full border border-line-2 px-2 py-0.5 font-label text-xs font-semibold uppercase tracking-[.07em] text-muted max-[760px]:hidden`}>Next</span>
-      <Menu label="☰" name="Settings" onAction={key => (key === 'setup' || key === 'settings' ? sheets.open(key) : setTheme(key === 'light' ? 'light' : 'dark'))}>
+      <Menu label="☰" name="Settings" onAction={key => (key === 'classic' ? void openClassic() : key === 'setup' || key === 'settings' ? sheets.open(key) : setTheme(key === 'light' ? 'light' : 'dark'))}>
         <MenuItem id="setup">Setup{sheets.warn ? ' ⚠' : ''}</MenuItem>
         <MenuItem id="settings">Settings</MenuItem>
         <MenuItem id="light">Light</MenuItem>
         <MenuItem id="dark">Dark</MenuItem>
+        {/* the classic Studio stays one click away (decision 0024) */}
+        <MenuItem id="classic">Use the classic Studio</MenuItem>
       </Menu>
     </header>
   )

@@ -27,12 +27,14 @@ async function intoDeck({ page, studio, app }, index) {
   await settle(page)
   const keys = await page.locator('.ab.page[data-key], .ov-ab.page[data-key]').evaluateAll(els => els.map(e => e.getAttribute('data-key')))
   await artboard(page, keys[index]).dblclick({ position: { x: 20, y: 20 } })
-  // the deck's camera takes a moment to arrive: judged once the frame it centres on has not changed for a second
+  // the deck's camera takes a moment to arrive: judged once the frame it centres on has not changed for a second, and
+  // only once the deck has drawn the page that was opened (it draws its pages one by one: a still camera over the
+  // first page alone is not yet the deck it opens on)
   let last = '', same = 0
   for (let i = 0; i < 40 && same < 3; i++) {
     await page.waitForTimeout(400)
-    const now = JSON.stringify(await page.evaluate(() => [...document.querySelectorAll('iframe')].map(f => { const r = f.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.width)] })))
-    same = now === last ? same + 1 : 0
+    const now = JSON.stringify(await page.evaluate(() => [...document.querySelectorAll('iframe')].filter(f => f.getBoundingClientRect().width > 0).map(f => { const r = f.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.width)] })))
+    same = now === last && JSON.parse(now).length > index ? same + 1 : 0
     last = now
   }
   return keys
