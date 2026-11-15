@@ -150,36 +150,6 @@
     "why": "Layout: after the click Hermia rests beside where Publish was pressed (web/pet.js). / has Publish in its top bar; the next deck follows PATTERNS.md (\"The Design deck follows Figma\": Play and Share in the right panel's top row), so its Publish, and she, sit lower."
   },
   {
-    "key": "publish only in /: page @pop 200ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "drift",
-    "why": "Slice 5b (Publish, Share, Export) has landed (#441), so this is no longer work to come: /next/'s Publish should move as the current one does."
-  },
-  {
-    "key": "publish only in /: page ~background-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "drift",
-    "why": "Slice 5b (Publish, Share, Export) has landed (#441), so this is no longer work to come: /next/'s Publish should move as the current one does."
-  },
-  {
-    "key": "publish only in /: page ~border-bottom-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "drift",
-    "why": "Slice 5b (Publish, Share, Export) has landed (#441), so this is no longer work to come: /next/'s Publish should move as the current one does."
-  },
-  {
-    "key": "publish only in /: page ~border-left-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "drift",
-    "why": "Slice 5b (Publish, Share, Export) has landed (#441), so this is no longer work to come: /next/'s Publish should move as the current one does."
-  },
-  {
-    "key": "publish only in /: page ~border-right-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "drift",
-    "why": "Slice 5b (Publish, Share, Export) has landed (#441), so this is no longer work to come: /next/'s Publish should move as the current one does."
-  },
-  {
-    "key": "publish only in /: page ~border-top-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "drift",
-    "why": "Slice 5b (Publish, Share, Export) has landed (#441), so this is no longer work to come: /next/'s Publish should move as the current one does."
-  },
-  {
     "key": "publish only in /next/: page @in 300ms x1 ease-out",
     "label": "intended (decision 0015)",
     "why": "The chat docks open along the bottom of the deck (decision 0015, #458 and #472), so its lines show and arrive with the chat's fade; in the current Studio the deck's chat starts shut, so none show."
