@@ -33,18 +33,28 @@ async function intoDeck({ page, studio, app }, index) {
   let last = '', same = 0
   for (let i = 0; i < 40 && same < 3; i++) {
     await page.waitForTimeout(400)
-    const now = JSON.stringify(await page.evaluate(() => [...document.querySelectorAll('iframe')].filter(f => f.getBoundingClientRect().width > 0).map(f => { const r = f.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.width)] })))
-    same = now === last && JSON.parse(now).length > index ? same + 1 : 0
+    const now = JSON.stringify(await focusedFrame(page))
+    same = now === last && JSON.parse(now).index === index ? same + 1 : 0
     last = now
   }
   return keys
 }
+// which page the deck is centred on: each page is drawn after its "Page N · title" label, as a live frame or, for a page
+// that has a picture, as that picture (the deck keeps only the pages near the camera live), so the pages are found by
+// their labels and not by their frames
 const focusedFrame = page => page.evaluate(() => {
   const area = document.querySelector('#viewport, [role="region"][aria-label="Canvas"]')?.getBoundingClientRect()
   const mid = area ? (area.left + area.right) / 2 : innerWidth / 2
-  const frames = [...document.querySelectorAll('iframe')].map((f, i) => ({ i, r: f.getBoundingClientRect() })).filter(f => f.r.width > 0)
-  frames.sort((a, b) => Math.abs((a.r.left + a.r.right) / 2 - mid) - Math.abs((b.r.left + b.r.right) / 2 - mid))
-  return { index: frames[0]?.i ?? null, frames: frames.length }
+  const pages = [...document.querySelectorAll('.frame-label, [role="region"][aria-label="Canvas"] *')].flatMap(el => {
+    const n = /^Page (\d+) ·/.exec(el.textContent.trim())
+    const frame = n && /^(IFRAME|IMG|CANVAS)$/.test(el.nextElementSibling?.tagName) && el.nextElementSibling
+    const r = frame && frame.getBoundingClientRect()
+    return r && r.width > 0 ? [{ n: Number(n[1]) - 1, c: (r.left + r.right) / 2 }] : []
+  })
+  // the next UI's deck draws no labels: every page is a live frame there
+  if (!pages.length) document.querySelectorAll('iframe').forEach((f, n) => { const r = f.getBoundingClientRect(); if (r.width > 0) pages.push({ n, c: (r.left + r.right) / 2 }) })
+  pages.sort((x, y) => Math.abs(x.c - mid) - Math.abs(y.c - mid))
+  return { index: pages[0]?.n ?? null, frames: pages.length }
 })
 
 const BIND = {

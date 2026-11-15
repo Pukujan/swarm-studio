@@ -53,6 +53,8 @@ export interface DeckModel {
   lines: DeckLine[]
   // the pages the Critic is looking at now (review:start until review:done): their frames show the scan
   reviewing: string[]
+  // when the last review ended (review:done), so the reviewer's cursor can say its verdict and go
+  reviewEnd: number
   planned: number
   done: number
   failed: number
@@ -82,7 +84,7 @@ const FRESH_MS = 8000
 export const belongs = (page: string, l: DeckLayer) => l.page === '*' || l.page === page
 
 export function empty(run: string | null = null): DeckModel {
-  return { run, kind: 'site', title: '', state: 'empty', pages: [], layers: {}, order: [], agents: [], theme: null, publish: NO_PUBLISH, exported: null, threads: {}, issues: {}, lines: [], reviewing: [], planned: 0, done: 0, failed: 0, t0: 0, tEnd: 0, brief: '', stopped: null }
+  return { run, kind: 'site', title: '', state: 'empty', pages: [], layers: {}, order: [], agents: [], theme: null, publish: NO_PUBLISH, exported: null, threads: {}, issues: {}, lines: [], reviewing: [], reviewEnd: 0, planned: 0, done: 0, failed: 0, t0: 0, tEnd: 0, brief: '', stopped: null }
 }
 
 // What a stream is "doing" right now, read off its tail (web/canvas/deck.js detectTool).
@@ -331,6 +333,7 @@ function step(m: DeckModel, e: DeckEvent): DeckModel {
       if (!page) return m
       const n = draft(m)
       n.reviewing = e.type === 'review:start' ? [...new Set([...m.reviewing, page])] : m.reviewing.filter(p => p !== page)
+      if (e.type === 'review:done') n.reviewEnd = num(e.t)
       return n
     }
     case 'review:issue': {

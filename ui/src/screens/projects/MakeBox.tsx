@@ -70,8 +70,9 @@ export function MakeBox({ inputRef }: { inputRef: React.RefObject<HTMLInputEleme
     if (down) return
     store.set(`home.mode.${make.k}`, way.k)
     if (way.k === 'now') return setPop({ k: 'brief', text: words, back: null })
-    // a game's Studio is its Plan board, where its talk asks (spec 27)
-    if (make.k === 'game') return go({ type: 'plan' })
+    // a game's Studio is its Plan board, where its talk asks (spec 27). The talk is the classic Studio's for now
+    // (PlanBoard.tsx): it opens there with these words (web/gametalk.js, decision 0024)
+    if (make.k === 'game') return location.assign(`/classic/?game=${encodeURIComponent(words)}`)
     // Studio: a Studio project, opened on the step the kind starts with
     try {
       const j = await post<{ project: { id: string } }>('/api/studio', { kind: make.k, idea: words, mode: way.k, depth: store.get<string>('home.depth', 'light') === 'thorough' ? 'thorough' : 'light', steps: way.steps || KIT_STEPS[make.k] })
