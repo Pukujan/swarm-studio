@@ -4161,7 +4161,7 @@ const server = createServer((req, res) => {
     return
   }
 
-  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|map|stop|open|scripts|seen|deploy|tell|idle|ask))?$/)
+  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|map|versions|back|stop|open|scripts|seen|deploy|tell|idle|ask))?$/)
   if (runApp && RUN_ID.test(runApp[1])) {
     const [, id, sub] = runApp
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
@@ -4169,6 +4169,8 @@ const server = createServer((req, res) => {
     if (req.method === 'GET') {
       // map: the plan as diagrams for the app build wall (spec 44); null when the run kept no plan, which is not an error
       if (sub === 'map') return void apps().then(a => reply(200, a.map(id))).catch(fail)
+      // the app's versions: its first build and each change, with the one it is at (issue #542)
+      if (sub === 'versions') return void apps().then(a => reply(200, a.versions(id))).catch(fail)
       // the app's state carries its project's name, for the app build wall's breadcrumb (spec 44)
       apps().then(a => reply(200, sub === 'files' ? a.files(id, url.searchParams.get('path')) : { ...a.state(id), name: nameFor(id)?.name || null })).catch(fail)
       return
@@ -4185,6 +4187,8 @@ const server = createServer((req, res) => {
         if (sub === 'ask') return askApp(a, id, input.text, { chart: input.chart === true })
         if (sub === 'tell') return tellBuilder(a, id, input.text, { who: input.who, on: input.on, confirm: typeof input.confirm === 'string' ? input.confirm.slice(0, 1200) : '', now: input.now === true })
         if (sub === 'open') return a.open(id, input)
+        // back to one of the app's versions, as one more commit (issue #542)
+        if (sub === 'back') return a.back(id, typeof input.rev === 'string' ? input.rev.slice(0, 64) : '')
         // a brought-in project's install scripts: the person's own answer, typed in the chat (docs/specs/45-intake.md)
         if (sub === 'scripts') return a.scripts(id, input.allow === true)
         if (sub === 'seen') return a.seen(id)
