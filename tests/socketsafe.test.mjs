@@ -37,7 +37,8 @@ test('a socket the other side has reset takes "no type of service" without throw
     const [line] = await once(peer.stdout, 'data')
     const c = net.connect(Number(String(line).trim()), '127.0.0.1')
     c.on('error', () => {})
-    await once(c, 'connect')
+    // the reset can beat the connection's own event (a busy Mac): the socket is dead either way, which is the case
+    await new Promise(done => { c.once('connect', done); c.once('error', done) })
     // this process stands still while the reset arrives: the socket is dead and nothing here has heard so yet
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300)
     assert.doesNotThrow(() => c.setTypeOfService(0))
