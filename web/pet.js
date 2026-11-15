@@ -182,7 +182,7 @@ export function makePet({ sw, C, doc = document }) {
     px: -1, py: -1, movedAt: Date.now(), active: 0,
     card: '', raf: 0, settle: 0, doze: 0, dozing: false, dozedAt: 0,
     queue: /** @type {{ kind: string, data: PetData }[]} */ ([]), batch: 0, batchFirst: 0, sayTimer: 0,
-    phoned: false, room: '', loading: false, loadTimer: 0, loadSince: 0, building: false, buildAt: 0, briefed: '', step: '',
+    phoned: false, room: '', loading: false, loadTimer: 0, loadSince: 0, building: false, buildAt: 0, replay: false, briefed: '', step: '',
     // what she works on: the placeholders screens hand her (newest last), and the one she is at
     jobs: /** @type {Set<Element>} */ (new Set()), work: /** @type {Element | null} */ (null), workAt: '', scanT: 0
   }
@@ -428,9 +428,15 @@ export function makePet({ sw, C, doc = document }) {
   // the address: a new screen loads; a Studio step reached (or skipped)
   function onView(v) {
     if (!v) return
-    // a replay is a build from its first frame, however the address reached the machine (it can be read after she
-    // starts): she is away before its run:start arrives, as at start-up below
-    if (v.replay && !P.building) { P.building = true; P.buildAt = Date.now(); away() }
+    // a replay is a build from its first frame to its last: she is away the whole time the view plays one, and
+    // back when it stops (its own run:done, and the finished build the classic deck opens whole before it plays,
+    // are not the end of it)
+    if (!!v.replay !== P.replay) {
+      P.replay = !!v.replay
+      P.building = P.replay
+      P.buildAt = Date.now()
+      away()
+    }
     const room = v.room
     if (room !== P.room) {
       P.room = room
@@ -451,12 +457,13 @@ export function makePet({ sw, C, doc = document }) {
   C?.nav?.subscribe?.(onView)
   // an address that opens on a replay is a build from the start: she is away before she is first drawn, not
   // shown and faded out when its run:start arrives (a fade that ran or not by how fast the server answered)
-  if (C?.nav?.view?.replay) { P.building = true; P.buildAt = Date.now(); away() }
+  if (C?.nav?.view?.replay) { P.replay = P.building = true; P.buildAt = Date.now(); away() }
   // the canvas's events: a build starts (she hands over) and ends (she says so)
   sw?.on?.(e => {
     if (e.type === 'run:start') { P.building = true; P.buildAt = Date.now(); away() }
-    // (the stream's reset as it connects is not the end of a replay the view is playing: she stays away)
-    if (e.type === 'run:done' || e.type === 'run:stopped' || (e.type === 'reset' && !C?.nav?.view?.replay)) {
+    // (while the view plays a replay, the build's events are the replay's: its end is the view's)
+    if (P.replay) return
+    if (e.type === 'run:done' || e.type === 'run:stopped' || e.type === 'reset') {
       const was = P.building && Date.now() - P.buildAt > 5000
       P.building = false
       away()
