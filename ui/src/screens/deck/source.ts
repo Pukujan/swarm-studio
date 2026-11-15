@@ -15,6 +15,8 @@ export interface DeckSource {
 }
 
 const token = () => window.SWARM?.token ?? ''
+// the address the page was opened on, read before the machine writes its own
+const OPENED_ON = new URLSearchParams(typeof location === 'undefined' ? '' : location.search)
 
 export const serverSource: DeckSource = {
   async events(run) {
@@ -89,13 +91,19 @@ export function useDeckRun(run: string | null, replay = false, onReplayEnd?: () 
     return () => { live = false; stop?.(); if (frame) clearTimeout(frame); queue.current = [] }
   }, [run, source, replay])
 
+  // A replay the page was opened on (?replay=…, the Wall and the capture scripts) runs at its address's speed, 8 times
+  // real time unless it says; ☰ → Replay plays at the speed it happened (web/canvas/start.js, replay.js startReplay)
+  function replaySpeed(id: string): number {
+    return OPENED_ON.get('replay') === id ? Number(OPENED_ON.get('speed')) || 8 : 1
+  }
+
   // Replay: every event at its time, stamped now (the deck treats it as happening), on one timer at a time
   function play(id: string) {
     let live = true, timer = 0
     setLoad({ model: empty(id), loading: true, error: null })
     source.events(id).then(all => {
       if (!live) return
-      const events = withTyping(all.filter(e => e.type !== 'cmd')), at = schedule(events), start = performance.now()
+      const events = withTyping(all.filter(e => e.type !== 'cmd')), at = schedule(events, replaySpeed(id)), start = performance.now()
       let i = 0, m = empty(id)
       setLoad({ model: m, loading: false, error: null })
       const step = () => {

@@ -9,7 +9,7 @@
 // It is the board's host for its pages (src/board/host.ts): the tier manager's (src/board/tierHost.ts), so the
 // deck's PageFrame attaches and talks to its frame here as it does under slice 1's host, and live is asked for by
 // reason (an agent at work, the person's pick).
-import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
 import { createCamera, type Cam } from '../../board/camera'
 import type { BoardMode } from '../../board/flag'
 import { photoFor, usePhotos, SNAP_W } from '../../board/photos'
@@ -22,7 +22,7 @@ import { PixiBoard } from '../../board/PixiBoard'
 import { crew } from './crew'
 import { FRAME_W, GAP, PageFrame, frameX, type FrameGeo } from './PageFrame'
 import { layersOf, type DeckAgent, type DeckModel } from './model'
-import type { StageHandle } from './DeckStage'
+import type { Picked, StageHandle } from './DeckStage'
 
 
 const LABEL = 28
@@ -41,8 +41,12 @@ function target(m: DeckModel, geo: Record<string, FrameGeo>, a: DeckAgent): { x:
   return { x: x0 + g.last[0], y: y0 + g.last[1] - 6 }
 }
 
-export function DeckBoard({ ref, model, mode, onZoom, follow = false, onFollow, selected = null }: {
-  ref?: Ref<StageHandle>, model: DeckModel, mode: Exclude<BoardMode, 'dom'>, onZoom?: (k: number) => void, follow?: boolean, onFollow?: (on: boolean) => void, selected?: string | null
+// `picked`, `onSelect` and `pickExtra` as DeckStage's: a click picks the section under it (on a page that is still a
+// photo, once its frame is live and has said where its sections are), outlined, with `pickExtra` (the Comment pin)
+// at its top right
+export function DeckBoard({ ref, model, mode, onZoom, follow = false, onFollow, selected = null, picked = null, onSelect, pickExtra }: {
+  ref?: Ref<StageHandle>, model: DeckModel, mode: Exclude<BoardMode, 'dom'>, onZoom?: (k: number) => void, follow?: boolean, onFollow?: (on: boolean) => void, selected?: string | null,
+  picked?: Picked | null, onSelect?: (p: Picked | null) => void, pickExtra?: ReactNode
 }) {
   const stage = useRef<HTMLDivElement>(null)
   const world = useRef<HTMLDivElement>(null)
@@ -92,8 +96,10 @@ export function DeckBoard({ ref, model, mode, onZoom, follow = false, onFollow, 
   place.current = c => {
     const w = world.current
     if (w) { w.style.transform = `translate(${c.x}px, ${c.y}px) scale(${c.k})`; w.style.willChange = camera.moving() ? 'transform' : '' }
-    for (const el of cursors.current?.querySelectorAll<HTMLElement>('[data-tx]') ?? []) {
+    for (const el of stage.current?.querySelectorAll<HTMLElement>('[data-tx]') ?? []) {
       el.style.transform = `translate(${Math.round(c.x + Number(el.dataset.tx) * c.k)}px, ${Math.round(c.y + Number(el.dataset.ty) * c.k)}px)`
+      // the picked section's outline keeps its size in the world
+      if (el.dataset.tw) { el.style.width = `${Number(el.dataset.tw) * c.k}px`; el.style.height = `${Number(el.dataset.th) * c.k}px` }
     }
   }
   useEffect(() => camera.subscribe(c => place.current(c)), [camera])
@@ -135,7 +141,7 @@ export function DeckBoard({ ref, model, mode, onZoom, follow = false, onFollow, 
   stopFollow.current = () => { moved.current = true; if (follow) onFollow?.(false) }
   const down = (e: React.PointerEvent) => {
     // with the PixiJS layer, its viewport takes the pointer and the wheel
-    if (e.button !== 0 || mode === 'pixi') return
+    if (e.button !== 0 || mode === 'pixi' || (e.target instanceof Element && e.target.closest('[data-ui]'))) return
     const c = camera.get()
     drag.current = { x: e.clientX, y: e.clientY, cx: c.x, cy: c.y }
     stage.current?.setPointerCapture(e.pointerId)
@@ -149,7 +155,33 @@ export function DeckBoard({ ref, model, mode, onZoom, follow = false, onFollow, 
     setPanning(true)
     camera.set({ x: d.cx + dx, y: d.cy + dy })
   }
-  const up = () => { drag.current = null; setPanning(false) }
+  // a click (no drag) picks the section under it; the empty canvas clears the pick
+  const [aim, setAim] = useState<{ page: string, x: number, y: number } | null>(null)
+  const up = (e: React.PointerEvent) => {
+    const clicked = !!drag.current && !panning
+    drag.current = null
+    setPanning(false)
+    if (!clicked || e.type !== 'pointerup') return
+    const r = stage.current?.getBoundingClientRect(), c = camera.get()
+    if (!r) return
+    const wx = (e.clientX - r.left - c.x) / c.k, wy = (e.clientY - r.top - c.y) / c.k - LABEL
+    const page = model.pages.find(p => wx >= frameX(p) && wx <= frameX(p) + FRAME_W)
+    if (!page || wy < 0) { setAim(null); onSelect?.(null); return }
+    setAim({ page: page.id, x: wx - frameX(page), y: wy })
+  }
+  // the aimed-at page goes live (a photo knows no sections); once its frame says where they are, the pick is made
+  useEffect(() => {
+    if (!aim) return
+    host.requestLive(aim.page, 'selected')
+    return () => host.releaseLive(aim.page, 'selected')
+  }, [host, aim])
+  useEffect(() => {
+    const g = aim && geo[aim.page]
+    if (!aim || !g) return
+    const key = Object.entries(g.slots).find(([, s]) => aim.x >= s.box[0] && aim.x <= s.box[0] + s.box[2] && aim.y >= s.box[1] && aim.y <= s.box[1] + s.box[3])?.[0]
+    setAim(null)
+    onSelect?.(key && model.layers[key] ? { key, page: aim.page } : null)
+  }, [aim, geo, model.layers, onSelect])
   useEffect(() => {
     const s = stage.current
     if (!s || mode === 'pixi') return
@@ -197,6 +229,17 @@ export function DeckBoard({ ref, model, mode, onZoom, follow = false, onFollow, 
   })
   const pageLayers = useMemo(() => Object.fromEntries(model.pages.map(p => [p.id, layersOf(model, p.id)])), [model])
   const working = model.agents.filter(a => a.layer)
+  // the picked section's box in the world, from its page's frame (live while picked)
+  const pickBox = (() => {
+    const g = picked && geo[picked.page]?.slots[picked.key]
+    const page = picked && model.pages.find(p => p.id === picked.page)
+    if (!g || !page) return null
+    const [x, y, w, h] = g.box
+    return { x: frameX(page) + x, y: LABEL + y, w, h }
+  })()
+  // placed at once when it appears or moves; the camera moves it after that
+  const pickAt = pickBox ? `${pickBox.x},${pickBox.y},${pickBox.w},${pickBox.h}` : ''
+  useLayoutEffect(() => { if (pickAt) place.current(camera.get()) }, [pickAt, camera])
 
   return (
     <BoardHostContext value={host}>
@@ -229,6 +272,12 @@ export function DeckBoard({ ref, model, mode, onZoom, follow = false, onFollow, 
           )
         })}
       </div>
+      {pickBox && (
+        <div className="pointer-events-none absolute inset-0">
+          <div data-picked data-tx={pickBox.x} data-ty={pickBox.y} data-tw={pickBox.w} data-th={pickBox.h} className="absolute top-0 left-0 border-[1.5px] border-text" />
+          {pickExtra && <div data-ui data-tx={pickBox.x + pickBox.w} data-ty={pickBox.y} className="absolute top-0 left-0"><div className="flex w-80 -translate-x-full justify-end p-2">{pickExtra}</div></div>}
+        </div>
+      )}
       <div ref={cursors} aria-hidden className="pointer-events-none absolute inset-0">
         {working.map(a => {
           const t = target(model, geo, a)

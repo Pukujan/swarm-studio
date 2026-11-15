@@ -11,6 +11,7 @@
 // else its plan; the chat is the current Studio's (the Dock says how).
 import { useCallback, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 import { search } from '../nav/address'
+import { classicHref } from '../shell/classic'
 import { useNav } from '../nav/NavProvider'
 import { MenuAt, MenuRow, MenuSeparator } from '../primitives/Menu'
 import { ToastProvider, useToast } from '../primitives/Toast'
@@ -59,7 +60,8 @@ function OverviewScreen() {
   const find = useCallback((key: string | null) => findItem(groups, key), [groups])
   const x = find(sel)
   const name = projectName(o.project, o.board)
-  const studioAt = `/${search(view, location.search)}`
+  // the crew's chat is the classic Studio's for now (decision 0024: `/` is the next UI, the classic one is /classic/)
+  const studioAt = classicHref(search(view, location.search))
 
   // ---------- the breadcrumb: Projects › name ▾
   const rename = useCallback((title: string) => { if (o.pid) post('/api/projects', { op: 'rename', ids: [o.pid], title }).then(() => o.reload()).catch(err => toast(said(err))) }, [o, toast])
