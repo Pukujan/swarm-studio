@@ -128,11 +128,24 @@ echo "· hosted studio starts"
 hport=${CHECK_HOSTED_PORT:-4392}
 SWARM_DATA_DIR=$tmp/hosted PORT=$hport HOSTED_BASE=/studio/app node server/hosted.mjs > $tmp/hosted.log 2>&1 &
 hpid=$!
+# the Hub's own origin, encoded, as it arrives in an "Equip and play" link
+hubq='https%3A%2F%2Fsign-in-to-ares-app.vercel.app'
 trap 'kill $pid $hpid 2>/dev/null || true; rm -rf "$tmp"' EXIT
 for i in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:$hport/healthz && break; sleep 0.5; done
 curl -sf http://127.0.0.1:$hport/healthz > "$tmp/reply" || { cat "$tmp/hosted.log"; echo 'hosted /healthz did not answer'; exit 1; }; has '"ok":true'
 curl -sf http://127.0.0.1:$hport/ > "$tmp/reply"; has '<title>Swarm Studio'; has '"hosted"'
 curl -sf http://127.0.0.1:$hport/studio/app/api/intake > "$tmp/reply"; has '"showcases"'
+# the ARES demo game left this repo (Pukujan/ares): every old /ares/ address, the Hub's "Equip and play" link
+# first of all, goes to where the game is with its query (?hub, ?player, ?loadout) kept, never a dead 404
+linked=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "http://127.0.0.1:$hport/studio/app/ares/web/?hub=$hubq&player=player_88057539&loadout=abc")
+case "$linked" in
+  302\ https://pukujan.github.io/ares/web/\?hub=*) ;;
+  *) echo "the hosted studio did not send the old ARES address to the game ($linked)"; exit 1 ;;
+esac
+case "$linked" in *player=player_88057539*loadout=abc*) ;; *) echo "the ARES redirect dropped the link's query ($linked)"; exit 1 ;; esac
+for old in /studio/app/ares/ /studio/app/ares/web/; do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$hport$old")" = 302 ] || { echo "the hosted studio 404s $old"; exit 1; }
+done
 # bring a project in (docs/specs/45-intake.md) reads a folder and fetches a repository: never on the hosted studio
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"folder":"/tmp","kind":"game"}' http://127.0.0.1:$hport/api/intake)" = 403 ] || { echo 'the hosted studio took an intake'; exit 1; }
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"repo":"a/b","kind":"game"}' http://127.0.0.1:$hport/studio/app/api/intake)" = 403 ] || { echo 'the hosted studio took an intake'; exit 1; }

@@ -32,6 +32,9 @@ const dataDir = process.env.SWARM_DATA_DIR || join(root, 'hosted-data')
 const runsDir = process.env.SWARM_RUNS_DIR || join(dataDir, 'runs')
 const port = Number(process.env.PORT || 8080)
 const bindHost = process.env.HOST || '127.0.0.1'
+// Where the ARES demo game is played now: its own repo's GitHub Pages build (Pukujan/ares). Games left this repo
+// on 2026-11-16, so the hosted studio carries none of it; the old /ares/ addresses here point at this.
+const ARES_PLAY = (process.env.HOSTED_ARES_URL || 'https://pukujan.github.io/ares/web/').replace(/\/?$/, '/')
 const BASE = (process.env.HOSTED_BASE ?? '/studio/app').replace(/\/$/, '')
 const PUBLIC = (process.env.HOSTED_PUBLIC_URL || 'https://swarm.design-bakery.com').replace(/\/$/, '')
 const num = (name, d) => { const v = Number(process.env[name]); return Number.isFinite(v) && v >= 0 ? v : d }
@@ -308,6 +311,14 @@ const server = createServer(async (req, res) => {
   // The ARES demo game used to be served here from games/ares/web (#211). ARES moved to its own repo
   // (Pukujan/ares, 2026-11-16) so that everyone installing this plugin stops downloading 164 MB of one
   // demo game: the demo lives with the game now, at https://pukujan.github.io/ares/web/.
+  // The old addresses still sit in links people kept -- a Hub's "Equip and play" is one -- so they answer with
+  // where the game went rather than "not found". The whole query comes along: ?hub, ?player and ?loadout are
+  // what dress the heroine, and the game's files sit at the root of its new home, exactly where they sat here.
+  if (path === '/ares' || path.startsWith('/ares/')) {
+    if (req.method === 'GET' || req.method === 'HEAD') return res.writeHead(302, { location: ARES_PLAY + url.search, 'cache-control': 'no-store' }).end()
+    res.writeHead(404, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+    return res.end(`<!doctype html><meta charset=utf-8><title>ARES</title><p>The ARES demo game moved with its own repo: play it at <a href="${ARES_PLAY}">${ARES_PLAY}</a>.</p>`)
+  }
 
   const ip = ipOf(req)
   const isApi = path === '/events' || path.startsWith('/api/')
