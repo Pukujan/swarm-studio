@@ -2090,7 +2090,12 @@ body.view-video .video-pop .vmin { display: none; }
 .tabs .chats-btn { display: inline-flex; align-items: center; gap: 4px; }
 .tabs .chats-btn .ico { width: 13px; height: 13px; }
 body.side-min .tabs .chats-btn { display: none; }
-.chats-pop { width: 280px; padding: 6px; }
+/* The list scrolls on its own and keeps "New chat" in reach: a build with a long history pushed the rows
+   past the panel with no way to reach them (the person, 2026-11-16: "along with overflow scroll"). */
+.chats-pop { width: 280px; padding: 6px; display: flex; flex-direction: column; max-height: min(70vh, 460px); }
+.chats-pop .cp-group, .chats-pop .cp-new { flex: none; }
+.chats-pop-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.chats-pop .cp-new { margin-top: 4px; border-top: 1px solid var(--ui-border); border-radius: 0 0 8px 8px; }
 .chats-pop .cp-group h4 { margin: 8px 8px 4px; font: 600 11px/1 var(--ui-head); letter-spacing: .12em; text-transform: uppercase; color: var(--ui-muted-foreground); }
 .chats-pop .cp-group.empty { display: none; }
 .chats-pop.dragging .cp-group.empty { display: block; min-height: 34px; border: 1px dashed var(--ui-border); border-radius: 8px; margin: 4px 0; }
@@ -2184,18 +2189,43 @@ body.side-min .tabs .chats-btn { display: none; }
 .cw-map .cw-path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cw-map .mp-tabs { display: flex; gap: 2px; }
 .cw-map .mp-tabs[hidden] { display: none; }
-.cw-map .mp-tabs button, .cw-map .mp-zoom, .cw-map .mp-reset { border: 0; background: none; color: var(--muted); font: 600 11px/1.6 var(--mono); padding: 1px 8px; border-radius: 99px; cursor: pointer; }
+.cw-map .mp-tabs button, .cw-map .mp-zoom { border: 0; background: none; color: var(--muted); font: 600 11px/1.6 var(--mono); padding: 1px 8px; border-radius: 99px; cursor: pointer; }
 .cw-map .mp-tabs button.on { background: var(--text); color: var(--void); }
 .cw-map .mp-zoom { display: grid; place-items: center; padding: 3px; }
-/* Recentre appears only after the diagram has been moved or zoomed (rule 22: the way back is only needed then) */
-.cw-map .mp-reset { padding: 1px 8px; }
-.cw-map .mp-reset[hidden] { display: none; }
 .cw-map .mp-zoom[hidden] { display: none; }
 .cw-map .mp-zoom .ico { width: 14px; height: 14px; }
-.cw-map .mp-tabs button:hover, .cw-map .mp-zoom:hover, .cw-map .mp-reset:hover { color: var(--text); }
+.cw-map .mp-tabs button:hover, .cw-map .mp-zoom:hover { color: var(--text); }
 .cw-map .mp-tabs button.on:hover { color: var(--void); }
-.cw-map .mp-tabs button:focus-visible, .cw-map .mp-zoom:focus-visible, .cw-map .mp-reset:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
-.cw-map .mp-body { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; padding: 12px; overflow: auto; cursor: zoom-in; }
+.cw-map .mp-tabs button:focus-visible, .cw-map .mp-zoom:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+/* The Zoom control, on the diagram's own bottom edge where the hand already is: minus, a slider, plus and
+   Fit. Quiet until the pointer is over the Map, so it never competes with the diagram (rule 20). */
+.cw-map .mp-zoomctl {
+  position: absolute; right: 10px; bottom: 10px; z-index: 2; display: flex; align-items: center; gap: 2px;
+  padding: 3px 8px; border-radius: 99px; border: 1px solid var(--panel-edge); background: var(--glass);
+  backdrop-filter: blur(14px); box-shadow: 0 4px 16px rgb(var(--shade-rgb) / .35);
+  opacity: .8; transition: opacity .18s;
+}
+.cw-map:hover .mp-zoomctl, .cw-map .mp-zoomctl:focus-within, .cw-map .mp-zoomctl:hover { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .cw-map .mp-zoomctl { transition: none; } }
+.cw-map .mp-zoomctl button {
+  display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%;
+  background: none; color: var(--text); cursor: pointer; font: 600 15px/1 var(--mono);
+}
+.cw-map .mp-zoomctl button:hover:not(:disabled) { background: rgb(var(--glass-rgb) / .1); color: var(--text); }
+.cw-map .mp-zoomctl button:disabled { opacity: .35; cursor: default; }
+.cw-map .mp-zoomctl button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.cw-map .mp-fit { width: auto !important; padding: 0 8px !important; border-radius: 99px !important; font-size: 10.5px; }
+.cw-map .mp-fit[hidden] { display: none; }
+/* the slider: a thin track and a small thumb, on the same tokens as the rest of the Studio */
+.cw-map .mp-range {
+  width: 96px; height: 26px; margin: 0 2px; background: none; cursor: pointer; -webkit-appearance: none; appearance: none;
+}
+.cw-map .mp-range::-webkit-slider-runnable-track { height: 3px; border-radius: 99px; background: rgb(var(--glass-rgb) / .22); }
+.cw-map .mp-range::-moz-range-track { height: 3px; border-radius: 99px; background: rgb(var(--glass-rgb) / .22); }
+.cw-map .mp-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 11px; height: 11px; margin-top: -4px; border: 0; border-radius: 50%; background: var(--text); box-shadow: 0 1px 3px rgb(var(--shade-rgb) / .5); }
+.cw-map .mp-range::-moz-range-thumb { width: 11px; height: 11px; border: 0; border-radius: 50%; background: var(--text); }
+.cw-map .mp-range:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.cw-map .mp-body { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; padding: 12px 12px 46px; overflow: auto; cursor: zoom-in; }
 .cw-map.big .mp-body { cursor: zoom-out; }
 .cw-map.alone .mp-body { cursor: default; }
 .cw-map .mp-pic { width: 100%; height: 100%; display: grid; place-items: center; }

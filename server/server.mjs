@@ -2044,13 +2044,17 @@ const refsRoute = refRoutes({ refs, head: pid => projects.get(pid)?.head || null
 // The Studio (docs/specs/37-studio-first.md): a project's studio record, its one brand and its Assets store
 const studios = studioStore({ projectsDir: projects.projectsDir })
 const projectAssets = assetStore({ projectsDir: projects.projectsDir, known: pid => !!projects.get(pid) })
-// what a project's newest build was made with, for its Studio (server/studio.mjs): websites only for now
+// what a project's newest build was made with, for its Studio (server/studio.mjs): a website, or the deck its
+// kit wrote out (projects/<pid>/deck/deck.html, which no run names, so the deck has to be looked for itself)
 function builtOf(pid) {
   const head = projects.get(pid)?.head
   const events = head ? readEvents(head) : null
   const start = events?.find(e => e.type === 'run:start')
   const pages = (events || []).filter(e => e.type === 'page' && e.title).map(e => String(e.title).slice(0, 60))
-  if (!start || !pages.length) return null
+  if (!start || !pages.length) {
+    const made = join(projects.projectsDir, pid, 'deck', 'deck.html')
+    return existsSync(made) ? { kind: 'deck', idea: '', pages: [], theme: null } : null
+  }
   const th = events.findLast(e => e.type === 'theme')
   return { kind: 'site', idea: baseBrief(start.brief).split('\n\nPages: ')[0].slice(0, 4000), pages: [...new Set(pages)], theme: th ? { accent: th.vars?.['--accent'] || th.vars?.['--primary'] || null, heading: th.fonts?.heading || null, name: th.name || null } : null }
 }
@@ -3527,7 +3531,7 @@ ${researchBrief(seen)}`
       // seen it (in References, in a project); nothing found, or a script's sure build, goes on without it
       if (lookFor && !researched && !sure) {
         const looked = await lookUp({ ask: lookFor, kind: 'site', pid }).catch(() => null)
-        if (looked?.findings.length) return void res.writeHead(409, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'research', ask: lookFor, project: pid, findings: looked.findings, searched: looked.searched, read: looked.read, note: looked.note, ...(pid ? { refs: refs.shown(pid).filter(r => r.source === 'research') } : {}) }))
+        if (looked?.findings.length) return void res.writeHead(409, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'research', ask: lookFor, project: pid, chat: goChat?.id || null, findings: looked.findings, searched: looked.searched, read: looked.read, note: looked.note, ...(pid ? { refs: refs.shown(pid).filter(r => r.source === 'research') } : {}) }))
       }
       // engine: open-design
       // the look, in Open Design's order (decision 0016 point 3): a design system the request names, then the
@@ -5133,6 +5137,29 @@ server.listen(port, '127.0.0.1', () => {
     for (const r of ROLES) if (viaHermes(r)) models[r].baseUrl = llm.provider().baseUrl
   }
   console.log(`swarm studio on http://127.0.0.1:${port}/  (planner ${models.planner.model}, workers ${models.worker.model})`)
+})
+
+// The port is taken. Most often that is a hand-over: the launcher starts this server on a new build while
+// the old one has not let go yet, so it is busy for a moment and then free. Instead of throwing on the spot
+// (the unhandled 'error' took the whole studio with it, nineteen times in one evening, 2026-11-16), wait a
+// few seconds for the hand-over and try again. If it is still taken it is somebody else's server, and that
+// must still be *said* as EADDRINUSE: the launcher reads that word and starts a fresh port (onFreePort in
+// scripts/studio-child.mjs), so swallowing it would leave a studio nobody can reach.
+// One second, not three: scripts/check.sh gives a starting server fifteen (CheckPort 4391), and a retry budget
+// long enough to outlast that turns a busy port in CI into "the server never started" (issue-drafts/005). A
+// hand-over — the previous build letting go — takes a few hundred milliseconds; anything slower is a
+// different server, and EADDRINUSE is the right answer then.
+const WAIT_MS = 1000
+let listenTries = 0
+server.on('error', err => {
+  const code = /** @type {any} */ (err)?.code
+  if (code !== 'EADDRINUSE') { console.error(`swarm studio could not start: ${/** @type {any} */ (err)?.message || err}`); process.exit(1) }
+  listenTries++
+  if (listenTries > WAIT_MS / 200) {
+    console.error(`swarm studio: port ${port} is still in use; another server has it (EADDRINUSE)`)
+    process.exit(1)
+  }
+  setTimeout(() => server.listen(port, '127.0.0.1'), 200)
 })
 
 // app servers and engine runs stop with the studio, each with every process it started (engine/proc.mjs stopTree)

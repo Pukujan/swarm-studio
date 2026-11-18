@@ -7,6 +7,7 @@
 // The record is the chat of spec 29 §Store (engine/chats.mjs); this file writes turns, decisions,
 // spec, state and lead.
 import { cardsLine } from './helpers.mjs'
+import { refLine } from './chatmedia.mjs'
 import { familyOf, sizeOf, titleFrom, FAMILIES, FAMILY_IDS, SIZES, planSummary } from './planshape.mjs'
 import { planFromAnswers, planPrice } from './plan.mjs'
 import { askedOf, askOptions, pickOptions, readAnswer, recommend, ASK_TEXT, PICK_TEXT, GO_TEXT, SKIPS } from './askfirst.mjs'
@@ -293,7 +294,7 @@ export function factsText(f) {
   return `What has really happened: the plan is ${f.locked ? 'locked' : 'NOT locked'}. ${sheets}. ${f.pieces.what}: ${f.pieces.done} of ${f.pieces.total} painted. Painting now: ${f.painting.length ? f.painting.join(', ') : 'nothing'}.`
 }
 
-async function plannerTurn(chat, env, model, fallback, facts = null, helpers = null) {
+async function plannerTurn(chat, env, model, fallback, facts = null, helpers = null, given = []) {
   if (!model) return null
   const draft = draftOf(chat, env)
   const tools = helpers?.lines('game') || ''
@@ -304,6 +305,8 @@ async function plannerTurn(chat, env, model, fallback, facts = null, helpers = n
     `The plan so far: ${planSummary(draft)}`,
     `Godot installed: ${env.godot === undefined ? 'unknown' : env.godot ? 'yes' : 'no'}`,
     fallback ? `Still open (ask this unless something matters more): ${fallback.text}` : 'Nothing important is open.',
+    // what they gave with the message (spec 29): how it was read, so the planner never claims more
+    ...(given.length ? [`What they attached to this message:\n${given.map(refLine).join('\n')}`] : []),
     `Conversation:\n${(chat.turns || []).slice(-12).map(t => `${t.who === 'person' ? 'Person' : 'Hermia'}: ${t.text}${cardsLine(t.cards)}`).join('\n')}`
   ].join('\n') }]
   try {
@@ -333,15 +336,22 @@ export async function say(chat, input = {}, opts = {}) {
   } else if (back) delete back.tool
   return back
 }
+// The media a turn carries: the chat's own refs, by the ids the person's chips named. An id the chat does not
+// hold is not invented into one: a chip whose upload failed is never claimed as read.
+const attachedOf = (chat, ids) => (Array.isArray(ids) ? ids.filter(x => typeof x === 'string').slice(0, 8) : []).map(id => (chat.refs || []).find(r => r.id === id)).filter(Boolean)
+// what the turn being answered carries: its own refs, as the chat holds them
+const attachedNow = chat => attachedOf(chat, [...chat.turns].reverse().find(t => t.who === 'person')?.refs)
 // facts: a website's or an app's chat is told what is true of its build (engine/chatstep.mjs chatFacts)
-async function sayTurn(chat, { said = '', pick = '' } = {}, { model = null, env = {}, now = Date.now(), plan = null, helpers = null, facts = null } = {}) {
+async function sayTurn(chat, { said = '', pick = '', refs = [] } = {}, { model = null, env = {}, now = Date.now(), plan = null, helpers = null, facts = null } = {}) {
   chat.decisions ||= {}
   chat.turns ||= []
   const last = [...chat.turns].reverse().find(t => t.who === 'planner')
   const option = pick && (last?.options || []).find(o => o.id === pick)
   const text = clean(said, 2000) || option?.label || ''
   if (!text) throw Object.assign(new Error('say something first'), { status: 400 })
-  const turn = { id: nextId(chat), who: 'person', at: now, text, ...(option ? { pick } : {}), refs: [], marks: [], layers: [] }
+  // the media this turn carries (spec 29): the ids the person's chips named, as the chat has them
+  const attached = attachedOf(chat, refs)
+  const turn = { id: nextId(chat), who: 'person', at: now, text, ...(option ? { pick } : {}), refs: attached.map(r => r.id), marks: [], layers: [] }
   // a website's open skip question (decision 0020) is answered here, before any model is needed
   const asked = chat.kind === 'site' && !chat.go ? askedOf(last) : null
   chat.turns.push(turn)
@@ -377,7 +387,7 @@ const NO_PLAN = { locked: false, sheets: [], pieces: { done: 0, total: 0 }, mock
 async function planTalk(chat, { model, env, now, plan, helpers = null }) {
   const facts = planFacts(plan, { ...env, skip: chat.skip || [] })
   const step = nextStep(chat, plan, env)
-  const ai = await plannerTurn(chat, env, model, null, facts, helpers)
+  const ai = await plannerTurn(chat, env, model, null, facts, helpers, attachedNow(chat))
   const { text: said } = checkClaims(ai?.say || '', facts)
   const turn = { ...(ai?.tool ? { tool: ai.tool } : {}), id: nextId(chat), who: 'planner', at: now, text: clean(`${said ? `${said} ` : ''}${step.text}`, 1500), options: step.options, step: true, plan: plan.id, refs: [], marks: [], layers: [], made: [], reads: [],
     ...(step.wait ? { wait: true } : {}), ...(step.sheet ? { sheet: step.sheet } : {}), ...(step.price ? { price: step.price } : {}) }
@@ -389,7 +399,7 @@ async function plannerSays(chat, { model, env, now, first, changed = true, asked
   // the planner leads: it takes its own recommendation on everything still open
   if (chat.lead === 'planner') for (const q of openQuestions(chat, env)) { const [k, ...v] = q.options[0].id.split(':'); setDecision(chat, k, v.join(':'), 'planner', `t${chat.turns.length}`, q.options[0].why) }
   let open = openQuestions(chat, env)
-  const ai = await plannerTurn(chat, env, model, open[0], null, helpers)
+  const ai = await plannerTurn(chat, env, model, open[0], null, helpers, attachedNow(chat))
   if (ai) for (const [k, v] of Object.entries(ai.decide)) changed = setDecision(chat, k, v, 'planner', `t${chat.turns.length}`, 'the planner read it') || changed
   open = openQuestions(chat, env)
   const draft = draftOf(chat, env)
