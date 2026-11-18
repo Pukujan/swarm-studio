@@ -190,6 +190,11 @@ export function replan(plan, { note = '', idea, answers, force, title } = {}, en
 }
 
 export const card = (plan, id) => plan.cards.find(c => c.id === id)
+// How many stages a plan paints, one way for the whole Studio: the World card the person can edit first, then
+// the plan's own settings, then the default. The price reads it (planPrice), and so must every sentence that
+// says how many backdrops a plan has: reading only the settings missed a card edit, and reading only the card
+// missed a settings change, so two parts of the Studio could disagree about the same number (issue #666).
+export const stageCount = plan => Math.max(1, parseInt(card(plan, 'world')?.body?.stages, 10) || Number(plan.settings?.stages) || SETTINGS.stages)
 export const roster = plan => (card(plan, 'cast')?.body.roster || []).filter(r => r && clean(r.name))
 export const is3d = plan => plan.shape ? plan.shape.art === '3d' : !twoD(plan.answers?.look || card(plan, 'look')?.body.style)
 // the cut-out pictures a 2D plan paints at build time (engine/planart.mjs spriteJobs)
@@ -253,7 +258,7 @@ export function planPrice(plan) {
   const sys = SYSTEMS.filter(([k]) => plan.systems?.[k]).length
   const bosses = has(card(plan, 'enemies')?.body.boss, /\w/)
   const runs = 2 + sys + (bosses ? 1 : 0)
-  const stages = Math.max(1, parseInt(card(plan, 'world')?.body.stages, 10) || Number(plan.settings?.stages) || SETTINGS.stages)
+  const stages = stageCount(plan)
   const shape = plan.shape || {}
   // pictures still to paint (image runs on the person's own login, not credits)
   const done = list => (list || []).filter(x => x.state === 'done').length

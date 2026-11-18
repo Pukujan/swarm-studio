@@ -158,6 +158,37 @@ Spec 27's `/api/talk` and `/api/talk/:id` create and extend the same record.
 - **A project.** The left chat opens the project's newest chat. At the top of the chat, the chat's name opens a list of the project's chats grouped as Design, App, Game and Video. Each group shows only once it has a chat. A chat can be dragged to another group. **New chat** is the list's last row.
 - The left chat is where all of this shows. Nothing opens a second chat window.
 
+### The chat's name, built (2026-11-17)
+
+The owner, of a 55-turn chat titled "New game" whose game is called "Rank Juggler": "why is the chat so weird". The
+chat list showed the project under a name nobody chose; two other chats were both "Rooftop Signal", so neither could
+be picked out.
+
+- **The chat takes the build's name.** `titleFromBuild(chat, name, nameMode)` (engine/chats.mjs) writes the chat's
+  `title` when nobody named it yet, and never touches a name the person typed (`titleBy: 'person'`) or one the chat
+  already has for itself. Unnamed means: no title, a default ("New game", "New chat"), or one the Studio made from
+  the first words said. A name typed on the Plan board (`POST /api/plans/:id/title`) is recorded as the person's.
+  Where it runs: `server/plans.mjs` `sayTitle`, after a plan is created or re-planned by a chat (`fromTalk`), after
+  `/api/plans/:id/title`, and after every plan action; `server/server.mjs` passes `titled`, which finds the chat
+  through `chats.ofPlan(planId)` and calls `chats.nameFromBuild`. The chat keeps `titleFrom: 'build'`, so the next
+  name of the same build replaces it. A chat with no plan is named by the same call, once its project or app has a
+  name to hand it.
+- **Two chats that read the same are told apart.** `distinguish(rows)` (a pure function over the list's rows) is
+  applied inside `chats.listLoose()` and `chats.forProject()`: the rows of one name each say which one they are,
+  "Rooftop Signal · 14 Nov", or "Rooftop Signal · 14 Nov, 9:20" for two made the same day, and "· a game" when a row
+  has no date. A row whose name is its own is returned exactly as it was, so old lists render unchanged. Every list
+  renders `row.title` as it comes and so needs no change: web/canvas/talk.js:518 (`esc(c.title)`), ui/src/chat/Chats.tsx:59,
+  web/home.js:305, ui/src/screens/Projects.tsx:322.
+- **A decision the planner read is said as read.** `chat.decisions[key].by === 'planner'` with `why: 'the planner read
+  it'` was recorded silently. `readsSaid(turn.text, chat, { turn })` adds one line to that turn where it is shown,
+  "I read that from what you said: Cast: Hero 1, Hero 2, Hero 3. Type it differently and it changes.", and adds
+  nothing to a turn that already says it. The file is not rewritten: `GET /api/chats/:id` (server/server.mjs) adds
+  the line as the chat is read, so every old chat says it too. Correcting it stays typing: the words are the person's
+  decision (`engine/talkplan.mjs` `wordsDecide`), and a person's decision is never overwritten by the planner.
+- **Not in this slice:** no question is asked before the planner reads a value (that is a turn change, and
+  `engine/talkplan.mjs` belongs to spec 27's session); a chat with no plan is not named from its project's title
+  because no single route owns that.
+
 ## Media in and out
 
 ### In

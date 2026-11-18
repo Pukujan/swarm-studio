@@ -94,8 +94,28 @@ test('titleFrom keeps a short first sentence and cuts a long one at a word', asy
 // The person, 2026-11-16: "i cant see my old chat where i asked it to fix something". The chat was
 // there all along (a loose "New game", 20 turns), but the Chats popover on a build asks for that
 // project's chats, and a project's list holds only its own: an empty list hid every loose chat.
-test('the Chats popover lists loose chats when the project has none of its own', () => {
+test('the Chats popover lists only this project chats', () => {
   const src = readFileSync(new URL('../web/canvas/talk.js', import.meta.url), 'utf8')
-  assert.match(src, /if \(pid && !groupOf\.length\)/, 'an empty project list falls back')
-  assert.match(src, /api\('\/api\/chats'\)/, 'to the loose chats the server keeps')
+  // The person, 2026-11-16: "this is supposed to show recent chat logs only from this project not others".
+  // Two earlier attempts went the other way — first hiding every loose chat, then listing all of them — and
+  // the second filled this build's picker with other builds: two rows both named "Rooftop Signal".
+  assert.equal(src.includes("if (pid && !groupOf.length)"), false, 'no fallback gated on an empty project list')
+  assert.equal(src.includes("api('/api/chats').then(r => r.json())"), false, 'the loose list is not merged in')
+  assert.match(src, /filter\(c => !c\.project \|\| c\.project === pid\)/, 'rows are kept only for this project')
+  assert.match(src, /\.filter\(g => g\.chats\.length\)/, 'a group left with no rows is dropped')
+  // the rows scroll, the New chat button does not
+  assert.match(src, /chats-pop-scroll/, 'the rows live in a scrolling box')
+  const css = readFileSync(new URL('../web/canvas.css', import.meta.url), 'utf8')
+  assert.match(css, /\.chats-pop-scroll \{[^}]*overflow-y: auto/, 'and it scrolls')
+})
+
+// The person, 2026-11-16: "i cant seem to send images and screenshots for changes ... it doesnt get sent".
+// The chip was taken only on the plain send (`brief ? [] : links.take('ref')`), so pressing Build — the
+// button that carries a brief — threw the picture away and the crew never saw it.
+test('a picture attached to a turn is sent with it, whichever button sends the turn', () => {
+  const src = readFileSync(new URL('../web/canvas/talk.js', import.meta.url), 'utf8')
+  assert.equal(src.includes("brief ? [] : links.take('ref')"), false, 'the brief path no longer drops the chips')
+  assert.match(src, /const media = links\.take\('ref'\)/, 'the chips are taken on every send')
+  // and they reach the server: talkSend posts them as refs, which the discuss route reads
+  assert.match(src, /media\.length \? \{ refs: media\.map\(m => m\.key\) \}/, 'the refs are posted with the turn')
 })

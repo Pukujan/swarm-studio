@@ -103,8 +103,28 @@ test('the Map zooms and pans, and offers the way back only once it has been move
   assert.match(src, /e\.key === '\+'/, 'the keyboard zooms in')
   assert.match(src, /e\.key === '0'/, 'and 0 fits it again')
   // the Recentre button is the way back, and only exists once there is somewhere to come back from (rule 22)
-  assert.match(src, /resetBtn\.hidden = !view\.moved/, 'Recentre appears only after a move')
+  // the visible control: a minus, a slider and a plus, plus Fit once there is somewhere to come back from
+  assert.match(src, /class="mp-out"[^>]*>\u2212<\/button>|class="mp-out"[^>]*>\\u2212<\/button>/, 'a minus')
+  assert.match(src, /class="mp-in"[^>]*>\+<\/button>/, 'a plus')
+  assert.match(src, /type="range" class="mp-range"/, 'a slider')
+  assert.match(src, /fitBtn\.hidden = !view\.moved && Math\.abs\(view\.k - 1\) < 0\.001/, 'Fit appears only after a move')
+  assert.match(src, /rangeEl\.value = String\(toTrack\(view\.k\)\)/, 'the slider reads the same value the wheel sets')
   // the diagram keeps its own size: forced to 100% of the window it could never be read larger
   assert.doesNotMatch(css, /\.mp-pic svg \{[^}]*width: 100%/, 'the SVG is not forced to the window width')
   assert.match(css, /\.mp-pic svg \{ display: block; max-width: none; \}/)
+})
+
+// The person, 2026-11-16: "doesnt zoom into cursor's current position like it should when scrolled up and
+// down". The first version scaled the offset as if the transform origin were the window's top-left, and
+// the picture's centre is not even the window's middle (a diagram wider than the window is centred by the
+// grid). Every wheel step slid the diagram sideways; measured, the point under the cursor ran ~1900px away.
+test('zooming keeps the point under the pointer still', () => {
+  const src = readFileSync(new URL('../web/canvas/mapwin.js', import.meta.url), 'utf8')
+  // the layout box, never the scaled bounds: rect() after a transform feeds the scale back into the next step
+  assert.match(src, /picEl\.offsetLeft \+ picEl\.offsetWidth \/ 2/, 'the origin is the layout box centre')
+  assert.doesNotMatch(src, /const C = \{ x: pr\.left/, 'not the scaled rect')
+  assert.doesNotMatch(src, /const C = \{ x: r\.width \/ 2/, 'not the window middle: the grid centres a wider picture')
+  // solved from scratch: t = (p - C)(1 - 1/k)
+  assert.match(src, /view\.x = \(px - C\.x\) \* \(1 - 1 \/ k\)/)
+  assert.match(src, /view\.y = \(py - C\.y\) \* \(1 - 1 \/ k\)/)
 })

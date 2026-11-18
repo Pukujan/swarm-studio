@@ -44,6 +44,86 @@ export function titleFrom(text = '') {
 // the deck talk's names for the two sides (you | hermia) as the record keeps them
 export const whoOf = w => (w === 'hermia' || w === 'planner' ? 'planner' : w === 'crew' ? 'crew' : 'person')
 
+// ---------- the chat takes the name of what it is building (EVIDENCE 2026-11-17, failure 5)
+// The owner, of a 55-turn chat titled "New game" whose game is called "Rank Juggler": "why is the chat so weird".
+// A name the planner gave the build is the chat's name too, so the list says "Rank Juggler" and not "New game".
+const NAMED = /^(new (chat|game|site|app|project|talk|build)|untitled|a game|a site|a new (game|site|app))$/i
+// a title nobody chose: never set, empty, or one the Studio itself made ("New game", a chat named from the first
+// words said). A name the person typed is theirs and is never taken, and neither is one already naming the build.
+export function unnamed(chat) {
+  const t = String(chat?.title || '').trim()
+  if (!t || NAMED.test(t)) return true
+  if (chat?.titleBy === 'person') return false
+  if (t === String(titleFrom((chat?.turns || []).find(x => x.who === 'person')?.text || '') || '')) return true
+  // an old chat file kept no titleBy: a "New game" is the default wherever it came from
+  return !chat?.titleBy
+}
+
+// The chat's name follows the build's, when the chat has no name of its own. Returns whether it changed, so the
+// caller writes the chat once (chatStore.update) and the change is in the list the person sees.
+// nameMode 'given': the name was typed, so it is the person's too. 'planner': the planner or the idea gave it.
+export function titleFromBuild(chat, name, nameMode = 'planner') {
+  const n = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 80)
+  if (!chat || !n || NAMED.test(n)) return false
+  const own = String(chat.title || '').trim()
+  if (own === n) {
+    if (nameMode !== 'given' || chat.titleBy === 'person') return false
+    chat.titleBy = 'person'
+    return false
+  }
+  if (chat.titleBy === 'person') return false
+  // a chat keeps the name it already has, unless that name came from the build and this is the build's name now
+  const fromBuild = chat.titleFrom === 'build'
+  if (own && !unnamed(chat) && !fromBuild) return false
+  chat.title = n
+  chat.titleBy = nameMode === 'given' ? 'person' : 'planner'
+  chat.titleFrom = 'build'
+  return true
+}
+
+// ---------- two chats that would read the same are told apart (same evidence)
+// Two of the owner's chats were both "Rooftop Signal", and later two more both named after a first sentence, so
+// neither could be picked out of the list. Pure over rows ({ id, title, kind, updated }), in the order given: the
+// first of a set of the same name keeps it, and each next one says which it is — "Rooftop Signal · 14 Nov", or, for
+// two chats named the same day, "Rooftop Signal · 14 Nov, 9:20". Rows with an id of their own that repeats nowhere
+// are untouched, so an old list renders exactly as before.
+const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const KIND_WORD = { game: 'a game', site: 'a site', app: 'an app', film: 'a film' }
+// a row's date from its own fields: `updated` is ms, or the ISO string an older plan's file kept
+export function rowWhen(row) {
+  const t = row?.updated
+  const n = typeof t === 'number' ? t : typeof t === 'string' ? Date.parse(t) : NaN
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+const dayOf = ms => { const d = new Date(ms); return `${d.getDate()} ${MONTH[d.getMonth()]}` }
+const hourOf = ms => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` }
+export function distinguish(rows = []) {
+  const list = Array.isArray(rows) ? rows.filter(r => r && r.id) : []
+  const sets = new Map()
+  for (const r of list) {
+    const key = String(r.title || '').trim().toLowerCase()
+    if (!key) continue
+    if (!sets.has(key)) sets.set(key, [])
+    sets.get(key).push(r)
+  }
+  return list.map(r => {
+    const same = sets.get(String(r.title || '').trim().toLowerCase()) || []
+    if (same.length < 2) return r
+    const when = rowWhen(r)
+    let suffix
+    if (when) {
+      const day = dayOf(when)
+      suffix = same.filter(o => o !== r && (rowWhen(o) ? dayOf(rowWhen(o)) === day : false)).length ? `${day}, ${hourOf(when)}` : day
+    }
+    // a chat with no date at all: what it is building
+    if (!suffix) suffix = KIND_WORD[r.kind] || ''
+    // two chats made the same minute: what it is building after the time, so they still read differently
+    const twin = when && same.some(o => o !== r && rowWhen(o) === when)
+    if (twin && KIND_WORD[r.kind]) suffix = `${suffix}, ${KIND_WORD[r.kind]}`
+    return suffix ? { ...r, title: `${String(r.title).trim()} · ${suffix}` } : r
+  })
+}
+
 // chatStore(dataDir) or chatStore({ dataDir, now, onMove })
 export function chatStore(arg) {
   const dataDir = typeof arg === 'string' ? arg : arg.dataDir
@@ -88,8 +168,8 @@ export function chatStore(arg) {
       if (!chat) throw Object.assign(new Error('no such chat'), { status: 404 })
       const out = await fn(chat)
       chat.updated = now()
-      write(chat)
-      return out === undefined ? chat : out
+      const kept = write(chat)
+      return out === undefined ? kept : out
     })
     queues.set(id, run)
     run.finally(() => { if (queues.get(id) === run) queues.delete(id) }).catch(() => {})
@@ -119,6 +199,17 @@ export function chatStore(arg) {
       chat.turns.push(turnOf(t, chat))
       if (!chat.title && whoOf(t.who) === 'person') chat.title = titleFrom(t.text)
     })
+  }
+  // The chat takes the build's name (titleFromBuild above). Returns whether it changed, so a caller can say it.
+  function nameFromBuild(id, name, nameMode = 'planner') {
+    if (!ok(id) || !String(name || '').trim()) return Promise.resolve(false)
+    return update(id, chat => titleFromBuild(chat, name, nameMode))
+  }
+  // the chat whose plan is this build's, loose or in a project (what /api/talk/plan/:id answers)
+  function ofPlan(planId) {
+    if (!planId) return null
+    const hit = listDir(dir).find(c => c.plan === planId) || (existsSync(projectsDir) ? (() => { for (const pid of readdirSync(projectsDir)) { const c = listDir(inProject(pid)).find(x => x.plan === planId); if (c) return c } return null })() : null)
+    return hit ? get(hit.id) : null
   }
   function rename(id, title) {
     const t = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 80)
@@ -173,13 +264,13 @@ export function chatStore(arg) {
   }
   const row = c => ({ id: c.id, kind: c.kind, category: c.category, title: c.title || 'New chat', state: c.state, plan: c.plan, updated: c.updated, turns: (c.turns || []).length, project: c.project || null })
   const newest = list => list.sort((a, b) => (b.updated || 0) - (a.updated || 0))
-  // loose chats (not in a project), newest first
-  const listLoose = () => newest(listDir(dir).filter(c => !c.project)).map(row)
+  // loose chats (not in a project), newest first; two named the same are told apart (distinguish)
+  const listLoose = () => distinguish(newest(listDir(dir).filter(c => !c.project)).map(row))
   // a project's chats, grouped by category, each group newest first; empty groups are left out
   function forProject(pid) {
     if (!PID.test(String(pid || ''))) return { groups: [] }
     const all = newest(listDir(inProject(pid)))
-    return { groups: CATEGORIES.map(name => ({ name, chats: all.filter(c => c.category === name).map(row) })).filter(g => g.chats.length) }
+    return { groups: CATEGORIES.map(name => ({ name, chats: distinguish(all.filter(c => c.category === name).map(row)) })).filter(g => g.chats.length) }
   }
   // the chat a project's next message belongs to: its newest in that group, or a new one there
   function forMessage(pid, kind = 'site') {
@@ -227,7 +318,31 @@ export function chatStore(arg) {
     return made ? get(made) : null
   }
 
-  return { dir, get, create, update, say, rename, setCategory, built, moveTo, settle, remove, listLoose, forProject, forMessage, cleanup, importPlans, forPlan, locate }
+  return { dir, get, create, update, say, rename, setCategory, built, moveTo, settle, remove, listLoose, forProject, forMessage, cleanup, importPlans, forPlan, nameFromBuild, ofPlan, locate }
+}
+
+// ---------- a decision the planner read is said as read, not assumed (same evidence)
+// The owner's chat recorded "roster locked: Hero 1, Hero 2, Hero 3" and `decisions` holding `by: 'planner'`,
+// `why: 'the planner read it'`, with the chat never saying it had read it. This says it, in the turn where it
+// applies: one quiet line naming each decision the planner read, so the person can correct any of them by typing.
+const DECISION_LABEL = { family: 'Game', size: 'Size', art: 'Art', engine: 'Engine', title: 'Name', enemies: 'Enemies', combat: 'Combat', look: 'Look', money: 'Money', progression: 'Progression', cast: 'Cast' }
+export function readLine(chat, { turn = null } = {}) {
+  const d = chat?.decisions
+  if (!d || typeof d !== 'object') return ''
+  const picked = Object.entries(d)
+    .filter(([, v]) => v && v.by === 'planner' && String(v.value ?? '').trim())
+    .filter(([, v]) => !turn || v.turn === turn)
+    .map(([k, v]) => `${DECISION_LABEL[k] || k}: ${String(v.value).trim()}`)
+  if (!picked.length) return ''
+  return `I read that from what you said: ${picked.join('; ')}. Type it differently and it changes.`
+}
+// a turn's text as it is shown, with that line where the planner read something and did not already say so.
+// Old chats and turns the planner wrote are shown unchanged, and a text that already says it gets no second line.
+export function readsSaid(text = '', chat = null, { turn = null } = {}) {
+  const body = String(text || '').trim()
+  if (!body || /i read/i.test(body)) return body
+  const line = readLine(chat, { turn })
+  return line ? `${body} ${line}` : body
 }
 
 export const isDir = p => { try { return statSync(p).isDirectory() } catch { return false } }

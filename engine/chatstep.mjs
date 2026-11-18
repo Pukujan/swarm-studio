@@ -49,7 +49,9 @@ export function chatFacts({ kind = 'site', run = null, build = null, pages = [],
     built: build.done + build.kept, total: build.planned + build.kept, failed: build.failed.length, next: build.next, raw: build
   } : null
   const a = app ? { state: String(app.state || 'idle'), built: !!app.hasApp, working: app.state === 'working', steps: (app.steps || []).length } : null
-  return { kind: kind === 'app' ? 'app' : 'site', run: run ? String(run) : null, pages: pages.length, names: pages.slice(0, 12).map(String), site, app: a, published: published ? String(published) : null, locked: !!locked }
+  // a game keeps its own kind: it has no pages and no website build, but its app build is the thing its chat could
+  // not see (issue #666), and stateLine/factsText read the app facts the same way for all three kinds
+  return { kind: kind === 'app' ? 'app' : kind === 'game' ? 'game' : 'site', run: run ? String(run) : null, pages: pages.length, names: pages.slice(0, 12).map(String), site, app: a, published: published ? String(published) : null, locked: !!locked }
 }
 
 const APP_SAYS = { working: 'The app is still building.', failed: 'The app build did not finish.', stopped: 'The app build is stopped partway.', paused: 'The app build waits on you.' }

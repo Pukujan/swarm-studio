@@ -30,18 +30,32 @@ export function mapWindow({ src, cursor, icons }) {
   const el = document.createElement('section')
   el.className = 'cw-map'
   el.setAttribute('aria-label', 'Map')
-  el.innerHTML = '<div class="cw-file"><span class="cw-path">Map</span><div class="mp-tabs" role="group" aria-label="Diagrams"></div><button type="button" class="mp-reset" aria-label="Fit the Map in the window" hidden>Recentre</button><button type="button" class="mp-zoom" aria-expanded="false" aria-label="Enlarge the Map"></button></div>'
-    + '<div class="mp-body"><div class="mp-pan"><div class="mp-pic"></div></div></div><ol class="mp-alt"></ol>'
+  // A visible zoom control (the person, 2026-11-16: "needs a better zoom in button/slider its too hard
+  // right now"): the wheel works but nothing showed it was there. A minus, a slider, a plus and Fit, on
+  // the diagram's own edge, out of the way of its top bar. The slider is the reading of the same value
+  // the wheel and a pinch set, so all three always agree.
+  el.innerHTML = '<div class="cw-file"><span class="cw-path">Map</span><div class="mp-tabs" role="group" aria-label="Diagrams"></div><button type="button" class="mp-zoom" aria-expanded="false" aria-label="Enlarge the Map"></button></div>'
+    + '<div class="mp-body"><div class="mp-pan"><div class="mp-pic"></div></div></div>'
+    + '<div class="mp-zoomctl" role="group" aria-label="Zoom">'
+    + '<button type="button" class="mp-out" aria-label="Zoom out">\u2212</button>'
+    + '<input type="range" class="mp-range" min="0" max="100" step="1" value="0" aria-label="Zoom" aria-valuetext="100%">'
+    + '<button type="button" class="mp-in" aria-label="Zoom in">+</button>'
+    + '<button type="button" class="mp-fit" aria-label="Fit the diagram in the window" hidden>Fit</button>'
+    + '</div><ol class="mp-alt"></ol>'
   const tabsEl = /** @type {HTMLElement} */ (el.querySelector('.mp-tabs')), body = /** @type {HTMLElement} */ (el.querySelector('.mp-body'))
   const picEl = /** @type {HTMLElement} */ (el.querySelector('.mp-pic'))
-  const resetBtn = /** @type {HTMLButtonElement} */ (el.querySelector('.mp-reset'))
-  const alt = /** @type {HTMLElement} */ (el.querySelector('.mp-alt')), zoomBtn = /** @type {HTMLButtonElement} */ (el.querySelector('.mp-zoom'))
+  const fitBtn = /** @type {HTMLButtonElement} */ (el.querySelector('.mp-fit'))
+  const rangeEl = /** @type {HTMLInputElement} */ (el.querySelector('.mp-range'))
+  const outBtn = /** @type {HTMLButtonElement} */ (el.querySelector('.mp-out'))
+  const inBtn = /** @type {HTMLButtonElement} */ (el.querySelector('.mp-in'))
+  const alt = /** @type {HTMLElement} */ (el.querySelector('.mp-alt'))
   /** @type {{ map: MapData | null | undefined, asked: MapAsked | null, tab: string, drawn: string, tabsKey: string, working: boolean, big: boolean, n: number }} */
   const st = { map: undefined, asked: null, tab: '', drawn: '', tabsKey: '', working: false, big: false, n: 0 }
   /** @type {{ zoom: (() => void) | null }} */
   const on = { zoom: null }
-  zoomBtn.innerHTML = icons.grow
-  zoomBtn.onclick = () => on.zoom?.()
+  const enumZoom = /** @type {HTMLButtonElement} */ (el.querySelector('.mp-zoom'))
+  enumZoom.innerHTML = icons.grow
+  enumZoom.onclick = () => on.zoom?.()
 
   // ---------- zooming the diagram (the person, 2026-11-16: "wish this map had zoom in zoom out feature").
   // The diagram used to be forced to the window's size, so a plan wider than the window kept its end cut
@@ -50,26 +64,58 @@ export function mapWindow({ src, cursor, icons }) {
   // been moved off its place (docs/ux/RULES.md, rule 22: direct manipulation, and the button is the way back).
   const view = { k: 1, x: 0, y: 0, moved: false }
   const K = { min: 0.2, max: 6 }
+  // The slider is the same value, on a log scale so half the track is 1x and the steps feel even either
+  // side of it: track 0 is K.min, 100 is K.max.
+  const toTrack = k => Math.round(100 * (Math.log(k / K.min) / Math.log(K.max / K.min)))
+  const toZoom = t => K.min * Math.pow(K.max / K.min, Math.min(100, Math.max(0, t)) / 100)
   const apply = () => {
     picEl.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.k})`
+    const pct = Math.round(view.k * 100)
+    rangeEl.value = String(toTrack(view.k))
+    rangeEl.setAttribute('aria-valuetext', `${pct}%`)
     // the button is the way home, shown only once there is somewhere to come back from
-    resetBtn.hidden = !view.moved
+    fitBtn.hidden = !view.moved && Math.abs(view.k - 1) < 0.001
     body.classList.toggle('zoomed', view.k > 1.001 || view.moved)
+    outBtn.disabled = view.k <= K.min + 1e-6
+    inBtn.disabled = view.k >= K.max - 1e-6
   }
   const reset = () => { Object.assign(view, { k: 1, x: 0, y: 0, moved: false }); apply() }
-  resetBtn.onclick = reset
-  /** zoom by `f` about a point in the window's own coordinates */
-  const zoomAt = (f, cx, cy) => {
-    const r = body.getBoundingClientRect(), px = cx - r.left, py = cy - r.top
-    const k2 = Math.min(K.max, Math.max(K.min, view.k * f))
-    if (k2 === view.k) return
-    // keep the point under the pointer still: the box is centred, so the offset scales with the picture
-    view.x = px - (px - view.x) * (k2 / view.k)
-    view.y = py - (py - view.y) * (k2 / view.k)
-    view.k = k2
-    if (k2 !== 1) view.moved = true
+  fitBtn.onclick = reset
+  // zoom to an absolute factor about a point (the slider, the buttons); the centre when no point is given
+  // Zoom to an absolute factor about a point on screen — the pointer for the wheel and a pinch, the middle
+  // for the slider and the buttons — and keep the diagram's own point under it exactly still.
+  //
+  // The picture is scaled about its OWN centre (transform-origin 50% 50%), and that centre sits at the
+  // window's middle. So a point p of the window lands at C + (p + t - C)/k. Asking that to stay put while k
+  // goes k1 -> k2 gives t2 = (p - C)*k2 - p + C. The first version scaled the offset as if the origin were
+  // the window's top-left corner, so every wheel step slid the diagram sideways: the point under the cursor
+  // ran away by a thousand pixels (the person, 2026-11-16: "doesnt zoom into cursor's current position").
+  const zoomTo = (k2, cx, cy) => {
+    const r = body.getBoundingClientRect()
+    const px = (cx ?? r.left + r.width / 2) - r.left, py = (cy ?? r.top + r.height / 2) - r.top
+    const k = Math.min(K.max, Math.max(K.min, k2))
+    if (Math.abs(k - view.k) < 1e-6) return
+    // The picture's centre, unmoved by its own transform. offsetLeft/offsetWidth describe the LAYOUT box,
+    // where getBoundingClientRect() reports the scaled one: reading that back after each step feeds the
+    // previous scale into the next and drifts. And it is not the window's middle either — a picture wider
+    // than the window is centred by the grid, so its centre sits off to one side (measured: 712,224 in a
+    // 898x481 window). Scaling about the wrong point is what sent the diagram under the cursor running.
+    const C = { x: picEl.offsetLeft + picEl.offsetWidth / 2, y: picEl.offsetTop + picEl.offsetHeight / 2 }
+    // Solved from scratch, not from the old offset: f(p) = C + (p - C)/k + t must equal p, so
+    // t = (p - C)(1 - 1/k). Iterating on the previous t compounded rounding and, worse, carried a pan
+    // made at another scale straight into the new one.
+    view.x = (px - C.x) * (1 - 1 / k)
+    view.y = (py - C.y) * (1 - 1 / k)
+    view.k = k
+    if (Math.abs(k - 1) > 0.001) view.moved = true
     apply()
   }
+  /** zoom by `f` about a point in the window's own coordinates */
+  const zoomAt = (f, cx, cy) => zoomTo(view.k * f, cx, cy)
+  rangeEl.oninput = () => { zoomTo(toZoom(Number(rangeEl.value))); rangeEl.blur?.() }
+  outBtn.onclick = () => zoomAt(1 / 1.5)
+  inBtn.onclick = () => zoomAt(1.5)
+  apply()
   body.addEventListener('wheel', e => {
     if (!picEl.firstElementChild) return
     // the wheel zooms rather than scrolls, but ctrl+wheel (a pinch on a trackpad) does not zoom the whole page
@@ -129,7 +175,7 @@ export function mapWindow({ src, cursor, icons }) {
   })
   // a new diagram starts fitted, not wherever the last one was left
   // a click on the diagram enlarges it, as on the wall's other windows (but not the click that ended a pan)
-  body.onclick = () => { if (!zoomBtn.hidden && !body.dataset.panned) on.zoom?.() }
+  body.onclick = () => { if (!enumZoom.hidden && !body.dataset.panned) on.zoom?.() }
 
   /** @type {Promise<any> | null} */
   let lib = null
@@ -273,12 +319,12 @@ export function mapWindow({ src, cursor, icons }) {
       if (st.big === big) return
       st.big = big
       el.classList.toggle('big', big)
-      zoomBtn.setAttribute('aria-expanded', String(big))
-      zoomBtn.setAttribute('aria-label', big ? 'Shrink the Map' : 'Enlarge the Map')
-      zoomBtn.innerHTML = big ? icons.shrink : icons.grow
+      enumZoom.setAttribute('aria-expanded', String(big))
+      enumZoom.setAttribute('aria-label', big ? 'Shrink the Map' : 'Enlarge the Map')
+      enumZoom.innerHTML = big ? icons.shrink : icons.grow
     },
     /** Alone on the stage there is nothing to enlarge against.  @param {boolean} alone */
-    alone(alone) { zoomBtn.hidden = alone; el.classList.toggle('alone', alone) },
+    alone(alone) { enumZoom.hidden = alone; el.classList.toggle('alone', alone) },
     /** @param {() => void} fn */
     onZoom(fn) { on.zoom = fn },
     draw,

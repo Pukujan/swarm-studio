@@ -45,7 +45,7 @@ import { makeProjects, stateOf, gameProgress } from './projects.mjs'
 import { buildState } from '../engine/buildstate.mjs'
 import { chatFacts, checkSaid, factsText, firstLine, nextStep, truthTurn } from '../engine/chatstep.mjs'
 import { kindState, KIND_EVENTS } from '../engine/kindstate.mjs'
-import { CHAT_ID } from '../engine/chats.mjs'
+import { CHAT_ID, readsSaid } from '../engine/chats.mjs'
 import { askTurn, askedOf, askOptions, ASK_TEXT } from '../engine/askfirst.mjs'
 import { wordsRead } from '../engine/talkplan.mjs'
 import { deployName, isScreenName, pieceKind, PIECES } from '../engine/naming.mjs'
@@ -785,6 +785,9 @@ async function stopWork({ run, project } = {}) {
 // What a run is working on right now, if anything: the site build, an app or game build, a film.
 // { what: site | app | game | film, stage, pct (0..1, or null when the job cannot say) }
 let appsNow = null // the app jobs, once loaded, so this can stay synchronous
+// The app engine's state for a run, read synchronously: the jobs are loaded by the first apps() call, and this
+// only reads what they already hold (null before that, which the caller reads as "no build known yet").
+const appStateNow = id => { try { return id && appsNow ? appsNow.state(id) : null } catch { return null } }
 // a Studio process that started a build: still running? (a killed one leaves its app:start behind)
 const appAlive = pid => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } }
 // how far a running website build is, 0..1, from its state: this build's own sections built of its own planned
@@ -1891,8 +1894,13 @@ const plans = planRoutes({
   planner: () => models.planner.apiKey ? { provider: provider('planner'), model: modelFor('planner') } : null,
   godot: () => godotHere,
   // a game's art references join its project when its talk does: a look to match to References, one used as is to Assets
-  toProject: (pid, { name, buf, asIs }) => (asIs ? projectAssets.addFile(pid, { name }, buf) : refs.addFile(pid, { name, source: 'plan' }, buf))
+  toProject: (pid, { name, buf, asIs }) => (asIs ? projectAssets.addFile(pid, { name }, buf) : refs.addFile(pid, { name, source: 'plan' }, buf)),
+  // The chat takes the build's name (engine/chats.mjs titleFromBuild): a game plan is named by the person, or by the
+  // idea and the planner, and the chat that shaped it is listed under that name and not "New game" (EVIDENCE failure 5).
+  // A chat the person renamed, or one with no name of its own, is not touched. `planner` is null until the talks below.
+  titled: (plan, nameMode) => { const c = planner?.ofPlan?.(plan?.id); if (c) planner.nameFromBuild(c.id, plan?.title, nameMode).catch(() => {}) }
 })
+let planner = null
 // end engine: meshy
 // The planner conversation (docs/specs/27-plan-conversation.md): decide together in the left chat, then lock.
 // A locked game chat makes its plan through the Plan board's routes above.
@@ -1900,6 +1908,8 @@ const talks = talkRoutes({
   dataDir, plans, helpers: () => helpers, env: () => ({ godot: godotHere, install: godotJob.state() }), godotCheck, godotInstall: godotJob,
   // a website's or an app's saved talk is told what is true of its build (chatTruth, engine/chatstep.mjs)
   facts: chat => chatTruth({ pid: chat.project || null, run: chat.run || null, kind: chat.kind, chat }),
+  // a game's one next step is the build itself, and a failed build says why (issue #666)
+  appOf: appStateNow,
   model: () => models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
     trace: { kind: 'talk' }, model: modelFor('planner'), maxTokens: 700, temperature: 0.3, signal: AbortSignal.timeout(60000),
     extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
@@ -1910,6 +1920,7 @@ const talks = talkRoutes({
 // their project when they build. On start: empty old chats go, and game plans made before chats existed
 // each get a chat that points at them (the plan files stay where they are).
 const chats = talks.chats
+planner = chats
 // the Studio's App kit (docs/specs/37-studio-first.md): the app's users, screens, data and connections
 const appKit = appKitRoutes({
   dataDir,
@@ -2044,13 +2055,17 @@ const refsRoute = refRoutes({ refs, head: pid => projects.get(pid)?.head || null
 // The Studio (docs/specs/37-studio-first.md): a project's studio record, its one brand and its Assets store
 const studios = studioStore({ projectsDir: projects.projectsDir })
 const projectAssets = assetStore({ projectsDir: projects.projectsDir, known: pid => !!projects.get(pid) })
-// what a project's newest build was made with, for its Studio (server/studio.mjs): websites only for now
+// what a project's newest build was made with, for its Studio (server/studio.mjs): a website, or the deck its
+// kit wrote out (projects/<pid>/deck/deck.html, which no run names, so the deck has to be looked for itself)
 function builtOf(pid) {
   const head = projects.get(pid)?.head
   const events = head ? readEvents(head) : null
   const start = events?.find(e => e.type === 'run:start')
   const pages = (events || []).filter(e => e.type === 'page' && e.title).map(e => String(e.title).slice(0, 60))
-  if (!start || !pages.length) return null
+  if (!start || !pages.length) {
+    const made = join(projects.projectsDir, pid, 'deck', 'deck.html')
+    return existsSync(made) ? { kind: 'deck', idea: '', pages: [], theme: null } : null
+  }
   const th = events.findLast(e => e.type === 'theme')
   return { kind: 'site', idea: baseBrief(start.brief).split('\n\nPages: ')[0].slice(0, 4000), pages: [...new Set(pages)], theme: th ? { accent: th.vars?.['--accent'] || th.vars?.['--primary'] || null, heading: th.fonts?.heading || null, name: th.name || null } : null }
 }
@@ -2282,9 +2297,21 @@ function projectState(pid, facts = null) {
 // when the chat is the App room's or the build has an app, and where it is live. Reads only. Null for a game, a
 // film or a project brought in: those keep their own states, and their chats are not checked by a website's rules.
 async function chatTruth({ pid = null, run = null, kind = 'site', chat = null } = {}) {
-  if (kind !== 'site' && kind !== 'app') return null
+  const game = kind === 'game'
+  if (!game && kind !== 'site' && kind !== 'app') return null
   const own = run ? readEvents(run) : null
   const start = own?.find(e => e.type === 'run:start')
+  // A GAME's chat is told its build (issue #666): the app engine's own state for the game's run, and nothing about
+  // pages or a website build, which a game has none of. Before this the chat was told nothing at all, which is why
+  // "i cant test the game live" was answered with a count of painted pictures: the planner could not know whether
+  // the game had built, passed its gates or failed after its repair turns.
+  if (game) {
+    let app = null
+    if (run) { try { app = (await apps()).state(run) } catch {} }
+    app ||= { state: 'idle', hasApp: false, steps: [] }
+    const publishedGame = own?.findLast(e => (e.type === 'publish:done' && e.url && e.target !== 'local') || (e.type === 'app:deployed' && e.url && !e.pending))?.url || null
+    return chatFacts({ kind: 'game', run, build: null, pages: [], app, published: publishedGame, locked: chat?.state === 'locked' })
+  }
   if (own && (start?.intake || ['game', 'video', 'film'].includes(start?.kind) || own.some(e => typeof e.type === 'string' && (e.type.startsWith('game:') || e.type.startsWith('video:'))))) return null
   const p = pid && projects.get(pid)
   const ids = [...(run ? [run] : []), ...((p?.versions || []).map(v => v.id))]
@@ -3527,7 +3554,7 @@ ${researchBrief(seen)}`
       // seen it (in References, in a project); nothing found, or a script's sure build, goes on without it
       if (lookFor && !researched && !sure) {
         const looked = await lookUp({ ask: lookFor, kind: 'site', pid }).catch(() => null)
-        if (looked?.findings.length) return void res.writeHead(409, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'research', ask: lookFor, project: pid, findings: looked.findings, searched: looked.searched, read: looked.read, note: looked.note, ...(pid ? { refs: refs.shown(pid).filter(r => r.source === 'research') } : {}) }))
+        if (looked?.findings.length) return void res.writeHead(409, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'research', ask: lookFor, project: pid, chat: goChat?.id || null, findings: looked.findings, searched: looked.searched, read: looked.read, note: looked.note, ...(pid ? { refs: refs.shown(pid).filter(r => r.source === 'research') } : {}) }))
       }
       // engine: open-design
       // the look, in Open Design's order (decision 0016 point 3): a design system the request names, then the
@@ -3610,7 +3637,14 @@ ${researchBrief(seen)}`
   const chatRoute = url.pathname.match(/^\/api\/chats\/(c-[0-9a-f]{10})$/)
   if (chatRoute) {
     const id = chatRoute[1]
-    if (req.method === 'GET') { const c = chats.get(id); return c ? json(200, c) : json(404, { error: 'no such chat' }) }
+    // a decision the planner read is said as read in the turn it decided (engine/chats.mjs readsSaid): the chat
+    // says it read something instead of recording it silently, and the person corrects it by typing
+    if (req.method === 'GET') {
+      const c = chats.get(id)
+      if (!c) return json(404, { error: 'no such chat' })
+      if (Array.isArray(c.turns)) c.turns = c.turns.map(t => (t.who === 'planner' ? { ...t, text: readsSaid(t.text, c, { turn: t.id }) } : t))
+      return json(200, c)
+    }
     const fail = err => json(err.status || 400, { error: String(err.message || err) })
     if (req.method === 'DELETE') return void chats.remove(id).then(r => json(200, r), fail)
     if (req.method === 'POST') return readJson(1e4, input => {
@@ -3659,12 +3693,20 @@ ${researchBrief(seen)}`
         // Ask mode (docs/specs/46-chat-modes.md): the planner answers and nothing else happens. No chat is made or
         // saved, no link is read or walked, no brief is written: only the answer goes back.
         if (input.ask === true) {
-          const [{ answerOnly }, { factLines }, facts] = await Promise.all([import('../engine/ask.mjs'), import('../engine/doctor.mjs'), studioFacts(inRun, { light: true }).catch(() => null)])
+          const [{ answerOnly }, { factLines }, { withRefs }, facts] = await Promise.all([import('../engine/ask.mjs'), import('../engine/doctor.mjs'), import('../engine/chatmedia.mjs'), studioFacts(inRun, { light: true }).catch(() => null)])
           const plan = typeof input.chat === 'string' && CHAT_ID.test(input.chat) ? String(chats.get(input.chat)?.spec?.brief || '').slice(0, 1500) : ''
+          // the picture or file attached to this turn goes with the question (spec 29): it was uploaded to the chat by
+          // the chips, and the planner is told how each one was read. The link is not opened and the chat is not saved.
+          const ids = Array.isArray(input.refs) ? input.refs.filter(x => typeof x === 'string').slice(0, 8) : []
+          const from = typeof input.chat === 'string' && CHAT_ID.test(input.chat) ? String(chats.get(input.chat)?.id || input.chat) : ''
+          const now = !ids.length ? [] : ((chats.get(from)?.refs || []).filter(r => ids.includes(r.id)).length ? (chats.get(from)?.refs || []).filter(r => ids.includes(r.id))
+            // a chip keyed with the chat's name (the upload answers with the chat it made) is found by its short id
+            : (chats.get(from)?.refs || []).filter(r => ids.some(k => k === String(r.id).slice(0, 5))))
+          const told = now.length ? said.map((t, i) => (i === said.length - 1 && t.who !== 'hermia' ? { ...t, text: withRefs(t.text, now) } : t)) : said
           // a question about how far things are is answered by the build's one state; any other answer is checked against it
           const truth = await chatTruth({ pid: inPid, run: inRun, kind: input.room === 'app' ? 'app' : kind })
           const project = [projectState(inPid, truth), plan ? `The plan agreed so far in the chat:\n${plan}` : ''].filter(Boolean).join('\n\n')
-          const answerIt = () => answerOnly({ said, kind, chat: talk, project, studio: facts ? factLines(facts).join('\n').slice(0, 2400) : '' })
+          const answerIt = () => answerOnly({ said: told, kind, chat: talk, project, studio: facts ? factLines(facts).join('\n').slice(0, 2400) : '' })
           const answer = truth ? await truthTurn({ text: String(said.at(-1)?.text || ''), facts: truth, ask: true, plan: answerIt }) : await answerIt()
           return json(200, { reply: answer.reply })
         }
@@ -5133,6 +5175,29 @@ server.listen(port, '127.0.0.1', () => {
     for (const r of ROLES) if (viaHermes(r)) models[r].baseUrl = llm.provider().baseUrl
   }
   console.log(`swarm studio on http://127.0.0.1:${port}/  (planner ${models.planner.model}, workers ${models.worker.model})`)
+})
+
+// The port is taken. Most often that is a hand-over: the launcher starts this server on a new build while
+// the old one has not let go yet, so it is busy for a moment and then free. Instead of throwing on the spot
+// (the unhandled 'error' took the whole studio with it, nineteen times in one evening, 2026-11-16), wait a
+// few seconds for the hand-over and try again. If it is still taken it is somebody else's server, and that
+// must still be *said* as EADDRINUSE: the launcher reads that word and starts a fresh port (onFreePort in
+// scripts/studio-child.mjs), so swallowing it would leave a studio nobody can reach.
+// One second, not three: scripts/check.sh gives a starting server fifteen (CheckPort 4391), and a retry budget
+// long enough to outlast that turns a busy port in CI into "the server never started" (issue-drafts/005). A
+// hand-over — the previous build letting go — takes a few hundred milliseconds; anything slower is a
+// different server, and EADDRINUSE is the right answer then.
+const WAIT_MS = 1000
+let listenTries = 0
+server.on('error', err => {
+  const code = /** @type {any} */ (err)?.code
+  if (code !== 'EADDRINUSE') { console.error(`swarm studio could not start: ${/** @type {any} */ (err)?.message || err}`); process.exit(1) }
+  listenTries++
+  if (listenTries > WAIT_MS / 200) {
+    console.error(`swarm studio: port ${port} is still in use; another server has it (EADDRINUSE)`)
+    process.exit(1)
+  }
+  setTimeout(() => server.listen(port, '127.0.0.1'), 200)
 })
 
 // app servers and engine runs stop with the studio, each with every process it started (engine/proc.mjs stopTree)

@@ -53,6 +53,17 @@ A send made in code (the Build button under a brief, a project's dock) is never 
 | **Build** | What the chat did before the modes. Its routing is not touched. | The same. | The same. |
 | **Fix** | The doctor (`POST /api/doctor`, engine/doctor.mjs). | The same. | The same, without a build's log. |
 
+## Ask: an answer, not the build's counters
+
+The owner, 2026-11-17, in ANSWER ONLY mode: asked "i cant test the game live", the reply was "Right now: using 61 pictures painted before; painting 0." That is the picture queue's own step line, where an answer should be. Ask's prompt had said "answer in one to four short sentences" and never said that the build's counters are not one.
+
+The question is answered in the person's terms. Two things hold it, because a prompt line alone is a hope, which is why engine/honest.mjs checks the answer too:
+
+- **The prompt** (`ANSWER_RULE`, engine/ask.mjs) says plainly that the build's counters and the plan's bookkeeping ("using 61 pictures painted before; painting 0", "5 of 9 sections are built", "3 of 7 steps", a step's name, a progress line) say what the Studio is doing and never what the person asked; that a fact from the project may be used only inside an answer to their question; and that when the honest answer is that it cannot tell from here, it says "I can't tell from here", says why, and names the one thing that would settle it.
+- **The check** (`isBookkeeping`, engine/ask.mjs) reads the reply line by line. A line that is the build's counters or the Studio's own step line is not an answer. A reply made only of those is asked again once, with the person's question and the reason ("that reply is the build's own progress, not an answer…"); the pattern is `honestly`'s in engine/honest.mjs. If the model still has only counters, the person is told plainly that there is no answer from here and what would settle it (`NO_ANSWER`), never handed the counters. A sentence that tells the person something is an answer, whatever numbers it carries, and so is a real answer with one line of counters beside it.
+
+Nothing else about Ask changes. The turn's attached picture or file still rides the question (the chips upload it to the chat and the planner is told how it was read, `withRefs`); no link is opened, no chat is saved, no talk is left open, and nothing is offered to build.
+
 ## Fix
 
 Fix looks at the Studio's own working parts, not the project. It gathers facts and says what they mean; it changes nothing.
@@ -72,6 +83,10 @@ A failure caused by the Studio's own tooling is not offered a re-run: it would f
 ## Honesty
 
 The crew members who answer in the chat can read and look. None can install a package, restart the Studio or change the computer. The rule is in each answering prompt (Talk during a build, Ask's planner, the doctor) and it is also checked on the answer (engine/honest.mjs): a reply that claims to install, restart or update something is asked again once; if the model still claims it, the plain truth is said instead. The test fixture is the Pillow exchange.
+
+The same rule covers the work the plan does. In a game chat the planner talks about pictures it cannot paint, so its words are checked against the plan file (engine/gamestep.mjs `checkClaims`, run by engine/talkplan.mjs), and a sentence the plan denies is cut whole. The facts it is checked against (`planFacts`) now name every kind of picture a plan paints — the sketch sheets, the close-ups or the cut-outs, the sprites and models, the mock screens and the backdrops — each with its own done, painting and queued count, so a claim about one is never borne out by another kind painting. A first-person claim of an action ("Repainting the mocks", "I am repainting", "I repainted it", "I changed the mocks", "I fixed the backdrop") is false unless that picture is painting now (present) or has landed (done); "Next: repaint the mocks", a question and "I cannot repaint them" are not claims and stay. "The plan is not locked yet" is not a lock claim. The test fixtures are that night's plan and lines (tests/fixtures/rank-juggler, tests/honeststep.test.mjs): "Repainting the mocks so they read as fast side-view arena combat" said when no mock was painted.
+
+The line a turn ends on is never the same one twice in a row: `stepLineFor(chat, step)` gives the step's line, or nothing when the last planner turn already ended on it, so the person is not shown "Painting the backdrops now. It shows on the board as it lands." on nine replies while nothing is painting (rank-juggler, turns 46 to 54). The step and its buttons are unchanged; only the repeated sentence is left out.
 
 ## Not in this slice
 

@@ -67,3 +67,29 @@ test('no test or check script picks a port, lets it go and hands it to a server'
   const picks = files.filter(f => f !== 'scripts/studio-child.mjs' && /\bfreePort\b/.test(readFileSync(join(root, f), 'utf8')))
   assert.deepEqual(picks, [])
 })
+
+// The person, 2026-11-16: "everytime i fix it it crashes". The server threw on a busy port, so a hand-over
+// (the launcher starting a new server on a new build while the old one had not let go) became a crash loop
+// instead of a one-second wait. It waits now — and still says EADDRINUSE when the port is really somebody
+// else's, because the launcher reads that word to pick a fresh port.
+test('a hand-over waits for the old server to let go, and a real conflict still says EADDRINUSE', async () => {
+  const src = readFileSync(new URL('../server/server.mjs', import.meta.url), 'utf8')
+  assert.match(src, /server\.on\('error'/, 'listen has an error handler')
+  assert.match(src, /err\)\?\.code !== 'EADDRINUSE'|code !== 'EADDRINUSE'/, 'a code other than EADDRINUSE still ends it')
+  assert.match(src, /setTimeout\(\(\) => server\.listen\(port, '127\.0\.0\.1'\), 200\)/, 'it waits and tries again')
+  assert.match(src, /is still in use; another server has it \(EADDRINUSE\)/, 'and says the word the launcher reads')
+
+  // a port held for a moment: the server that waits takes it over
+  const dir = mkdtempSync(join(tmpdir(), 'child-hand-'))
+  const other = createServer()
+  await new Promise(r => other.listen(0, '127.0.0.1', r))
+  const port = other.address().port
+  setTimeout(() => other.close(), 400)
+  try {
+    const s = await startStudio({ env: envIn(dir), port })
+    try {
+      assert.equal(s.port, port, 'it took the very port that was busy a moment ago')
+      assert.equal((await fetch(s.base + '/')).status, 200)
+    } finally { s.child.kill() }
+  } finally { try { other.close() } catch {} rmSync(dir, { recursive: true, force: true }) }
+})

@@ -17,7 +17,9 @@ import { planTemplate, remixPlan, templateStore, TEMPLATE_ID } from '../engine/t
 // planner() -> { provider, model } or null: reads the idea's genre family (engine/planshape.mjs askShape);
 // without one the plan is shaped from the tables alone. godot() says whether Godot 4 is on this machine.
 // toProject(pid, { name, buf, asIs }): a plan's art reference copied into a project, once its talk joins one (engine/planrefs.mjs)
-export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onPicture = null, builtInTemplates = [], planner = null, godot = () => undefined, toProject = null }) {
+// titled(plan, nameMode): the plan has a name, so its chat takes it too (engine/chats.mjs titleFromBuild). nameMode is
+// 'given' for a name typed on the board, 'planner' for one the idea or the planner gave.
+export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onPicture = null, builtInTemplates = [], planner = null, godot = () => undefined, toProject = null, titled = null }) {
   const store = planStore(join(dataDir, 'plans'))
   const env = () => ({ godot: godot() })
   // the planner's reading of the idea, never longer than 40 s and never a reason to fail
@@ -27,6 +29,9 @@ export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onP
     return askShape({ ...p, idea, answers, signal: AbortSignal.timeout(40000) }).catch(() => null)
   }
   const templates = templateStore(join(dataDir, 'templates'), { builtIn: builtInTemplates })
+  // the plan's name reaches its chat, once a name is written or whenever the plan is saved with one; never a
+  // failed plan save or a chat that cannot be written breaks the plan's own answer
+  const sayTitle = (p, nameMode = 'planner') => { try { if (p?.title) titled?.(p, nameMode) } catch {} }
   const files = id => join(store.dir, id)
   // the next step is the game chat's own last line (engine/gamestep.mjs), shown on the board too
   const nextOf = plan => { try { return nextStep({}, plan).text || '' } catch { return '' } }
@@ -187,11 +192,13 @@ export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onP
   async function fromTalk(input, planId = null) {
     const hint = await hintFor(input.idea, input.answers || {})
     const was = planId && store.get(planId)
-    if (!was) return view(store.create(input, env(), hint))
+    if (!was) { const made = store.create(input, env(), hint); sayTitle(made); return view(made) }
     if (building.has(was.id)) throw Object.assign(new Error('the build is running'), { status: 409 })
     queues.delete(was.id)
     replan(was, input, env(), hint)
-    return view(store.save(was))
+    const saved = store.save(was)
+    sayTitle(saved)
+    return view(saved)
   }
 
   // a plan's talk joined a project: its art references go there too, each once
@@ -333,7 +340,7 @@ export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onP
     if (sub === 'card') editCard(plan, String(input.card || ''), input.body || {})
     else if (sub === 'systems') setSystems(plan, input || {})
     else if (sub === 'starter') editStarter(plan, { key: input.key, value: input.value, system: input.system, on: input.on })
-    else if (sub === 'title') { const t = String(input.title || '').trim().slice(0, 80); if (t) { plan.title = t; plan.titleSet = true } }
+    else if (sub === 'title') { const t = String(input.title || '').trim().slice(0, 80); if (t) { plan.title = t; plan.titleSet = true; sayTitle(plan, 'given') } }
     else if (sub === 'replan') {
       if (building.has(plan.id)) throw Object.assign(new Error('the build is running'), { status: 409 })
       queues.delete(plan.id)
@@ -356,6 +363,8 @@ export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onP
     else if (hooks[sub]) await hooks[sub](plan, input, store)
     else throw Object.assign(new Error('no such action'), { status: 404 })
     store.save(plan)
+    // a replan or a lock may have made the plan's name (the idea's, or the planner's): the chat takes it then
+    sayTitle(plan)
     if (typeof after === 'function') after()
     return view(plan)
   }

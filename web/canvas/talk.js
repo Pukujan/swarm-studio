@@ -135,9 +135,12 @@ export async function talkSay(text, brief = false) {
     talk.briefAsk = null
     if (!talk.on) return
   }
-  const media = brief ? [] : links.take('ref')
+  // A picture pasted or attached is this turn's, whichever button sends it: it used to be taken only on the
+  // plain send, so pressing "Build"/the brief threw the chip away and the crew never saw the screenshot the
+  // person had just attached (the person, 2026-11-16: "i cant seem to send images ... it doesnt get sent").
+  const media = links.take('ref')
   // layers dragged in (the Studio scaffold's Layers, web/layers.js): the planner is told what the turn is about
-  const about = brief ? [] : links.take('layer')
+  const about = links.take('layer')
   let took = null, mine = null
   if (!brief) { talk.said.push({ who: 'you', text: about.length ? `${text}\n(About: ${about.map(c => c.name).join(', ')})` : text }); mine = feed(null, text, 'you', [...about, ...media].map(m => m.name).join(', ')); took = talk.heard?.(text) }
   els.feed.querySelectorAll('.talk-acts, .fail-turn .chips').forEach(x => x.remove())
@@ -277,15 +280,30 @@ const talkPost = (path, body) => api(path, { method: 'POST', headers: { 'content
   .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error('no answer'), { reason: j.hermes ? { code: 'hermes', message: j.message, action: j.action } : j.reason || null }); return j })
 // again: the same words once more after a failed turn (nothing is said twice); saved: that turn is in the chat
 // already (its model failed inside the turn), so the server takes it back before it asks again
+// A game talk takes the media chips too (spec 29): they were uploaded and filed in the chat by the time the chip
+// showed, so the send has to name them or the picture is never seen by the planner (#648)
 async function gameSay({ said = '', pick = '', label = '', again = false, saved = false }) {
   if (talk.busy) return
   const text = again ? '' : said || label
+  const media = !again && !pick ? links.take('ref') : []
   if (text) { talk.said.push({ who: 'you', text }); feed(null, text, 'you') }
   els.feed.querySelectorAll('.talk-acts, .fail-turn .chips').forEach(x => x.remove())
   const wait = botMsg('…', true)
   talk.busy = true
   try {
-    const j = talk.chat ? await talkPost(`/api/talk/${encodeURIComponent(talk.chat)}`, { said, pick, ...(again && saved ? { again: true } : {}) }) : await talkPost('/api/talk', { kind: 'game', said })
+    const refs = media.length ? { refs: media.map(m => m.key) } : {}
+    let j
+    try {
+      j = talk.chat
+        ? await talkPost(`/api/talk/${encodeURIComponent(talk.chat)}`, { said, pick, ...refs, ...(again && saved ? { again: true } : {}) })
+        : await talkPost('/api/talk', { kind: 'game', said, ...refs })
+    } catch (err) {
+      // the turn did not happen: the chips go back so the next send still carries the picture
+      for (const m of media) links.add(m)
+      throw err
+    }
+    // Build the game: the App room's own button, run by the page and not by the server (issue #666)
+    if (j.act === 'do:app') { talk.chat = j.chat.id; return stepRun('do:app', { run: j.chat.run || talk.from || shownRun() }) }
     if (!talk.on) return
     talk.chat = j.chat.id
     talk.said.push({ who: 'hermia', text: j.turn.text + chatCardsLine(j.turn.cards) })
@@ -299,9 +317,9 @@ async function gameSay({ said = '', pick = '', label = '', again = false, saved 
     if (j.turn.wait) gameWatch(j.turn.text, j.turn.install ? msg : null)
     // the planner's model did not answer this turn (server/talk.mjs `failed`): the step above is the plan's own;
     // the reason is said beside it, with Try again for the same words
-    if (j.failed) { const retry = () => { talk.retry = null; gameSay({ said, pick, again: true, saved: true }) }; talk.retry = retry; failSay(j.failed, { again: retry }) }
+    if (j.failed) { for (const m of media) links.add(m); const retry = () => { talk.retry = null; gameSay({ said, pick, again: true, saved: true }) }; talk.retry = retry; failSay(j.failed, { again: retry }) }
   } catch (err) {
-    if (talk.on) { const retry = () => { talk.retry = null; gameSay({ said, pick, again: true }) }; talk.retry = retry; failSay(err.reason, { again: retry }) }
+    if (talk.on) { for (const m of media) links.add(m); const retry = () => { talk.retry = null; gameSay({ said, pick, again: true }) }; talk.retry = retry; failSay(err.reason, { again: retry }) }
   } finally { talk.busy = false; wait.remove() }
 }
 // While something paints, ask for the next step every few seconds; when it moves on, Hermia says it with its buttons
@@ -491,20 +509,21 @@ if (chatsBtn) chatsBtn.onclick = async () => {
   const run = shownRun(), known = projectNow()
   const j = await api(known ? `/api/projects/${encodeURIComponent(known)}/chats` : `/api/chats${run ? `?run=${encodeURIComponent(run)}` : ''}`).then(r => r.json()).catch(() => ({}))
   const pid = known || j.project || null
-  // A chat with no project of its own is loose, and a project's list holds only its own: opening Chats on
-  // a build with no chats of that project showed none, and a chat the person had been talking in a day
-  // earlier ("New game", 20 turns) was nowhere to be found (the person, 2026-11-16: "i cant see my old
-  // chat where i asked it to fix something"). The loose ones are always listed, under the project's.
-  const groupOf = (j.groups || []).slice()
-  if (pid && !groupOf.length) {
-    const loose = await api('/api/chats').then(r => r.json()).then(o => o.chats || []).catch(() => [])
-    if (loose.length) groupOf.push({ name: '', chats: loose })
-  }
-  const groups = pid ? groupOf : [{ name: '', chats: j.chats || [] }]
+  // Inside a project the picker is that project's own chats and nothing else. It used to fall back to every
+  // loose chat — first when the project had none, then always — which mixed other builds into this one: two
+  // rows both named "Rooftop Signal", "Army of Ants" beside a game about rooftops (the person, 2026-11-16:
+  // "this is supposed to show recent chat logs only from this project not others"). A chat belongs to a
+  // build through its `project`; a chat that has none is loose and is shown only where there is no project.
+  const groups = pid
+    ? (j.groups || []).map(g => ({ ...g, chats: (g.chats || []).filter(c => !c.project || c.project === pid) })).filter(g => g.chats.length)
+    : [{ name: '', chats: j.chats || [] }]
   const row = c => `<button type="button" class="cp-row${talk.on && talk.chat === c.id ? ' on' : ''}" data-chat="${esc(c.id)}" draggable="${!!pid}"><span>${esc(c.title)}</span>${c.state === 'locked' ? '<small>Locked</small>' : ''}</button>`
-  // every group is a place to drop a chat, so the four always show while dragging
-  const names = pid ? ['Design', 'App', 'Game', 'Video'] : ['']
-  const html = names.map(n => { const g = groups.find(x => x.name === n); return `<section class="cp-group${g ? '' : ' empty'}" data-group="${n}">${n ? `<h4>${n}</h4>` : ''}${(g?.chats || []).map(row).join('')}</section>` }).join('') +
+  // every group is a place to drop a chat, so the four always show while dragging. A group named '' is the
+  // loose chats (no project): it has no heading and no drop target of its own.
+  const names = [...new Set([...(pid ? ['Design', 'App', 'Game', 'Video'] : []), ...groups.map(g => g.name)])]
+  const list = names.map(n => { const g = groups.find(x => x.name === n); return `<section class="cp-group${g && g.chats.length ? '' : ' empty'}" data-group="${n}">${n ? `<h4>${n}</h4>` : ''}${(g?.chats || []).map(row).join('')}</section>` }).join('')
+  // the rows scroll, the New chat button does not: it stays where the hand expects it
+  const html = `<div class="chats-pop-scroll">${list}</div>` +
     `<button type="button" class="cp-row cp-new" data-new>${ico('plus')}<span>New chat</span></button>`
   chatsPop = window.SwarmUI.popover(chatsBtn, html, { className: 'chats-pop', align: 'start' })
   const el = chatsPop.el

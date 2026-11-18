@@ -113,7 +113,9 @@ export function makeHome({ sw, C, root }) {
     }
     H.loaded = true
     if (H.view === 'assets') H.assets = await api('/api/assets').then(j => j.assets).catch(() => [])
-    if (H.view === 'chats') loadChats()
+    // also on every load, not only on opening Chats: the rail's Chats row shows how many there are, so
+    // the older talks are visible without hunting for them
+    if (H.view === 'chats' || !H.chats) loadChats()
     if (H.view === 'folder' && !H.data.folders.some(f => f.name === H.folder)) go('recent')
     render()
     clearTimeout(H.timer)
@@ -166,7 +168,10 @@ export function makeHome({ sw, C, root }) {
   function renderSide() {
     const n = live().length, t = H.data.projects.filter(p => p.trashed).length
     const item = (v, icon, label, count) => navRow(v, icon, label, count, H.view === v && !H.stack)
-    nav.innerHTML = item('recent', 'clock', 'Recent') + item('all', 'grid', 'All projects', n) + (hosted() ? '' : item('chats', 'msg', 'Chats') + item('assets', 'image', 'Assets') + item('trash', 'trash', 'Trash', t))
+    // the Chats row carries how many there are, so the older talks are visible before the row is opened
+    // (the person, 2026-11-16: "why is it always same??? i cant find my older chat logs")
+    const nc = (H.chats || []).length
+    nav.innerHTML = item('recent', 'clock', 'Recent') + item('all', 'grid', 'All projects', n) + (hosted() ? '' : item('chats', 'msg', 'Chats', nc || undefined) + item('assets', 'image', 'Assets') + item('trash', 'trash', 'Trash', t))
     foldersEl.innerHTML = H.data.folders.map(f => `<button class="nv${H.view === 'folder' && H.folder === f.name && !H.stack ? ' on' : ''}" data-folder="${esc(f.name)}">${ic('folder')}<span>${esc(f.name)}</span>${f.count ? `<span class="n" aria-label="${f.count} projects">${f.count}</span>` : ''}</button>`).join('')
     root.classList.toggle('no-folders', hosted())
   }
@@ -283,7 +288,14 @@ export function makeHome({ sw, C, root }) {
   // Chats (spec 29): talks with the planner that have not built anything, newest first. One opens in
   // the Design deck's chat where it left off; a chat that builds moves into its project.
   const CHAT_ICON = { site: 'site', app: 'code', game: 'game', film: 'film' }
-  function loadChats() { api('/api/chats').then(j => { H.chats = j.chats || []; if (H.view === 'chats' && !H.stack) renderChats() }).catch(() => {}) }
+  function loadChats() {
+    api('/api/chats').then(j => {
+      H.chats = j.chats || []
+      // the rail's count comes from this list, so redraw it too, not only the Chats view
+      renderSide()
+      if (H.view === 'chats' && !H.stack) renderChats()
+    }).catch(() => {})
+  }
   function renderChats() {
     let list = H.chats || []
     if (H.q) { const q = H.q.toLowerCase(); list = list.filter(c => c.title.toLowerCase().includes(q)) }

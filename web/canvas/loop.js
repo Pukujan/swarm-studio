@@ -22,6 +22,7 @@ import { links, refLines } from './base.js'
 import { carryStep, carryMoving } from './carry.js'
 import { hosted } from './hosted.js'
 import { isResearchStop, stopText, stopItems, againBody, takeOut } from '../researchstop.js'
+import { readAsk, askRoute, partButtons } from '../triage.js'
 
 // ---------- loop
 
@@ -479,6 +480,20 @@ async function sendDock() {
   // a project's dock has already decided (web/project.js): its open version is what the words
   // extend, whatever run this canvas happens to be showing
   const route = to.fresh ? 'new' : to.route || routeMessage({ text: brief, run: to.from, site: S.kind !== 'game' && S.frames.length > 0, selected: to.selected, hosted: !!hosted })
+  // What the words are asking for, read first (web/triage.js, docs/specs/49-read-the-ask.md): a complaint about
+  // this build, or several things in a row, is not a fresh brief. The chat says what it understood and offers the
+  // parts; nothing runs until the person presses, or types the same words. A product described, and a send made in
+  // code (a Build button, a project's dock), go on exactly as they did.
+  {
+    const read = readAsk(brief, triageCtx())
+    // a question is read only where a build would start: with nothing built, the chat's own routing answers it (or
+    // offers the talk) as it always did, and over a build it is not turned into a change (that would build on it)
+    if (askRoute(read) === 'say' && !(read.kind === 'question' && route === 'new')) {
+      els.brief.value = ''
+      feed(null, brief, 'you')
+      return saidBack(read, brief)
+    }
+  }
   if (route === 'fix') { els.brief.value = ''; feed(null, `› ${brief}`, 'you'); to.done?.(null); return commandOps.fix({ text: brief }) }
   // "don't build yet, let's talk" or a question for the crew, typed into a project's dock: the
   // planner answers here and nothing is built until the person says build (engine/talkplan.mjs)
@@ -531,6 +546,56 @@ async function sendDock() {
   else if (res?.status === 503 && j.hermes) hermesSays(j)
   else if (hosted && res) hosted.refuse(j)
   else feed(null, `Couldn't start the run${res ? ` (${res.status})` : ''}. Is the canvas server running?`, 'err')
+}
+
+// ---------- reading the ask (web/triage.js, docs/specs/49-read-the-ask.md)
+// What "here" is, for readAsk: a game's "the look" is its art and a website's is its theme, and something built is
+// what a complaint is about. A send on the Overview (a project's dock) has already been read there (web/project.js
+// say), so it is not read again: the dock's own route decides.
+/** @type {() => { hasBuild: boolean, kind: string, preview: boolean }} */
+function triageCtx() {
+  const ov = overview()
+  return {
+    hasBuild: !!(shownRun() || ov?.board?.kind) && S.frames.length > 0,
+    kind: S.kind === 'game' ? 'game' : ov?.board?.app ? 'app' : 'site',
+    // a slash command is the chat's own (runSlash), and a project's dock read its own words (web/project.js say)
+    preview: /^\/[a-z?]/i.test(els.brief.value.trim()) || !!ov
+  }
+}
+
+// What the chat understood, in one plain line, with the parts as buttons. The words stay in the chat as the
+// person's own; nothing runs until they press, or type the same thing again (anything a button does can be
+// typed: each button is just the box's words for its part, sent). A question changes nothing and is answered in
+// Ask mode; words this file will not guess about say why, and offer Do it anyway.
+/** @param {{ kind: string, parts: { what: string, target?: string }[], heard: string, unclear?: boolean }} read @param {string} brief */
+function saidBack(read, brief) {
+  // the box's words for a part, sent: anything a button here does can be typed, word for word
+  const again = what => { els.brief.value = what; els.form.requestSubmit() }
+  const line = read.kind === 'multi' ? read.heard : `I would ${read.parts[0].what.replace(/[.]+$/, '')}. Is that a change to this build, or something new?`
+  const item = botMsg(read.unclear ? "I couldn't tell what to change from that. Say which part, or have it built as you said it." : line)
+  item.classList.add('ask-read')
+  const acts = document.createElement('div')
+  acts.className = 'chips'
+  const add = (label, run, primary = false) => {
+    const b = document.createElement('button')
+    b.type = 'button'
+    if (primary) b.className = 'primary'
+    b.textContent = label
+    b.onclick = () => { acts.remove(); run() }
+    acts.append(b)
+    return b
+  }
+  if (read.kind === 'multi') {
+    for (const p of partButtons(read.parts)) add(p.label, () => again(p.what))
+    add('Do all of that', () => again(brief), true)
+  } else if (read.kind === 'change') {
+    add('Make the change', () => again(brief), true)
+  } else {
+    add('Do it anyway', () => again(brief))
+  }
+  add('Never mind', () => {})
+  item.append(acts)
+  return item
 }
 
 // Hermia's line, each page it found with its link and what was taken, ✕ to take one out, and Build with what is left
