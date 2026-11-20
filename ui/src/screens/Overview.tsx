@@ -6,15 +6,17 @@
 // it is (issue #404). What is drawn is the machine's (useNav().view: the project and version); the selection, the
 // search and the panel are this screen's own.
 //
+// Scribble (spec 29) is here: the dock's Scribble and Eraser, marks drawn on a page with a note each, sent with the
+// chat's words, and the crew's drafts kept or let go (overview/useScribble.ts, MarkLayer.tsx).
 // Not here yet, because they run on the Design deck's runtime in the current Studio (web/canvas/): a page's sections
-// picked and edited by hand, Scribble and its drafts, the Critic's pins, pictures' stand-ins while painting, the
-// crew's cursors and Follow, and the live line. A page shows its saved snapshot, else its plan, and a page that
-// changed is photographed again in a frame of its own (overview/Snapper.tsx); the chat is the current Studio's (the
-// Dock says how).
-import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { search } from '../nav/address'
+// picked and edited by hand, the Critic's pins, pictures' stand-ins while painting, the crew's cursors and Follow,
+// and the live line. A page shows its saved snapshot, else its plan, and a page that
+// changed is photographed again in a frame of its own (overview/Snapper.tsx). The chat is the one place to type
+// (overview/OverviewChat.tsx): down the left in a wide window, along the bottom in a narrower one (decision 0015), and
+// the screen keeps clear of it (overview.css, --chat-w and --chat-h).
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { openOn } from '../nav/opening'
-import { classicHref } from '../shell/classic'
+import { sectionDoc } from './deck/playdoc'
 import { useNav } from '../nav/NavProvider'
 import { MenuAt, MenuRow, MenuSeparator } from '../primitives/Menu'
 import { ToastProvider, useToast } from '../primitives/Toast'
@@ -22,8 +24,12 @@ import { useScreenCrumb } from '../shell/crumb'
 import { api, post, said, store, raw } from './overview/api'
 import { Dock } from './overview/Dock'
 import { FilesPanel } from './overview/FilesPanel'
+import { MarkLayer } from './overview/MarkLayer'
+import { markWords, pageK } from './overview/scribble'
+import { useScribble } from './overview/useScribble'
 import { Inspector } from './overview/Inspector'
-import { download, findItem, groups as groupOf, opening, projectName, type Act, type Item, type Project, type Ref, type Section, type Sending, type Upload } from './overview/model'
+import { OverviewChat } from './overview/OverviewChat'
+import { download, findItem, withDrafts, groups as groupOf, opening, projectName, type Act, type Item, type Project, type Ref, type Section, type Sending, type Upload } from './overview/model'
 import { PlayPublish } from './overview/PlayPublish'
 import { ProjectCrumb } from './overview/ProjectCrumb'
 import { useSnapshots } from './overview/Snapper'
@@ -52,12 +58,12 @@ function OverviewScreen() {
   const [aspects, setAspects] = useState(() => new Map<string, number>())
   const [sending, setSending] = useState<Sending[]>([])
   const [renaming, setRenaming] = useState<string | null>(null)
-  const [text, setText] = useState('')
+  // words put in the chat's box (New page)
+  const [fill, setFill] = useState<{ id: string, text: string }>()
   const [files, setFiles] = useState(false)
   const [linking, setLinking] = useState(false)
   const [menu, setMenu] = useState<{ x: Item, at: { x: number, y: number } } | null>(null)
   const stage = useRef<StageHandle>(null)
-  const ask = useRef<HTMLInputElement>(null)
   const fileIn = useRef<HTMLInputElement>(null)
   const refIn = useRef<HTMLInputElement>(null)
   const anchor = useRef<HTMLSpanElement>(null)
@@ -67,12 +73,39 @@ function OverviewScreen() {
   // pages that changed are photographed again, and their new pictures drawn before the server is asked again
   const snaps = useSnapshots(waiting ? null : o.run, waiting ? null : o.board, stage)
   const board = useMemo(() => withShots(o.board, snaps.kept), [o.board, snaps.kept])
-  const groups = useMemo(() => groupOf(waiting ? null : board, o.uploads, o.refs, q, sending), [waiting, board, o.uploads, o.refs, q, sending])
+  // Scribble: the tool in hand, the marks, the run's drafts (beside their pages)
+  const sc = useScribble(waiting ? null : o.run, { toast })
+  const groups = useMemo(() => withDrafts(groupOf(waiting ? null : board, o.uploads, o.refs, q, sending), sc.drafts, sc.drafting, sc.reads), [waiting, board, o.uploads, o.refs, q, sending, sc.drafts, sc.drafting, sc.reads])
   const find = useCallback((key: string | null) => findItem(groups, key), [groups])
   const x = find(sel)
   const name = projectName(o.project, o.board)
-  // the crew's chat is the classic Studio's for now (decision 0024: `/` is the next UI, the classic one is /classic/)
-  const studioAt = classicHref(search(view, location.search))
+
+  // ---------- Scribble: the note that follows a mark just drawn, and a selected draft as its own document
+  const [noting, setNoting] = useState<{ id: string, x: number, y: number } | null>(null)
+  const picture = useCallback((page: string) => { const p = findItem(groups, `page:${page}`); return p?.snap ? p.sharp || p.src : null }, [groups])
+  const over = (it: Item, aspect?: number) => (it.page ? (
+    <MarkLayer page={it.page} k={pageK(it.snap ? aspect : undefined)} tool={sc.tool} marks={sc.marks.filter(m => m.page === it.page)} sent={sc.sent.filter(m => m.page === it.page)}
+      onErase={sc.erase} onDraw={(page, pts, shift, at) => { const m = sc.draw(page, pts, shift); if (m) setNoting({ id: m.id, x: at.x, y: at.y }) }} />
+  ) : null)
+  const [draftDoc, setDraftDoc] = useState<{ key: string, doc: string } | null>(null)
+  const draftHtml = x?.kind === 'draft' ? x.draft?.html : undefined
+  useEffect(() => {
+    if (!x || draftHtml == null) { setDraftDoc(null); return }
+    let live = true
+    const key = x.key
+    void sc.model().then(m => { if (live && m) setDraftDoc({ key, doc: sectionDoc(m, draftHtml) }) })
+    return () => { live = false }
+  }, [x?.key, draftHtml, sc.model])
+  const closeDraft = (it: Item, accept: boolean) => {
+    if (!it.draft) return
+    void sc.closeDraft(it.draft.id, accept).then(ok => {
+      if (!ok) { toast('That did not work'); return }
+      toast(accept ? 'Accepted' : 'Dismissed', { icon: accept ? 'check' : 'x' })
+      if (sel === it.key) setSel(null)
+      if (accept) setTimeout(() => { void o.reload() }, 800)
+    })
+  }
+  const chatMarks = useMemo(() => ({ n: sc.marks.length, label: markWords(sc.marks.length || 1), clear: sc.clear, send: (text: string, say: Parameters<typeof sc.send>[1]) => sc.send(text, say, picture) }), [sc.marks.length, sc.clear, sc.send, picture])
 
   // ---------- the breadcrumb: Projects › name ▾
   const rename = useCallback((title: string) => { if (o.pid) post('/api/projects', { op: 'rename', ids: [o.pid], title }).then(() => o.reload()).catch(err => toast(said(err))) }, [o, toast])
@@ -194,12 +227,13 @@ function OverviewScreen() {
     asset: refs => o.setRefs(refs)
   })
 
-  // ---------- Replace: a picture is painted again (the words in "Tell the crew…" steer it); an upload takes a new file
+  // ---------- Replace: a picture is painted again as it was described (words in the chat, with it selected, steer
+  // it: OverviewChat); an upload takes a new file
   const replace = (it: Item) => {
     if (it.kind === 'upload') { replacing.current = it.name; if (fileIn.current) { fileIn.current.multiple = false; fileIn.current.click() } return }
     if (it.kind === 'art' && it.art && o.run) {
-      post(`/api/runs/${enc(o.run)}/image`, { page: it.art.page, layer: it.art.layer, gen: it.art.gen, prompt: text.trim() })
-        .then(() => { setText(''); toast('Painting', { icon: 'image' }); setTimeout(() => { void o.reload() }, 1500) })
+      post(`/api/runs/${enc(o.run)}/image`, { page: it.art.page, layer: it.art.layer, gen: it.art.gen, prompt: '' })
+        .then(() => { toast('Painting', { icon: 'image' }); setTimeout(() => { void o.reload() }, 1500) })
         .catch(err => toast(said(err)))
     }
   }
@@ -209,17 +243,11 @@ function OverviewScreen() {
     if (a === 'zip') void exportZip()
     if (a === 'replace') replace(it)
     if (a === 'ref-remove') removeRef(it)
+    if (a === 'draft-accept' || a === 'draft-dismiss') closeDraft(it, a === 'draft-accept')
   }
 
-  // ---------- the dock
-  const newPage = () => { setSel(null); setText('Add a page: '); requestAnimationFrame(() => ask.current?.focus()) }
-  const send = () => {
-    const t = text.trim()
-    if (!t) { ask.current?.focus(); return }
-    if (x?.kind === 'art') return replace(x)
-    // the crew's chat is the current Studio's until the talk moves here: the words stay in the box
-    toast('Tell the crew from the Studio', { icon: 'msg', action: 'Open', onAction: () => { location.href = studioAt } })
-  }
+  // ---------- New page: the words start in the chat's box, about the whole project
+  const newPage = () => { setSel(null); setFiles(false); setFill({ id: String(Date.now()), text: 'Add a page: ' }) }
 
   const onKey = (e: KeyboardEvent) => {
     if (e.key !== 'Escape' || e.defaultPrevented) return
@@ -231,7 +259,8 @@ function OverviewScreen() {
 
   const shut = (k: Section) => { const next = { ...open, [k]: !(open[k] === false || (k === 'code' && !open[k])) }; setOpen(next); store.set('project.open', next) }
   return (
-    <div className={`ov ${x ? 'insp-on' : ''} ${files ? 'files-on' : ''}`} onKeyDown={onKey} {...drop.zone}>
+    <>
+    <div className={`ov ${x ? 'insp-on' : ''} ${files ? 'files-on' : ''} ${sc.tool === 'scribble' ? 'scribbling' : sc.tool === 'eraser' ? 'erasing' : ''}`} onKeyDown={onKey} {...drop.zone}>
       <FilesPanel groups={groups} theme={o.board?.theme} selected={sel} open={open} onToggle={shut} q={q} onSearch={setQ}
         layers={{ pages: waiting ? [] : o.board?.pages || [], page: x?.kind === 'page' ? x.page! : null, onPickPage: p => select(`page:${p}`, { pan: true }) }}
         onSelect={k => { if (narrow()) { setSel(k); setFiles(false); requestAnimationFrame(() => stage.current?.zoomTo(k)) } else select(k, { pan: true }) }}
@@ -241,11 +270,17 @@ function OverviewScreen() {
       {linking && <LinkBox onDone={async u => { if (u) { const out = await refPost('link', { url: /^https?:\/\//i.test(u) ? u : `https://${u}` }); if (out?.ref) setSel(`rf:${out.ref.id}`) } setLinking(false) }} />}
       <Stage ref={stage} groups={groups} waiting={waiting} theme={o.board?.theme} selected={sel} inspector={!!x}
         aspects={aspects} onMeasure={(page, r) => setAspects(m => (Math.abs((m.get(page) || 0) - r) < 0.01 ? m : new Map(m).set(page, r)))}
-        onSelect={k => select(k)} onOpen={openItem} onMenu={(it, at) => setMenu({ x: it, at })} find={find} />
+        onSelect={k => select(k)} onOpen={openItem} onMenu={(it, at) => setMenu({ x: it, at })} find={find} over={over} />
       {o.error && !o.board && <p role="alert" className="ov-error">⚠ {o.error}</p>}
-      {x && <Inspector x={x} theme={o.board?.theme} onClose={() => setSel(null)} onAct={act} onUseFor={useFor} />}
-      <Dock ref={ask} text={text} onText={setText} onSubmit={send} files={files} onFiles={() => setFiles(!files)}
-        onFrame={() => stage.current?.frameAll()} onNewPage={newPage} onUpload={() => fileIn.current?.click()} onChat={() => { location.href = studioAt }} />
+      {x && <Inspector x={x} theme={o.board?.theme} draftDoc={draftDoc?.key === x.key ? draftDoc.doc : null} onClose={() => setSel(null)} onAct={act} onUseFor={useFor} />}
+      {/* the optional note, at the end of the mark; Enter, Esc or a click away closes it */}
+      {noting && (
+        <input key={noting.id} autoFocus className="ov-mk-note" placeholder="Note" aria-label="Note for this mark" maxLength={200}
+          style={{ left: Math.min(innerWidth - 230, noting.x + 10), top: Math.min(innerHeight - 44, noting.y + 6) }}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur() } }}
+          onBlur={e => { sc.note(noting.id, e.currentTarget.value); setNoting(null) }} />
+      )}
+      <Dock files={files} tool={sc.tool} onTool={sc.setTool} onFiles={() => setFiles(!files)} onFrame={() => stage.current?.frameAll()} onNewPage={newPage} onUpload={() => fileIn.current?.click()} />
       {/* Play and Publish in the top bar, as the classic Overview has them */}
       <PlayPublish run={o.run} />
       {drop.layer}
@@ -279,6 +314,9 @@ function OverviewScreen() {
         </MenuAt>
       )}
     </div>
+    {/* beside the screen, not inside it: a file dropped on the chat is the chat's, not the screen's drop */}
+    {view.version && <OverviewChat run={view.version} board={waiting ? null : o.board} selected={x} fill={fill} onReload={o.reload} onExport={() => void exportZip()} marks={chatMarks} />}
+    </>
   )
 }
 

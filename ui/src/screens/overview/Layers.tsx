@@ -2,6 +2,7 @@
 // Studio scaffold, the Design deck and the Overview (#416, web/layers.js), and its React version comes with the
 // Studio's port (feat/port-studio). Until then this stand-in draws the same pages and their planned sections from
 // the board, behind the interface the shared one will take, so swapping it is one import.
+import { layerDrag } from '../../chat'
 import { Icon } from '../../primitives/Icon'
 import { planOf, shortTitle, type Page } from './model'
 
@@ -23,7 +24,9 @@ export function LayersPanel({ pages, page, onPickPage }: Layers) {
             <Icon name="site" size={14} /><span className="min-w-0 flex-1 truncate">{shortTitle(p.title) || p.id}</span>
           </button>
           {page === p.id && planOf(p).map(l => (
-            <div key={l.id} className="flex h-8 items-center gap-2 pl-9 font-monospace text-xs text-muted">
+            // a built section drags into the chat as a chip: the words sent with it go to just that section (spec 29)
+            <div key={l.id} draggable={!!l.done} onDragStart={e => layerDrag(e, `${p.id}/${l.id}`, l.role || l.id)}
+              className={`flex h-8 items-center gap-2 pl-9 font-monospace text-xs text-muted ${l.done ? 'cursor-grab' : ''}`}>
               <Icon name="frame" size={12} /><span className="truncate">{l.role || l.id}</span>
             </div>
           ))}

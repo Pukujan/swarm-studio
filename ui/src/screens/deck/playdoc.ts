@@ -89,7 +89,11 @@ export function pageParts(html: string): { html: string, items: TourItem[] } {
   return { html: doc.body.innerHTML, items }
 }
 
-export function pageDoc(m: DeckModel, page: string): string {
+// a page as a document, and (sectionDoc) one section on its own in the same theme: a Scribble draft, shown before it
+// is kept (web/canvas/hook.js marks.render draws the same thing for its picture)
+export const pageDoc = (m: DeckModel, page: string): string => docOf(m, pageParts(pageBody(m, page)).html)
+export const sectionDoc = (m: DeckModel, html: string): string => docOf(m, `<div data-layer="draft">${clean(html)}</div>`)
+function docOf(m: DeckModel, inner: string): string {
   const t = m.theme
   const heading = t?.fonts?.heading || 'Georgia', body = t?.fonts?.body || 'Inter'
   const vars = Object.entries(t?.vars ?? {}).map(([k, v]) => `${k}:${v};`).join('')
@@ -102,7 +106,7 @@ html,body{margin:0;background:var(--background,#fff);color:var(--foreground,#111
 body.hint [data-goto]{outline:3px solid #8e8e93cc;outline-offset:2px}
 .tour-hover{outline:2px solid #8e8e93aa;outline-offset:3px;filter:brightness(1.06)}
 .tour-press{transform:scale(.96);transition:transform .1s}</style>
-${PLAY_SCRIPT}${playTags(t)}</head><body>${pageParts(pageBody(m, page)).html}</body></html>`
+${PLAY_SCRIPT}${playTags(t)}</head><body>${inner}</body></html>`
 }
 
 // What the current Studio's Play adds (web/canvas/player.js layoutTag, motionTags), from the page's boot

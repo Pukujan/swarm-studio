@@ -7,6 +7,7 @@ import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, 
 import { BoardHostContext } from '../../board/host'
 import { iframeHost } from '../../board/iframeHost'
 import { CrewCursors } from './CrewCursors'
+import { LinkWires } from './LinkWires'
 import { FRAME_W, GAP, PageFrame, frameX, type FrameGeo } from './PageFrame'
 import { layersOf, type DeckAgent, type DeckModel } from './model'
 
@@ -299,6 +300,7 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
         ))}
       </div>
       {pick && pickExtra && <div data-ui className="absolute z-20 flex justify-end" style={{ left: Math.max(8, pick.left + pick.width - 328), top: Math.max(8, pick.top + 8), width: 320 }}>{pickExtra}</div>}
+      <LinkWires model={model} cam={shown} box={k => sectionBox(model, geo, k)} pageTop={id => { const p = model.pages.find(x => x.id === id); return p ? { x: frameX(p), y: LABEL } : null }} />
       <CrewCursors model={model} cam={shown} stage={stage} target={a => target(model, geo, a)} box={k => sectionBox(model, geo, k)} spot={(p, n) => reviewSpot(model, geo, p, n)} />
       <div aria-hidden className="pointer-events-none absolute inset-0">
         {pick && <div data-picked className="absolute border-[1.5px] border-text" style={pick} />}

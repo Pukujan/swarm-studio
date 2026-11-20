@@ -1,31 +1,23 @@
-// The dock (SITEMAP §8 › Dock): Move, Frame all, New page, Upload files, Chat, and "Tell the crew…". On a phone it
-// also opens the Files panel. About a selected picture, the words repaint it (its Replace); anything else goes to
-// the crew through the current Studio for now, where the shared chat lives, until the talk's React port
-// (feat/port-talk) hosts it here. Scribble, Eraser and Follow wait for the Design deck's runtime.
-import { forwardRef } from 'react'
+// The dock (SITEMAP §8 › Dock): Move, Scribble, Eraser, Frame all, New page and Upload files. On a phone it also
+// opens the Files panel. It has no box of its own: the chat is the one place to type (owner, 2026-11-15;
+// overview/OverviewChat.tsx), and it is always on screen (decision 0015), so the dock has no Chat tool either.
+// Scribble and Eraser are toggles (pressed again, Move is back; S, E and V on the keyboard). Follow waits for the
+// Design deck's runtime.
 import { IconButton } from '../../primitives/Button'
-import { Icon } from '../../primitives/Icon'
+import type { Tool } from './useScribble'
 
-export const Dock = forwardRef<HTMLInputElement, {
-  text: string, onText: (t: string) => void, onSubmit: () => void,
-  files: boolean, onFiles: () => void, onFrame: () => void, onNewPage: () => void, onUpload: () => void, onChat: () => void
-}>(function Dock({ text, onText, onSubmit, files, onFiles, onFrame, onNewPage, onUpload, onChat }, ref) {
+export function Dock({ files, tool, onTool, onFiles, onFrame, onNewPage, onUpload }: {
+  files: boolean, tool: Tool, onTool: (t: Tool) => void, onFiles: () => void, onFrame: () => void, onNewPage: () => void, onUpload: () => void
+}) {
   return (
     <div className="ov-dock">
       <IconButton icon="folder" label="Files" className="ov-files-btn" on={files} aria-expanded={files} onPress={onFiles} />
-      <IconButton icon="move" label="Move" on />
+      <IconButton icon="move" label="Move" on={tool === 'move'} onPress={() => onTool('move')} />
+      <IconButton icon="pencil" label="Scribble" on={tool === 'scribble'} aria-pressed={tool === 'scribble'} onPress={() => onTool('scribble')} />
+      <IconButton icon="eraser" label="Eraser" on={tool === 'eraser'} aria-pressed={tool === 'eraser'} onPress={() => onTool('eraser')} />
       <IconButton icon="frame" label="Frame all" onPress={onFrame} />
       <IconButton icon="type" label="New page" onPress={onNewPage} />
       <IconButton icon="image" label="Upload files" onPress={onUpload} />
-      <IconButton icon="msg" label="Chat" onPress={onChat} />
-      <form className="ov-ask" autoComplete="off" onSubmit={e => { e.preventDefault(); onSubmit() }}>
-        <input ref={ref} value={text} onChange={e => onText(e.target.value)} placeholder="Tell the crew…" aria-label="Tell the crew" maxLength={4000}
-          className="min-w-0 flex-1 bg-transparent font-monospace text-sm text-text outline-none placeholder:text-dim" />
-        <button type="submit" aria-label="Send"
-          className="grid size-10 flex-none cursor-pointer place-items-center rounded-[10px] bg-text text-void outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-frame-hi">
-          <Icon name="up" size={16} />
-        </button>
-      </form>
     </div>
   )
-})
+}

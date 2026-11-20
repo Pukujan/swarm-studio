@@ -12,6 +12,15 @@ test('a brief gets the page type that fits it', () => {
   assert.equal(pickPageType('flight search to compare fares', [], () => 0), 'tool')
 })
 
+test('a brief that names its type keeps it, however lately that type was used', () => {
+  // the same brief built again: Gallery was just used, and it is still a gallery (it became a search tool)
+  for (let i = 0; i < 50; i++) assert.equal(pickPageType('A portfolio for a photographer\n\nPages: Home, Portfolio, About, Journal, Contact.', ['gallery', 'editorial']), 'gallery')
+  // two types fit as well as each other: the one used lately gives way
+  const tie = 'a booking page for a pixel arcade'
+  const both = new Set(Array.from({ length: 60 }, () => pickPageType(tie, [])))
+  if (both.size > 1) for (const used of both) for (let i = 0; i < 20; i++) assert.notEqual(pickPageType(tie, [used]), used)
+})
+
 test('the last three types are skipped', () => {
   for (let i = 0; i < 50; i++) {
     const k = pickPageType('a ramen counter in Osaka', ['editorial', 'shop', 'poster'])

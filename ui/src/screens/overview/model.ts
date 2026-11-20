@@ -22,13 +22,16 @@ export interface Ref { id: string, kind: string, name: string, src?: string, url
 export interface Version { id: string }
 export interface Project { id: string, title?: string, head?: string | null, versions?: Version[], parts?: Record<string, string> }
 
-export type Kind = 'page' | 'app' | 'game' | 'film' | 'art' | 'upload' | 'ref' | 'code'
+// 'draft': a section the crew wrote again from Scribble's marks (spec 29), beside its page until it is kept or let go
+export type Kind = 'page' | 'app' | 'game' | 'film' | 'art' | 'upload' | 'ref' | 'code' | 'draft'
 export interface Item {
   key: string, kind: Kind, name: string,
   full?: string, page?: string, src?: string | null, sharp?: string | null, snap?: boolean, cover?: string | null, plan?: PlanRow[],
   pitch?: string, run?: string | null, work?: Work | null, video?: string, seconds?: number | null,
   used?: string, style?: string | null, art?: Pick<Art, 'page' | 'layer' | 'gen' | 'name'>, pending?: Painting,
-  type?: string, size?: number, sending?: number, ref?: Ref
+  type?: string, size?: number, sending?: number, ref?: Ref,
+  // a draft: its id, section and words (none of these while it is still being written: `writing`)
+  draft?: { id: string, layer: string, role: string, html: string, marks: string[], reads: string[] }, writing?: boolean
 }
 // 'story' (spec 39) is listed so the order stays web/project.js's; its lane is not moved here yet, so nothing fills it
 export type Section = 'site' | 'story' | 'app' | 'game' | 'film' | 'art' | 'uploads' | 'refs' | 'code'
@@ -77,6 +80,19 @@ export function groups(board: Board | null, uploads: Upload[] = [], refs: Ref[] 
   return g
 }
 
+// a page's drafts (Scribble) sit right after it on the stage and in Files: the ones written, then the ones still
+// being written (web/project.js draftsOf)
+export function withDrafts(g: Groups, drafts: { id: string, page: string, layer: string, role: string, html: string, marks: string[] }[], drafting: { page: string, layer: string, role: string }[], reads: Record<string, string>): Groups {
+  if (!g.site || (!drafts.length && !drafting.length)) return g
+  const site: Item[] = []
+  for (const p of g.site) {
+    site.push(p)
+    for (const d of drafts.filter(d => d.page === p.page)) site.push({ key: `draft:${d.id}`, kind: 'draft', name: `Draft: ${d.role}`, page: d.page, draft: { ...d, reads: d.marks.map(id => reads[id]).filter(Boolean) } })
+    for (const d of drafting.filter(d => d.page === p.page)) site.push({ key: `draft:writing:${d.page}/${d.layer}`, kind: 'draft', name: `Draft: ${d.role}`, page: d.page, writing: true })
+  }
+  return { ...g, site }
+}
+
 export const findItem = (g: Groups, key: string | null) => (key ? Object.values(g).flat().find(x => x!.key === key) ?? null : null)
 
 // a section is shut when the person shut it; Code starts shut
@@ -90,7 +106,7 @@ export const USUAL: PlanRow[] = [{ id: 'hero', role: 'hero', h: 720 }, { id: 'a'
 export const planOf = (x: Pick<Item, 'plan'>) => (x.plan?.length ? x.plan : USUAL)
 // never a thin strip: a page's tile is at least a little taller than wide
 export const planRatio = (x: Pick<Item, 'plan'>) => Math.max(1.25, planOf(x).reduce((a, l) => a + l.h, 0) / 1280)
-export const SIZE: Record<Kind, [number, number]> = { page: [PAGE_W, 233], game: [300, 169], app: [300, 169], code: [300, 169], film: [142, 80], art: [112, 112], upload: [112, 112], ref: [112, 112] }
+export const SIZE: Record<Kind, [number, number]> = { page: [PAGE_W, 233], game: [300, 169], app: [300, 169], code: [300, 169], film: [142, 80], art: [112, 112], upload: [112, 112], ref: [112, 112], draft: [PAGE_W, 72] }
 // an artboard's size: a page grows to its snapshot's length once it is known, else to its plan's
 export function boardSize(x: Item, aspect?: number): [number, number] {
   if (x.kind !== 'page') return SIZE[x.kind]
@@ -116,6 +132,8 @@ export function facts(x: Item, dims?: string): [string, string][] {
     x.style ? ['Style', x.style] : null,
     x.used ? ['Used on', x.used] : null,
     x.kind === 'film' && x.seconds ? ['Length', fmtTime(x.seconds)] : null,
+    x.kind === 'draft' && x.draft ? ['Section', x.draft.role] : null,
+    x.kind === 'draft' && x.draft?.marks.length ? ['Marks', x.draft.marks.join(', ')] : null,
     x.kind === 'upload' && x.size ? ['File', `${(x.size / 1024 / 1024).toFixed(x.size > 1048576 ? 1 : 2)} MB`] : null,
     x.kind === 'ref' && x.ref ? ['From', REF_FROM[x.ref.source || ''] || x.ref.source || ''] : null,
     x.kind === 'ref' && x.ref?.use ? ['Use', x.ref.use] : null,
@@ -123,7 +141,7 @@ export function facts(x: Item, dims?: string): [string, string][] {
   ] as ([string, string] | null)[]).filter((r): r is [string, string] => !!r && !!r[1])
 }
 
-export type Act = 'open' | 'export' | 'zip' | 'replace' | 'ref-remove'
+export type Act = 'open' | 'export' | 'zip' | 'replace' | 'ref-remove' | 'draft-accept' | 'draft-dismiss'
 export function acts(x: Item, hosted = false): Act[] {
   const up = x.kind === 'upload' && x.sending == null
   return ([
@@ -131,7 +149,9 @@ export function acts(x: Item, hosted = false): Act[] {
     x.kind === 'art' || up || x.kind === 'film' ? 'export' : null,
     x.kind === 'page' ? 'zip' : null,
     (x.kind === 'art' || up) && !hosted ? 'replace' : null,
-    x.kind === 'ref' && !hosted ? 'ref-remove' : null
+    x.kind === 'ref' && !hosted ? 'ref-remove' : null,
+    x.kind === 'draft' && x.draft && !hosted ? 'draft-accept' : null,
+    x.kind === 'draft' && x.draft && !hosted ? 'draft-dismiss' : null
   ] as (Act | null)[]).filter((a): a is Act => !!a)
 }
 

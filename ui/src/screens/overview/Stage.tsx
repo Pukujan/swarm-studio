@@ -2,7 +2,7 @@
 // pictures; the game, app, film and code). The camera is web/project.js's: drag the board to pan, the wheel scrolls,
 // ⌘/Ctrl + wheel or a pinch zooms about the pointer (0.15× to 3×), and Frame all fits everything in view. A click
 // selects, a double-click opens the file's room, a right-click its menu; a click on the empty board lets go.
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from 'react'
 import { Artboard, WaitingPages } from './Artboard'
 import { COLUMNS, SECTION_NAME, type Board, type Groups, type Item } from './model'
 
@@ -20,8 +20,10 @@ const INSP = 272
 export const Stage = forwardRef<StageHandle, {
   groups: Groups, waiting: boolean, theme: Board['theme'], selected: string | null, inspector: boolean,
   aspects: Map<string, number>, onMeasure: (page: string, ratio: number) => void,
-  onSelect: (key: string | null) => void, onOpen: (x: Item) => void, onMenu: (x: Item, at: { x: number, y: number }) => void, find: (key: string) => Item | null
-}>(function Stage({ groups, waiting, theme, selected, inspector, aspects, onMeasure, onSelect, onOpen, onMenu, find }, ref) {
+  onSelect: (key: string | null) => void, onOpen: (x: Item) => void, onMenu: (x: Item, at: { x: number, y: number }) => void, find: (key: string) => Item | null,
+  // what a page's artboard wears over its picture (Scribble's marks), given the page's height over its width
+  over?: (x: Item, aspect?: number) => ReactNode
+}>(function Stage({ groups, waiting, theme, selected, inspector, aspects, onMeasure, onSelect, onOpen, onMenu, find, over }, ref) {
   const stage = useRef<HTMLDivElement>(null)
   const world = useRef<HTMLDivElement>(null)
   const cam = useRef<Cam>({ x: 0, y: 0, k: 1 })
@@ -172,7 +174,7 @@ export const Stage = forwardRef<StageHandle, {
     <section key={k} className={`ov-sec ${k}`}>
       <span className="ov-al">{SECTION_NAME[k]}</span>
       <div className="ov-abs">
-        {groups[k]!.map(x => <Artboard key={x.key} x={x} theme={theme} selected={selected === x.key} aspect={x.page ? aspects.get(x.page) : undefined} sharp={sharp} onMeasure={onMeasure} />)}
+        {groups[k]!.map(x => <Artboard key={x.key} x={x} theme={theme} selected={selected === x.key} aspect={x.page ? aspects.get(x.page) : undefined} sharp={sharp} onMeasure={onMeasure} over={x.kind === 'page' ? over?.(x, x.page ? aspects.get(x.page) : undefined) : undefined} />)}
       </div>
     </section>
   )

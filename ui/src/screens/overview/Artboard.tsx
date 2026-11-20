@@ -3,11 +3,11 @@
 // its length, the game with its play mark or its build's bar, an upload with its progress. A page is 124 wide and as
 // long as its snapshot (nine widths at most). Pictures only: a generated page is never run here (the Design deck runs
 // it, in a sandboxed frame).
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { Icon } from '../../primitives/Icon'
 import { boardSize, fmtTime, skeletonBlocks, type Board, type Item, type Work } from './model'
 
-const ICON: Record<string, string> = { page: 'site', app: 'code', game: 'game', film: 'film', upload: 'file', code: 'code', art: 'image' }
+const ICON: Record<string, string> = { draft: 'pencil', page: 'site', app: 'code', game: 'game', film: 'film', upload: 'file', code: 'code', art: 'image' }
 const WORK: Record<string, string> = { site: 'the site', app: 'the app', game: 'the game', film: 'the film' }
 
 function Skeleton({ x, theme, cover }: { x: Item, theme: Board['theme'], cover?: string | null }) {
@@ -40,7 +40,8 @@ export function WorkBar({ w }: { w: Work }) {
   )
 }
 
-export function Artboard({ x, theme, selected, aspect, sharp, onMeasure }: { x: Item, theme: Board['theme'], selected: boolean, aspect?: number, sharp: boolean, onMeasure: (page: string, ratio: number) => void }) {
+// `over`: what is drawn over a page's picture (its Scribble marks, MarkLayer.tsx)
+export function Artboard({ x, theme, selected, aspect, sharp, onMeasure, over }: { x: Item, theme: Board['theme'], selected: boolean, aspect?: number, sharp: boolean, onMeasure: (page: string, ratio: number) => void, over?: ReactNode }) {
   const [w, h] = boardSize(x, aspect)
   const src = sharp && x.sharp ? x.sharp : x.src
   const pic = x.kind === 'page' && !x.snap
@@ -51,14 +52,16 @@ export function Artboard({ x, theme, selected, aspect, sharp, onMeasure }: { x: 
       : <TypeCover x={x} theme={theme} />
   const blank = !src && !(x.kind === 'page' && !x.snap) && !(x.kind === 'page' && theme?.colors?.length)
   return (
-    <div data-key={x.key} className={`ov-ab ${x.kind} ${x.pending ? `pt-${x.pending.state}` : ''}`} style={{ width: w, height: h }}>
+    <div data-key={x.key} className={`ov-ab ${x.kind} ${x.pending ? `pt-${x.pending.state}` : ''} ${x.writing ? 'writing' : ''}`} style={{ width: w, height: h }} aria-busy={x.writing || undefined}>
       {!(x.pending && !x.src) && pic}
       {blank && <span className="absolute inset-0 grid place-items-center text-dim"><Icon name={x.kind === 'ref' && x.ref?.kind === 'link' ? 'ext' : ICON[x.kind] || 'file'} size={26} /></span>}
       {x.kind === 'ref' && !x.src && <span className="ov-cap">{x.name}</span>}
+      {x.kind === 'draft' && <span className="ov-cap">{x.name}</span>}
       {x.pending && <span className="ov-paint" role="progressbar" aria-label={`Painting ${x.name}`}><i /></span>}
       {x.kind === 'film' && <><span className="ov-play" />{x.seconds ? <span className="ov-dur">{fmtTime(x.seconds)}</span> : null}</>}
       {x.kind === 'game' && <>{x.work ? <WorkBar w={x.work} /> : <span className="ov-play" />}<span className="ov-cap">{x.name}</span></>}
       {x.sending != null && <span className="ov-upl"><i style={{ width: `${Math.round(x.sending * 100)}%` }} /></span>}
+      {over}
       {selected && <div className="ov-sel"><i /><i /><i /><i /></div>}
     </div>
   )

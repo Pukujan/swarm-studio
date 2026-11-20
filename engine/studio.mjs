@@ -78,11 +78,12 @@ export function studioStore({ projectsDir }) {
   const depth = (pid, d) => update(pid, s => { if (!DEPTHS.includes(d)) throw bad('light or thorough'); s.depth = d })
   const mode = (pid, m) => update(pid, s => { if (!MODES.includes(m)) throw bad('studio, scaffold or takes'); s.mode = m })
 
-  // the project's one brand, in the brand sheet's routes' store shape: get(id) -> { id, brand }, update(id, fn)
+  // the project's one brand, in the brand sheet's routes' store shape: get(id) -> { id, brand }, update(id, fn).
+  // `step` is where the walk's Brand step stands (null with no Studio record): server/brand.mjs lockedBrand reads it
   const brands = {
     get(pid) {
       if (!PID.test(String(pid || '')) || !existsSync(join(projectsDir, pid))) return null
-      return { id: pid, brand: readJson(at(pid, 'brand.json')) }
+      return { id: pid, brand: readJson(at(pid, 'brand.json')), step: get(pid)?.steps?.brand ?? null }
     },
     update(pid, fn) {
       const rec = brands.get(pid)
