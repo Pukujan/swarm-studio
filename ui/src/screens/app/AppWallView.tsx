@@ -172,7 +172,7 @@ export function AppWallView({ model, said, onAsk, onOpen, onFile, onBack, going 
 
   return (
     // the wall fills the screen under the top bar (h-14), as the boards do; its windows scroll inside
-    <div className={`flex min-h-0 flex-col ${docked ? 'h-[calc(100dvh-3.5rem-var(--chat-h,0px))]' : 'h-[calc(100dvh-3.5rem)]'}`}>
+    <div className={`flex min-h-0 flex-col ${docked ? 'ml-[var(--chat-w,0px)] h-[calc(100dvh-3.5rem-var(--chat-h,0px))]' : 'h-[calc(100dvh-3.5rem)]'}`}>
       {!docked && <form className="flex items-end gap-2 px-3 pt-3" onSubmit={e => { e.preventDefault(); const t = ask.trim(); if (t) { onAsk(t); setAsk('') } }}>
         <div className="max-w-[520px] flex-1"><TextField label="Ask the crew" placeholder="Pip, what are you on?" value={ask} onChange={setAsk} /></div>
         <Button role="secondary" type="submit" isDisabled={!ask.trim()}>Ask</Button>

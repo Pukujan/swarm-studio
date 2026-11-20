@@ -120,6 +120,10 @@ export interface ChatProps {
   // the box's placeholder, the line while the chat is empty, and the button's word
   box?: { placeholder: string, empty: string, action: string }
 
+  // the screen presses one of the open question's options for the person (the Plan board's Lock while its game talk
+  // drafts the plan, web/canvas/talk.js gameLock): a new `id` presses it once
+  press?: { id: string, pick: string, label: string } | null
+
   // ---------- what the chat tells the screen
   // Send while no talk is on: a build (or, when it starts with /, a command), with the pickers' values and the
   // chips, which leave the box

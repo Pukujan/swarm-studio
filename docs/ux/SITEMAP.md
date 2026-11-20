@@ -176,6 +176,13 @@ flowchart LR
 
 A Game opens here after its questions. Nothing that costs credits runs before the lock.
 
+In both Studios the board talks beside its chat (spec 27). **Make › Game › Studio** opens it with no plan yet: the
+chat sends the words, the planner asks what they left open, and the plan as it stands is drawn on the board,
+read-only, until **Lock** (the chat's, or the top bar's, which presses the chat's). The lock makes the plan, the board
+opens on it at its own address, and the crew write its cards in. A plan opened any other way (its card, the address, a
+reload, a game chat) opens its own chat with its next step. The new Studio's is `ui/src/screens/PlanBoard.tsx`; it no
+longer hands a new game's talk to the classic Studio.
+
 ```mermaid
 flowchart LR
   TPL["💡 → a template: Remix"] --> PB
@@ -283,6 +290,10 @@ flowchart LR
   MOB --> MOV["Private or Public"]
   SW --> SWB["Builds and boards you were invited to"]
 ```
+
+In the next UI the two talk branches (Chats, and "Don't build yet") open on its own Design deck: the deck with nothing
+on it and the chat talking, the machine's `draft`. Build there opens the new build on the same deck. It has no address
+of its own, so a reload shows Projects.
 
 ## 7. Me
 
@@ -517,6 +528,27 @@ flowchart LR
 
 The 7-step game wizard is gone. Its questions become the Tweak branch, asked after the first playable build.
 
+The room as built today, in both Studios, is not that tree yet (Play, Tweak and Details are the agreed direction). The
+new Studio's is `ui/src/screens/GameRoom.tsx`, moved from `web/canvas/rooms.js` as it is. Its bar has the state, the
+switch **Crew · Art · Live · Map** (each only when it has something to show), **Autoplay** once the game runs,
+**Preview / Code**, Reload, the engine project to download, Open in its own tab and **Stop**. Its stage follows the
+build: the crew's wall, then the art sheet, then the live game, or the room's card when the build stopped or failed. Its
+chat takes the same switch typed ("show the art", "play it for me"), questions to the crew, and the answer to a slice
+that waits ("fix it", "go on", a note).
+
+Starting a game is in the new Studio too (`ui/src/screens/game/start/`, moved from `web/canvas/rooms.js` and
+`web/workshop.js` as it is). The room's card **Start a game**, or `/game` in its chat, opens **New game**; `/cast`
+opens the Cast step on its own for the build that is open.
+
+- **Start a game** · `/game` → the questions, one at a time (**Just build it** fills the rest), or **Continue … n/7**
+  for an unfinished walk
+- → the spec card, every line edited in place: **Build the game**, **Shape it**, and for a promo game **Put the site
+  online first**
+- Build the game, when the game is 3D with people in it → **Cast**, a role at a time: the shortlist (By, Licence,
+  Triangles), the project's own art as **Meshy** (**Make · N credits**) or **Sprite**, and the bench (waiting,
+  sculpting, rigging, carrying) → **Build the game**
+- Shape it → Game · Story · World · Hero · Enemies · Levels · Sound → **Build now** or **Build the game**
+
 A game build's wall follows what the crew is doing, after the Map in its first window (spec 44): two painters and one code tile while the art is painted, the play test, a picture window and one code tile after. When the build stops:
 
 ```mermaid
@@ -556,6 +588,12 @@ flowchart LR
   L7 --> L8[Time and channel]
   L2 -.-> FS
 ```
+
+In the new Studio the Film studio is one screen at `?version=<build>&room=video` (ui/src/screens/FilmStudio.tsx), moved
+from the classic room as it is: Watch is the finished film with its saved cuts and, when the film was made in them, its
+wide, tall and square shapes; New cut is the form under it (the prompt, a style reference, Start from, Voice, Music)
+or an idea typed in the chat; the storyboard's beats sit above both. Shots, and the Launch pad, are still the agreed
+direction above and are in neither Studio.
 
 ## 11. Hermia, the commander
 

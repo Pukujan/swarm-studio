@@ -16,6 +16,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, copyFileSync, symlinkSync, chmodSync, rmSync } from 'node:fs'
 import { dirname, join, extname, basename } from 'node:path'
 import { streamChat } from './llm.mjs'
+import { navBrand, projectName } from './naming.mjs'
 import { checkLook, lookPrompt, lookCss, paletteVars, paletteCss, textureLayer, revealTween, cutTween, cutLayer, cutCss, rng, hash, MOTIONS, CUTS } from './look.mjs'
 
 // the renderer and the checked ffmpeg builds, pinned with every dependency in engine/videotools/package-lock.json
@@ -73,7 +74,12 @@ export function collect(events, runDir) {
         images.push({ n: images.length + 1, gen: clip(`${start.brief || ''}`, 120) || 'a picture from the build', page: pages[0]?.id || 'home', file: join(runDir, 'img', f) })
     } catch {}
   }
-  const brand = clip((pages[0]?.title || start.brief || 'Our site').split(/\s[—–|:-]\s/)[0], 40)
+  // the film is signed with the site's own name: the brief's brand, else the wordmark the crew put in the nav
+  // (engine/naming.mjs, as the story and the launch kit name it). The first page's title names a page: a film
+  // ended on a card that said "Home" (owner, 2026-11-19).
+  const nav = events.findLast(e => e.type === 'layer:done' && e.page === '*' && e.layer === 'nav' && e.html)
+  const named = clip(projectName({ brief: clip(start.brief, 600), brand: navBrand(nav?.html), title: start.title }), 40)
+  const brand = named || clip((pages[0]?.title || start.brief || 'Our site').split(/\s[—–|:-]\s/)[0], 40)
   // footage recorded from the running app (gameplay, a scroll through the site), when there is some
   const clips = []
   try {
@@ -83,6 +89,26 @@ export function collect(events, runDir) {
     }
   } catch {}
   return { brief: start.brief || '', agents: start.agents || [], theme, brand, copy: copy.slice(0, 5000), images, clips }
+}
+
+// A build with no pictures and no footage (its pictures were never painted, or it has none) still has its pages:
+// the top of each page's saved shot becomes a picture the storyboard can show, so the film is the site and not
+// type on black (owner, 2026-11-19: a photographer's film was four text cards). The shots are the Story cards'
+// (story/screens/<page>-desktop.jpg) or the Overview's snapshots (snaps/index.json), cut to a wide frame with the
+// pinned ffmpeg into img/video-screen-<page>.jpg (collect's folder scan skips video-*). Nothing is shot here.
+export async function screenStills(c, events, runDir, ffmpeg) {
+  if (c.images.length || c.clips.length || !ffmpeg) return c
+  let snaps = {}
+  try { snaps = JSON.parse(readFileSync(join(runDir, 'snaps', 'index.json'), 'utf8')).pages || {} } catch {}
+  mkdirSync(join(runDir, 'img'), { recursive: true })
+  for (const p of events.filter(e => e.type === 'page' && /^[\w-]{1,60}$/.test(String(e.id || ''))).slice(0, 6)) {
+    const from = [join(runDir, 'story', 'screens', `${p.id}-desktop.jpg`), snaps[p.id]?.f ? join(runDir, 'snaps', basename(String(snaps[p.id].f))) : ''].find(f => f && existsSync(f))
+    if (!from) continue
+    const file = join(runDir, 'img', `video-screen-${p.id}.jpg`)
+    const ok = await new Promise(done => execFile(ffmpeg, ['-v', 'error', '-y', '-i', from, '-vf', "crop=iw:'min(ih,iw*9/16)':0:0,scale=1920:-2:flags=lanczos", '-frames:v', '1', '-q:v', '3', file], err => done(!err && existsSync(file))))
+    if (ok) c.images.push({ n: c.images.length + 1, gen: clip(`the ${p.title || p.id} page of the finished site, as it looks on screen${p.purpose ? `: ${p.purpose}` : ''}`, 160), page: p.id, file, screen: true })
+  }
+  return c
 }
 
 // ---------- the storyboard

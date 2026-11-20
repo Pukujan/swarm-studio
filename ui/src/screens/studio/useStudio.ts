@@ -152,13 +152,16 @@ export function useStudio(pid: string | null) {
   }, [pid, api, post, fail])
 
   useEffect(() => { setD(null); setSel(null); setTakes(null); prepared.current = null; void load() }, [pid, load])
-  // a picture kept from the chat (decision 0025 e, ui/src/chat/useTalk.ts pickCard): its References again, nothing else
+  // a picture kept from the chat (decision 0025 e, ui/src/chat/useTalk.ts pickCard): its References again, nothing else;
+  // when chat clarifies and refreshes an unlocked brand sheet, reload Studio so the story/idea stay in sync
   useEffect(() => {
     if (!pid) return
     const again = () => { api<{ refs: StoreItem[] }>(proj('/refs')).then(j => take({ refs: j.refs })).catch(() => {}) }
+    const brandAgain = () => { void load() }
     window.addEventListener('swarm:refs', again)
-    return () => window.removeEventListener('swarm:refs', again)
-  }, [pid, api, take])
+    window.addEventListener('swarm:brand', brandAgain)
+    return () => { window.removeEventListener('swarm:refs', again); window.removeEventListener('swarm:brand', brandAgain) }
+  }, [pid, api, take, load])
 
   // What you have: while the crew reads something the person brought (or walks a site for its look), its card
   // follows; once a read is done, what it filled in (the idea, the brand's story) is loaded with the rest

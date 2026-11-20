@@ -9,6 +9,7 @@ import { MenuAt, MenuRow } from '../../primitives/Menu'
 import { Panel } from '../../primitives/Popover'
 import { useToast } from '../../primitives/Toast'
 import { useNav } from '../../nav/NavProvider'
+import { talkOn } from '../../chat'
 import { ApiError, api, post, said, store, useStored } from './api'
 import { isResearchStop, stopText, againBody, type Finding, type Stop } from '@studio/researchstop'
 import { ResearchStop } from '../../studio/ResearchStop'
@@ -55,9 +56,10 @@ export function MakeBox({ inputRef }: { inputRef: React.RefObject<HTMLInputEleme
       const b = e.body as { error?: string, ask?: string, chat?: string | null, text?: string, options?: GoOption[] } | undefined
       if (e.status === 409 && b?.error === 'ask') {
         if (b.chat && b.ask !== 'talk') return setPop({ k: 'go', brief, chat: b.chat, text: b.text || '', options: b.options || [] })
-        // "don't build yet": nothing builds; the words stay in the box and the talk is a new chat on the deck
+        // "don't build yet": nothing builds; the words stay in the box, and Talk sends them to Hermia as the first
+        // message of a new chat on the deck (web/canvas/loop.js: talkStart with the words)
         setPop(null); setText(brief)
-        return toast(b.text || "Let's talk it through first.", { action: 'Talk', onAction: () => go({ type: 'draft' }) })
+        return toast(b.text || "Let's talk it through first.", { action: 'Talk', onAction: () => { talkOn({ id: `talk:${Date.now()}`, kind: 'site', text: brief, blank: true }); go({ type: 'draft' }) } })
       }
       // it looked something up first: what it found, here under the box, before the crew uses it (decision 0025)
       if (e.status === 409 && isResearchStop(e.body)) return setPop({ k: 'research', brief, sets, stop: e.body })
@@ -74,10 +76,12 @@ export function MakeBox({ inputRef }: { inputRef: React.RefObject<HTMLInputEleme
     setOff(down ? { text: `${h!.health!.message} ${String(h!.health!.action || '').replace(/`/g, '')}`, again: () => void begin(way, words) } : null)
     if (down) return
     store.set(`home.mode.${make.k}`, way.k)
-    if (way.k === 'now') return setPop({ k: 'brief', text: words, back: null })
-    // a game's Studio is its Plan board, where its talk asks (spec 27). The talk is the classic Studio's for now
-    // (PlanBoard.tsx): it opens there with these words (web/gametalk.js, decision 0024)
-    if (make.k === 'game') return location.assign(`/classic/?game=${encodeURIComponent(words)}`)
+    // a website goes straight to the question before its build (decision 0020): Just make it is the press, so no
+    // brief first (web/home.js confirmBuild); the other kinds show the brief with Build
+    if (way.k === 'now') return make.k === 'site' ? void build(words) : setPop({ k: 'brief', text: words, back: null })
+    // a game's Studio is its Plan board, where its talk asks (spec 27): the board opens with no plan yet, and its
+    // chat sends these words as the talk's first (web/studio.js talkGame)
+    if (make.k === 'game') { setText(''); talkOn({ id: `game:${Date.now()}`, kind: 'game', text: words, blank: true }); return go({ type: 'plan', plan: null }) }
     // Studio: a Studio project, opened on the step the kind starts with
     try {
       const j = await post<{ project: { id: string } }>('/api/studio', { kind: make.k, idea: words, mode: way.k, depth: store.get<string>('home.depth', 'light') === 'thorough' ? 'thorough' : 'light', steps: way.steps || KIT_STEPS[make.k] })

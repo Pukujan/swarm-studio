@@ -1,0 +1,67 @@
+/* Starting a game: the motion and the drawn parts that are not one utility each, as the current Studio draws them
+   (web/canvas.css .game-pop .cforge / .fg-*, web/workshop.css .ws-*). Tokens only. */
+
+/* ---------- the bench: each Meshy job a tile; a clay figure rises under a turning wire mesh, bones go in for the
+   rig, then the made model lifts off to the library. transform and opacity only. */
+.cforge { display: flex; align-items: flex-end; gap: 12px; margin: 2px 0 14px; }
+.cforge .fg-row { display: flex; gap: 10px; flex: 1; min-width: 0; overflow-x: auto; padding: 2px; }
+.cforge .fg { flex: none; width: 76px; display: flex; flex-direction: column; gap: 4px; padding: 0; background: none; border: 0; color: var(--text); cursor: pointer; text-align: center; outline: none; }
+.cforge .fg b { font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cforge .fg-stage { position: relative; display: block; width: 76px; height: 100px; overflow: hidden; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); contain: strict; }
+.cforge .fg[data-focus-visible] .fg-stage { outline: 2px solid var(--frame-hi); outline-offset: 2px; }
+.cforge .fg-stage > svg, .cforge .fg-stage img, .cforge .fg-fill { position: absolute; inset: 0; width: 100%; height: 100%; }
+.cforge .fg-stage img { object-fit: cover; object-position: top; }
+.cforge .fg-fill, .cforge .fg-fill > span { display: block; overflow: hidden; transition: transform .8s var(--ease, ease-out); }
+.cforge .fg-fill { transform: translateY(calc((1 - var(--p, 0)) * 100%)); }
+.cforge .fg-fill > span { position: absolute; inset: 0; transform: translateY(calc((var(--p, 0) - 1) * 100%)); }
+.cforge .fg-clay { filter: grayscale(1) contrast(.75) brightness(1.1); opacity: .9; }
+.cforge .fg-wire { fill: none; stroke: var(--muted); stroke-width: .6; opacity: calc(1 - var(--p, 0) * .6); }
+.cforge .fg-mer { transform-box: view-box; transform-origin: 30px 50px; animation: fg-turn 3.2s linear infinite; animation-delay: var(--ago, 0s); }
+.cforge .fg-mer.b { animation-delay: calc(var(--ago, 0s) - 1.6s); }
+@keyframes fg-turn { 0% { transform: scaleX(1) } 50% { transform: scaleX(-1) } 100% { transform: scaleX(1) } }
+.cforge .fg-bones { stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; fill: var(--accent); opacity: 0; }
+.cforge .fg-bones > * { opacity: 0; }
+.cforge .fg-made { opacity: 0; }
+.cforge .fg.st-queued .fg-fill { opacity: .45; }
+.cforge .fg.st-rig .fg-wire, .cforge .fg.st-download .fg-wire, .cforge .fg.st-failed .fg-wire { opacity: 0; }
+.cforge .fg.st-rig .fg-bones { opacity: 1; }
+.cforge .fg.st-rig .fg-bones > * { animation: fg-bone .4s ease-out both; animation-delay: calc(var(--i) * .22s); }
+@keyframes fg-bone { from { opacity: 0 } to { opacity: 1 } }
+.cforge .fg.st-download .fg-made { opacity: 1; animation: fg-lift 3.2s ease-in-out infinite; animation-delay: var(--ago, 0s); }
+@keyframes fg-lift { 0%, 25% { transform: none; opacity: 1 } 45% { transform: translateY(-6px) scale(.9); opacity: .35 } 70%, 100% { transform: none; opacity: 1 } }
+.cforge .fg.st-failed .fg-fill { opacity: .5; }
+.cforge .fg-who { position: absolute; right: 4px; bottom: 4px; line-height: 0; opacity: .9; }
+.cforge .fg-warn { position: absolute; right: 6px; top: 4px; font-size: 14px; color: var(--red, currentColor); }
+/* offscreen, the bench rests */
+.cforge.rest *, .cforge.rest { animation-play-state: paused !important; }
+.cforge .fg-lib { flex: none; display: flex; align-items: center; gap: 6px; padding: 6px 8px; min-height: 44px; border: 1px dashed var(--line); border-radius: 12px; }
+.cforge .fg-shelf { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; font-weight: 700; padding: 0 2px; }
+.cforge .fg-lib button { width: 30px; height: 40px; padding: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--bg); cursor: pointer; }
+.cforge .fg-lib button img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.cforge .fg-lib.got .fg-shelf { animation: fg-got .6s ease-out; }
+@keyframes fg-got { 40% { transform: scale(1.25) } }
+@media (max-width: 760px) { .cforge { flex-direction: column; align-items: stretch; } .cforge .fg-lib { align-self: flex-start; } }
+@media (prefers-reduced-motion: reduce) {
+  .cforge .fg-mer, .cforge .fg.st-download .fg-made, .cforge .fg-lib.got .fg-shelf { animation: none; }
+  .cforge .fg.st-rig .fg-bones > * { animation: none; opacity: 1; }
+  .cforge .fg-fill, .cforge .fg-fill > span { transition: none; }
+}
+
+/* ---------- Shape it: the step ring, a hero's sprite sheet stepping through its six poses, the music loop's bars,
+   and a slot a crew member is painting */
+.ws-ring svg { width: 40px; height: 40px; transform: rotate(-90deg); }
+.ws-ring circle { fill: none; stroke-width: 3; }
+.ws-ring .t { stroke: var(--line); }
+.ws-ring .f { stroke: var(--accent); transition: stroke-dasharray .3s; }
+.ws-sprite { background-color: var(--deep); background-size: 300% 200%; background-repeat: no-repeat; }
+.ws-wave i { width: 6px; height: 18px; border-radius: 3px; background: var(--frame-hi); }
+.ws-wave.on i { background: var(--accent); animation: ws-bar .9s ease-in-out infinite; }
+.ws-wave.on i:nth-child(2n) { animation-delay: -.3s; }
+.ws-wave.on i:nth-child(3n) { animation-delay: -.6s; }
+@keyframes ws-bar { 0%, 100% { height: 14px } 50% { height: 64px } }
+.ws-wait { position: relative; overflow: hidden; }
+.ws-wait::before { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgb(var(--glass-rgb) / .08) 50%, transparent 70%); background-size: 200% 100%; animation: ws-shine 1.4s linear infinite; }
+@keyframes ws-shine { from { background-position: 200% 0 } to { background-position: -200% 0 } }
+.gs-spin { width: 28px; height: 28px; border: 3px solid rgb(var(--glass-rgb) / .14); border-top-color: var(--accent); border-radius: 50%; animation: gs-spin 1s linear infinite; }
+@keyframes gs-spin { to { transform: rotate(360deg) } }
+@media (prefers-reduced-motion: reduce) { .ws-wait::before, .ws-wave.on i, .ws-ring .f { animation: none; transition: none; } .gs-spin { animation-duration: 3s; } }

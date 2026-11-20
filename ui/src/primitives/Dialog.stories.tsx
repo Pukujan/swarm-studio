@@ -23,3 +23,7 @@ export default meta
 
 export const Closed: StoryObj<typeof meta> = {}
 export const Open: StoryObj<typeof meta> = { parameters: { open: true } }
+// a walk of steps (a new game's questions) is wider
+export const Wide: StoryObj<typeof meta> = { args: { size: 'wide' }, parameters: { open: true } }
+// while its work must not be dropped it does not close: Esc, a click outside and × are off
+export const Locked: StoryObj<typeof meta> = { args: { locked: true }, parameters: { open: true } }

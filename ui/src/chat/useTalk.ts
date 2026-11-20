@@ -95,13 +95,14 @@ export function useTalk({ api = chatApi, from = null, project = null, events, ad
     const g = s.gen
     const wait = add({ who: 'hermia', text: brief ? 'Writing the brief…' : '…', working: true })
     setBusy(true, g)
-    let ok = false, j: { chat?: string, error?: string, brief?: string, route?: string, reply?: string, cards?: ChatCard[], turn?: string, heard?: string } = {}
+    let ok = false, j: { chat?: string, error?: string, brief?: string, route?: string, reply?: string, cards?: ChatCard[], turn?: string, heard?: string, brandUpdated?: boolean } = {}
     try {
-      const r = await api('/api/discuss', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ said: s.said, kind: s.kind, brief, ...(refs.length ? { refs: refs.map(m => m.key) } : {}), ...(s.chat ? { chat: s.chat } : s.from ? { from: s.from } : {}) }) })
+      const r = await api('/api/discuss', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ said: s.said, kind: s.kind, brief, ...(refs.length ? { refs: refs.map(m => m.key) } : {}), ...(ctx.current.project ? { project: ctx.current.project } : {}), ...(s.chat ? { chat: s.chat } : s.from ? { from: s.from } : {}) }) })
       ok = r.ok
       j = await r.json().catch(() => ({}))
     } catch { /* no answer: said below */ }
     if (j.chat && alive(g)) s.chat = j.chat
+    if (j.brandUpdated) window.dispatchEvent(new CustomEvent('swarm:brand'))
     setBusy(false, g)
     drop(wait)
     if (!alive(g)) return
@@ -183,7 +184,7 @@ export function useTalk({ api = chatApi, from = null, project = null, events, ad
     const wait = add({ who: 'hermia', text: '…', working: true })
     setBusy(true, g)
     try {
-      type Ans = { chat: { id: string }, turn: Turnish, draft?: unknown, plan?: { id: string } }
+      type Ans = { chat: { id: string }, turn: Turnish, draft?: unknown, plan?: { id: string }, failed?: { message?: string, action?: string } }
       const j = s.chat ? await postJson<Ans>(api, `/api/talk/${enc(s.chat)}`, { said, pick }) : await postJson<Ans>(api, '/api/talk', { kind: 'game', said })
       if (!alive(g)) return
       s.chat = j.chat.id
@@ -195,9 +196,18 @@ export function useTalk({ api = chatApi, from = null, project = null, events, ad
       if (j.plan?.id) { const fresh = s.plan !== j.plan.id; s.plan = j.plan.id; if (fresh) ev.current.onPlan?.(j.plan.id); else ev.current.onPlanAt?.(j.plan.id, {}) }
       else if (j.draft) ev.current.onPlanDraft?.(j.draft)
       if (j.turn.wait) watch(g, j.turn.text, j.turn.install ? line : null)
+      // the planner's model did not answer this turn (server/talk.mjs `failed`): the step above is the plan's own;
+      // the reason is said beside it
+      if (j.failed) add({ who: 'err', text: [j.failed.message, j.failed.action].filter(Boolean).join(' ') || 'Hermia did not answer. Say it again.' })
     } catch (err) {
       if (alive(g)) add({ who: 'hermia', text: (err as Error).message || 'Hermia did not answer. Say it again.' })
     } finally { setBusy(false, g); drop(wait) }
+  }
+  // the plan's Lock, from the board's button while the chat talks: the same lock as the chat's (talk.js gameLock)
+  function press(pick: string, label: string) {
+    const s = T.current
+    if (s.busy || !s.chat || s.kind !== 'game') return
+    void gameSay({ pick, label })
   }
 
   async function gameResume(last: string | null) {
@@ -256,6 +266,14 @@ export function useTalk({ api = chatApi, from = null, project = null, events, ad
     if (s.kind === 'site' && s.chat && last && t.said?.at(-1)?.who === 'hermia') return void siteResume(last)
     // an old chat reopened: its words are back, and the box goes on from them
     if (last && t.said?.at(-1)?.who === 'hermia') patch(last, { acts: { type: 'build' } })
+    // a new project's chat is never blank: Hermia's first line, from the server (talk.js stepNow, engine/chatstep.mjs)
+    else if (t.blank && !last && s.kind !== 'game') void first()
+  }
+  async function first() {
+    const s = T.current, g = s.gen
+    const j = await postJson<{ first?: string }>(api, '/api/discuss/step', { kind: s.kind, talked: false }).catch(() => null)
+    // nothing was said since: the line still belongs at the top of an empty chat
+    if (j?.first && alive(g) && !s.said.length && !s.busy) add({ who: 'hermia', text: j.first })
   }
   function end() {
     const s = T.current
@@ -341,6 +359,6 @@ export function useTalk({ api = chatApi, from = null, project = null, events, ad
   const s = T.current
   return {
     on: s.on, busy: s.busy, kind: s.kind, chat: s.chat, started: s.started, turns,
-    start, end, say, note: add, build, pick, briefText, briefGo, brandSheet, keepTalking, openChat, newChat, files, pickCard
+    start, end, say, note: add, build, pick, briefText, briefGo, brandSheet, keepTalking, openChat, newChat, files, pickCard, press
   }
 }
