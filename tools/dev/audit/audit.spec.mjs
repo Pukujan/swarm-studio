@@ -154,16 +154,18 @@ for (const screen of screens) {
     const said = await page.evaluate(() => (document.body.innerText.match(/packs?/gi) || []).length)
     if (said) add('words', `the word "pack" is on screen ${said} time${said === 1 ? '' : 's'}`)
 
-    // chat (decision 0015): along the bottom at every width, never on the left; only the next UI is held to it
+    // chat (decision 0015, as changed 2026-11-19): down the left under the top bar in a wide window (1280 and up,
+    // ui/src/chat/Dock.tsx SIDE_MIN), along the bottom at the full width in a narrower one; only the next UI is held to it
     if (APP === 'next') {
       const dock = await page.evaluate(() => {
         // the chat itself, not a button that opens it (the Overview's dock has one named Chat)
         const el = [...document.querySelectorAll('[aria-label="Chat"]:not(button, a, [role="button"])')].find(x => x.getClientRects().length)
         if (!el) return null
         const r = el.getBoundingClientRect()
-        return { bottom: Math.round(innerHeight - r.bottom), left: Math.round(r.left), width: Math.round(innerWidth - r.width) }
+        return { bottom: Math.round(innerHeight - r.bottom), left: Math.round(r.left), width: Math.round(innerWidth - r.width), top: Math.round(r.top), wide: innerWidth >= 1280 }
       })
-      if (dock && (Math.abs(dock.bottom) > 2 || Math.abs(dock.left) > 2 || dock.width > 20)) add('chat', `the chat is not docked along the bottom (${dock.bottom}px above it, ${dock.left}px in from the left, ${dock.width}px narrower than the screen)`)
+      if (dock && dock.wide && (Math.abs(dock.bottom) > 2 || Math.abs(dock.left) > 2 || dock.top > 60)) add('chat', `the chat is not down the left of a wide window (${dock.bottom}px above the bottom, ${dock.left}px in from the left, ${dock.top}px from the top)`)
+      if (dock && !dock.wide && (Math.abs(dock.bottom) > 2 || Math.abs(dock.left) > 2 || dock.width > 20)) add('chat', `the chat is not docked along the bottom (${dock.bottom}px above it, ${dock.left}px in from the left, ${dock.width}px narrower than the screen)`)
     }
 
     // compare with the known ones

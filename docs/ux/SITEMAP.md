@@ -284,6 +284,10 @@ flowchart LR
   SW --> SWB["Builds and boards you were invited to"]
 ```
 
+In the next UI the two talk branches (Chats, and "Don't build yet") open on its own Design deck: the deck with nothing
+on it and the chat talking, the machine's `draft`. Build there opens the new build on the same deck. It has no address
+of its own, so a reload shows Projects.
+
 ## 7. Me
 
 ```mermaid

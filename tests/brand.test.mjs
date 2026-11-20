@@ -133,6 +133,76 @@ test('the routes: options on a new chat, own words picked, Lock gives the build 
   }
 })
 
+test('brands.refresh: a new brief makes an unlocked project sheet again, keeps what the person did, and leaves a locked one alone', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'brand-refresh-'))
+  try {
+    const { studioStore } = await import('../engine/studio.mjs')
+    const chats = chatStore(dir)
+    const studios = studioStore({ projectsDir: join(dir, 'projects') })
+    studios.make('p1', { kind: 'site', idea: 'hermes website' })
+    const routes = brandRoutes({ chats, projectBrands: studios.brands })
+    // no sheet yet: nothing to make again
+    assert.equal(await routes.refresh('p1', 'anything'), null)
+    await call(routes, 'POST', '/api/projects/p1/brand', { brief: 'hermes website', kind: 'site' })
+    assert.equal(studios.brands.get('p1').brand.brief, 'hermes website')
+    // the same brief changes nothing
+    assert.equal(await routes.refresh('p1', 'hermes website'), null)
+    // what the person did on the sheet: a story line typed, and a pack picked whole
+    await call(routes, 'POST', '/api/projects/p1/brand/edit', { part: 'story', values: { who: 'People who run agents' } })
+    const slug = studios.brands.get('p1') && (await call(routes, 'GET', '/api/projects/p1/brand')).body.packs[0].slug
+    await call(routes, 'POST', '/api/projects/p1/brand/pick', { part: 'pack', id: slug })
+    const before = studios.brands.get('p1').brand
+    assert.equal(before.pack, slug)
+    // a new brief: the sheet is made for it, and those stay
+    const refreshed = await routes.refresh('p1', 'Hermes Agent by Nous Research — dark developer website for an AI agent')
+    assert.match(refreshed.brand.brief, /Nous Research/)
+    assert.match(refreshed.brand.story.what, /Nous Research|Hermes Agent/i)
+    assert.equal(refreshed.brand.story.who, 'People who run agents')
+    assert.equal(refreshed.brand.pack, slug)
+    assert.equal(refreshed.brand.pick.palette, `k-${slug}`)
+    assert.equal(refreshed.brand.pick.type, `k-${slug}`)
+    assert.equal(refreshed.brand.radius, before.radius)
+    assert.deepEqual(refreshed.brand.voice, before.voice)
+    assert.deepEqual(refreshed.brand.pictures, before.pictures)
+    // locked: a new brief never overwrites it
+    await call(routes, 'POST', '/api/projects/p1/brand/lock')
+    assert.equal(await routes.refresh('p1', 'Something completely different'), null)
+    assert.match(studios.brands.get('p1').brand.brief, /Nous Research/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('a Studio project\'s build uses the look the person chose without Lock; a sheet nobody touched, or a skipped Brand step, is not used', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'brand-chosen-'))
+  try {
+    const { studioStore } = await import('../engine/studio.mjs')
+    const chats = chatStore(dir)
+    const studios = studioStore({ projectsDir: join(dir, 'projects') })
+    studios.make('p1', { kind: 'site', idea: 'A portfolio for a photographer' })
+    const routes = brandRoutes({ chats, projectBrands: studios.brands })
+    const made = (await call(routes, 'POST', '/api/projects/p1/brand', { brief: 'A portfolio for a photographer', kind: 'site' })).body
+    // made, never touched: a guess, so the planner picks the look
+    assert.equal(lockedBrand(studios.brands, 'p1'), null)
+    // an option picked, no Lock: the build gets that look
+    const slug = made.packs[0].slug
+    await call(routes, 'POST', '/api/projects/p1/brand/pick', { part: 'pack', id: slug })
+    const b = studios.brands.get('p1').brand
+    assert.equal(b.lockedAt, null)
+    const used = lockedBrand(studios.brands, 'p1')
+    assert.equal(used.theme.vars['--background'], b.palettes.find(x => x.id === b.pick.palette).bg)
+    // the step skipped: the person said not to use it
+    await studios.step('p1', 'brand', 'skipped')
+    assert.equal(lockedBrand(studios.brands, 'p1'), null)
+    // a loose chat's sheet still needs Lock, picked or not
+    const loose = (await call(routes, 'POST', '/api/brand', { brief: 'A portfolio for a photographer', kind: 'site' })).body
+    await call(routes, 'POST', `/api/brand/${loose.chat}/pick`, { part: 'pack', id: slug })
+    assert.equal(lockedBrand(chats, loose.chat), null)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('the page inlines every module the studio imports, and the sheet\'s styles', async () => {
   const { readFileSync } = await import('node:fs')
   const studio = readFileSync(new URL('../web/studio.js', import.meta.url), 'utf8'), page = readFileSync(new URL('../server/page.mjs', import.meta.url), 'utf8')

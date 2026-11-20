@@ -39,7 +39,8 @@ export function MenuAt<T extends object>({ name, triggerRef, isOpen, onClose, pl
   )
 }
 
-const ITEM = 'flex min-h-10 cursor-pointer items-center gap-3 rounded-[8px] px-3 font-monospace text-sm text-text outline-none data-[focused]:bg-panel-2 data-[disabled]:opacity-50'
+// 44 px tall on a phone (RULES.md: a touch target; openspec/specs/make "Menus at 390")
+const ITEM = 'flex min-h-10 max-[760px]:min-h-11 cursor-pointer items-center gap-3 rounded-[8px] px-3 font-monospace text-sm text-text outline-none data-[focused]:bg-panel-2 data-[disabled]:opacity-50'
 
 export function MenuItem(props: MenuItemProps) {
   return <AriaMenuItem {...props} className={ITEM} />

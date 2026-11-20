@@ -74,15 +74,18 @@ export const PAGE_TYPES = {
 
 const KEYS = Object.keys(PAGE_TYPES)
 
-// The type that fits the brief best, skipping the ones used lately. Ties and
-// briefs that fit nothing go to a random type, so two similar briefs still differ.
+// The type that fits the brief best. A brief that names its type keeps it, however lately it was used: the same
+// brief built again is the same kind of site (a photographer's portfolio built twice became a search tool the second
+// time, because Gallery had just been used; owner, 2026-11-19). The types used lately are skipped only among the
+// best fits when another fits as well, and for a brief that fits nothing, which goes to a random one of the rest
+// so two vague briefs still differ.
 export function pickPageType(brief = '', recent = [], rand = Math.random) {
   const avoid = new Set(recent.slice(0, 4))
-  const open = KEYS.filter(k => !avoid.has(k))
-  const pool = open.length ? open : KEYS
-  const scored = pool.map(k => ({ k, n: (String(brief).match(new RegExp(PAGE_TYPES[k].words.source, 'gi')) || []).length }))
+  const scored = KEYS.map(k => ({ k, n: (String(brief).match(new RegExp(PAGE_TYPES[k].words.source, 'gi')) || []).length }))
   const best = Math.max(...scored.map(s => s.n))
-  const top = best > 0 ? scored.filter(s => s.n === best) : scored
+  const fits = best > 0 ? scored.filter(s => s.n === best) : scored
+  const fresh = fits.filter(s => !avoid.has(s.k))
+  const top = fresh.length ? fresh : fits
   return top[Math.floor(rand() * top.length)].k
 }
 

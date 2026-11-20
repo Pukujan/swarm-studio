@@ -111,7 +111,7 @@ export function SetupSheet({ row = '', group, part, onClose, onModels }: {
           <div className="divide-y divide-edge overflow-hidden rounded-[12px] border border-edge font-body">
             <section id="setup-account"><AccountRow account={view.account || {}} setAccount={setAccount} isExpanded={open('account')} onToggle={toggle('account')} /></section>
             <section id="setup-models"><ModelsRow view={view} test={test} opts={opts} setOpts={setOpts} isExpanded={open('models')} onToggle={toggle('models')} onTest={runTest} onPicked={onPicked} /></section>
-            <section id="setup-pictures"><PicturesRow pictures={view.pictures} onPick={pickPictures} isExpanded={open('pictures')} onToggle={toggle('pictures')} /></section>
+            <section id="setup-pictures"><PicturesRow pictures={view.pictures} pexels={(facts.local as { keys?: Record<string, boolean> } | undefined)?.keys?.PEXELS_API_KEY} onPick={pickPictures} isExpanded={open('pictures')} onToggle={toggle('pictures')} /></section>
             <section id="setup-parts">
               <PartsRow facts={F} settled={Object.keys(FACTS).every(k => k in facts)} group={ctx.group} part={ctx.part} isExpanded={at !== 'index'} onToggle={() => send({ type: 'parts' })}
                 onGroup={k => send({ type: 'group', k })} onPart={k => send({ type: 'part', k })} onGoto={goto} setConn={setConn} />

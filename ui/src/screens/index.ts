@@ -40,13 +40,14 @@ export const CRUMB_NAMES: Record<Room, string> = {
 }
 
 // Projects, the Overview, the Plan board, the brand sheet, the Studio scaffold and the Design deck's shell (slice 1)
-// have moved (issue #404); `draft`, a new project's deck, has not
+// have moved (issue #404), and so has `draft`: a new project's talk on the same deck, with nothing on it
 export const SCREENS: Partial<Record<Room, ComponentType>> = {
   // an app build's four windows (spec 44); a game build's App view has not moved yet
   app: AppWall,
   // a project's brand sheet, opened from its Studio; one opened from a chat has no address and stays behind
   brand: BrandSheet,
   deck: DesignDeck,
+  draft: DesignDeck,
   home: Projects,
   overview: Overview,
   plan: PlanBoard,
