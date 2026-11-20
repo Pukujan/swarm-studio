@@ -39,7 +39,7 @@ Settings  (me.settings; a sheet, "Settings")
   · Data                                   ──(none)──▶ Data
   a group (‹ Settings goes back)
   · You: Swarm Feed
-  · Crew: Planner · Builders · Reviewer · Media reader · Pictures · Film · Stand-in photos · 3D
+  · Crew: Planner · Builders · Reviewer · Media reader · Pictures · Film · Stock photos · 3D
   · Publish: GitHub Pages · Vercel · Cloudflare Pages · Supabase · Gateways
   · a row (dot: connected, ring: not) ──(none)──▶ its "Goes to" line opens under it
   · Data: where each thing goes, nine lines

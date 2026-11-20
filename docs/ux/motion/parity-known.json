@@ -65,9 +65,24 @@
     "why": "The current Studio draws the game's App room step list (div.st in #app-steps, @in .25s) in its canvas behind the Overview at this address, where no one sees it. No decision covers it."
   },
   {
-    "key": "game reduced cursor Hermia: differs",
+    "key": "game only in /next/: page @in 300ms x1 ease-out",
+    "label": "intended (decision 0015)",
+    "why": "The Game room has moved to the next UI and opens with its chat docked (decision 0015, as the App room and the deck do), so the build's lines arrive in it with the chat's fade; in the current Studio this address shows no chat line arriving."
+  },
+  {
+    "key": "game only in /next/: page @pet-dot endless 1000ms ease-in-out",
     "label": "drift",
-    "why": "With reduced motion the current Studio puts Hermia 300 px further right (665,176) than it does in normal motion (365,176), on another page skeleton; the next UI keeps her normal-motion spot (365,179) in both. The current Studio's reduced-motion spot is the odd one out."
+    "why": "While the game's state is read, the next UI's Game room shows a loading skeleton and Hermia works on it (web/pet.js, the same cursor both apps host); the current room shows nothing while it loads (its known 'game loading' audit violation). No decision covers it."
+  },
+  {
+    "key": "game only in /next/: page @pet-tap endless 700ms ease-in-out",
+    "label": "drift",
+    "why": "While the game's state is read, the next UI's Game room shows a loading skeleton and Hermia works on it (web/pet.js, the same cursor both apps host); the current room shows nothing while it loads (its known 'game loading' audit violation). No decision covers it."
+  },
+  {
+    "key": "game only in /next/: page ~opacity 200ms x1 ease",
+    "label": "drift",
+    "why": "While the game's state is read, the next UI's Game room shows a loading skeleton and Hermia works on it (web/pet.js, the same cursor both apps host); the current room shows nothing while it loads (its known 'game loading' audit violation). No decision covers it."
   },
   {
     "key": "mid-build cursor Ada: differs",

@@ -95,13 +95,14 @@ export function useTalk({ api = chatApi, from = null, project = null, events, ad
     const g = s.gen
     const wait = add({ who: 'hermia', text: brief ? 'Writing the brief…' : '…', working: true })
     setBusy(true, g)
-    let ok = false, j: { chat?: string, error?: string, brief?: string, route?: string, reply?: string, cards?: ChatCard[], turn?: string, heard?: string } = {}
+    let ok = false, j: { chat?: string, error?: string, brief?: string, route?: string, reply?: string, cards?: ChatCard[], turn?: string, heard?: string, brandUpdated?: boolean } = {}
     try {
-      const r = await api('/api/discuss', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ said: s.said, kind: s.kind, brief, ...(refs.length ? { refs: refs.map(m => m.key) } : {}), ...(s.chat ? { chat: s.chat } : s.from ? { from: s.from } : {}) }) })
+      const r = await api('/api/discuss', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ said: s.said, kind: s.kind, brief, ...(refs.length ? { refs: refs.map(m => m.key) } : {}), ...(ctx.current.project ? { project: ctx.current.project } : {}), ...(s.chat ? { chat: s.chat } : s.from ? { from: s.from } : {}) }) })
       ok = r.ok
       j = await r.json().catch(() => ({}))
     } catch { /* no answer: said below */ }
     if (j.chat && alive(g)) s.chat = j.chat
+    if (j.brandUpdated) window.dispatchEvent(new CustomEvent('swarm:brand'))
     setBusy(false, g)
     drop(wait)
     if (!alive(g)) return

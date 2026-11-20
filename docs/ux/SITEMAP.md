@@ -517,6 +517,14 @@ flowchart LR
 
 The 7-step game wizard is gone. Its questions become the Tweak branch, asked after the first playable build.
 
+The room as built today, in both Studios, is not that tree yet (Play, Tweak and Details are the agreed direction). The
+new Studio's is `ui/src/screens/GameRoom.tsx`, moved from `web/canvas/rooms.js` as it is. Its bar has the state, the
+switch **Crew · Art · Live · Map** (each only when it has something to show), **Autoplay** once the game runs,
+**Preview / Code**, Reload, the engine project to download, Open in its own tab and **Stop**. Its stage follows the
+build: the crew's wall, then the art sheet, then the live game, or the room's card when the build stopped or failed. Its
+chat takes the same switch typed ("show the art", "play it for me"), questions to the crew, and the answer to a slice
+that waits ("fix it", "go on", a note). Starting a game (its questions, Shape it, Cast) is still in the classic Studio.
+
 A game build's wall follows what the crew is doing, after the Map in its first window (spec 44): two painters and one code tile while the art is painted, the play test, a picture window and one code tile after. When the build stops:
 
 ```mermaid

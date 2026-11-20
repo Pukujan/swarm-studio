@@ -9,8 +9,9 @@ import { Projects } from './Projects'
 import { PlanBoard } from './PlanBoard'
 import { StudioFirst } from './StudioFirst'
 import { DesignDeck } from './DesignDeck'
-// an app build's App room, the app build wall (spec 44); a game's App room has not moved and stays the stand-in
+// an app build's App room, the app build wall (spec 44); a game build's App room is the Game room
 import { AppWall } from './app/AppWall'
+import { GameRoom } from './GameRoom'
 
 export const SCREEN_NAMES: Record<Room, string> = {
   home: 'Projects',
@@ -42,11 +43,12 @@ export const CRUMB_NAMES: Record<Room, string> = {
 // Projects, the Overview, the Plan board, the brand sheet, the Studio scaffold and the Design deck's shell (slice 1)
 // have moved (issue #404); `draft`, a new project's deck, has not
 export const SCREENS: Partial<Record<Room, ComponentType>> = {
-  // an app build's four windows (spec 44); a game build's App view has not moved yet
+  // an app build's four windows (spec 44); a game build's App view is the Game room (AppWall hands it over)
   app: AppWall,
   // a project's brand sheet, opened from its Studio; one opened from a chat has no address and stays behind
   brand: BrandSheet,
   deck: DesignDeck,
+  game: GameRoom,
   home: Projects,
   overview: Overview,
   plan: PlanBoard,

@@ -48,7 +48,7 @@ const SCREENS = [
   { id: 'overview', crumb: trail('Alpha Tea', 'Overview'), address: s => `?project=${s.ids.site}&version=${s.ids.site2}`, go: (p, s) => p.goto(`${s.BASE}/?project=${s.ids.site}&version=${s.ids.site2}`, { waitUntil: 'commit' }), ready: '.pj-world .ab.page', nextReady: '.ov-world .ov-ab.page' },
   { id: 'deck', crumb: trail('Alpha Tea', 'Design deck'), address: s => `?version=${s.ids.site2}&room=deck`, go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.site2}&room=deck`, { waitUntil: 'commit' }), ready: 'body.cosmos-station #viewport', nextReady: '[role="region"][aria-label="Canvas"]' },
   { id: 'app', crumb: trail('Shift Log', 'App'), address: s => `?version=${s.ids.app}&room=app`, go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.app}&room=app`, { waitUntil: 'commit' }), ready: 'body.view-app #appview', nextReady: '[data-wall]' },
-  { id: 'game', crumb: trail('Lantern Run', 'Game'), address: s => `?version=${s.ids.game}&room=game`, go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.game}&room=game`, { waitUntil: 'commit' }), ready: 'body.view-app' },
+  { id: 'game', crumb: trail('Lantern Run', 'Game'), address: s => `?version=${s.ids.game}&room=game`, go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.game}&room=game`, { waitUntil: 'commit' }), ready: 'body.view-app', nextReady: '[data-game-room]' },
   { id: 'film', crumb: trail('River Hours', 'Film'), address: s => `?version=${s.ids.film}&room=video`, go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.film}&room=video`, { waitUntil: 'commit' }), ready: 'body.view-video' },
   { id: 'studio', crumb: trail('Cedar Cafe', 'Studio'), address: s => `?room=studio&project=${s.scaffold}&step=brand`, go: (p, s) => p.goto(`${s.BASE}/?room=studio&project=${s.scaffold}&step=brand`, { waitUntil: 'commit' }), ready: '.ab[data-key="brand:open"]', nextReady: '.ab[data-key="brand:open"]' },
   { id: 'plan', crumb: trail('New game', 'Plan'), address: () => '?room=plan',
@@ -154,16 +154,18 @@ for (const screen of screens) {
     const said = await page.evaluate(() => (document.body.innerText.match(/packs?/gi) || []).length)
     if (said) add('words', `the word "pack" is on screen ${said} time${said === 1 ? '' : 's'}`)
 
-    // chat (decision 0015): along the bottom at every width, never on the left; only the next UI is held to it
+    // chat (decision 0015, as changed 2026-11-19): down the left under the top bar in a wide window (1280 and up,
+    // ui/src/chat/Dock.tsx SIDE_MIN), along the bottom at the full width in a narrower one; only the next UI is held to it
     if (APP === 'next') {
       const dock = await page.evaluate(() => {
         // the chat itself, not a button that opens it (the Overview's dock has one named Chat)
         const el = [...document.querySelectorAll('[aria-label="Chat"]:not(button, a, [role="button"])')].find(x => x.getClientRects().length)
         if (!el) return null
         const r = el.getBoundingClientRect()
-        return { bottom: Math.round(innerHeight - r.bottom), left: Math.round(r.left), width: Math.round(innerWidth - r.width) }
+        return { bottom: Math.round(innerHeight - r.bottom), left: Math.round(r.left), width: Math.round(innerWidth - r.width), top: Math.round(r.top), wide: innerWidth >= 1280 }
       })
-      if (dock && (Math.abs(dock.bottom) > 2 || Math.abs(dock.left) > 2 || dock.width > 20)) add('chat', `the chat is not docked along the bottom (${dock.bottom}px above it, ${dock.left}px in from the left, ${dock.width}px narrower than the screen)`)
+      if (dock && dock.wide && (Math.abs(dock.bottom) > 2 || Math.abs(dock.left) > 2 || dock.top > 60)) add('chat', `the chat is not down the left of a wide window (${dock.bottom}px above the bottom, ${dock.left}px in from the left, ${dock.top}px from the top)`)
+      if (dock && !dock.wide && (Math.abs(dock.bottom) > 2 || Math.abs(dock.left) > 2 || dock.width > 20)) add('chat', `the chat is not docked along the bottom (${dock.bottom}px above it, ${dock.left}px in from the left, ${dock.width}px narrower than the screen)`)
     }
 
     // compare with the known ones

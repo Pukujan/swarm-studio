@@ -29,10 +29,10 @@ docs name that binary inside the bundle ([Command line tutorial](https://docs.go
 A Mac's Godot is an app, from godotengine.org or `brew install --cask godot`. Homebrew's `godot` link in `/opt/homebrew/bin`
 is missing from the `PATH` an app opened from the Dock gets, so `PATH` alone missed it (issue #405; CI's `checks-macos`
 job installs the cask and checks that the app is found with `PATH=/usr/bin:/bin`). The launcher keeps both
-`SWARM_GODOT` and `GODOT` (plus `PATH`) in the server's environment (launcher.py `KEEP_ENV`; tests/test_manifest.py). The server checks once at start and the planner is told yes, no or unknown (server/server.mjs:1450-1457, engine/talkplan.mjs:282).
+`SWARM_GODOT` and `GODOT` (plus `PATH`) in the server's environment (launcher.py `KEEP_ENV`; tests/test_manifest.py). The server checks once at start and the planner is told yes, no or unknown (server/server.mjs:1450-1457, engine/talkplan.mjs:321).
 
 **Not installed.** If the plan names Godot and none is found, the chat offers "Godot (install it first)" or "The
-browser for now" (engine/talkplan.mjs:218-219); the plan says to install Godot 4 (engine/planshape.mjs:365). At build
+browser for now" (engine/talkplan.mjs:236-237); the plan says to install Godot 4 (engine/planshape.mjs:365). At build
 time it falls back to the browser and says so in a step (engine/appjob.mjs:409-412).
 Once a game plan is locked, the chat's next step asks the same thing with two buttons, **Install Godot 4** and
 **Browser is fine** (engine/gamestep.mjs `nextStep`). Browser is fine sets the plan's engine to the browser, by the

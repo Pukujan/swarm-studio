@@ -24,8 +24,8 @@ const meta = {
   component: Chat,
   args: { api: fixture(base) },
   parameters: { layout: 'fullscreen', height: 0 },
-  // the dock is along the bottom of the page; a story's height (0 low, 1 middle, 2 high) is the one the person
-  // left it at, kept in this browser
+  // in a wide window the chat is a column down the left; in a narrower one (under 1280 px) it is the dock along the
+  // bottom, where a story's height (0 low, 1 middle, 2 high) is the one the person left it at, kept in this browser
   decorators: [(Story, { parameters }) => {
     try { localStorage.setItem('swarm.chatHeight', String(parameters.height ?? 0)) } catch { /* private window */ }
     return <div className="relative h-dvh w-full bg-void"><Story /></div>

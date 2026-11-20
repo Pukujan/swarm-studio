@@ -252,4 +252,11 @@ test('the Studio and its chat: the question is asked in the chat, typed answers 
   assert.equal(sent.at(-1), 'a tea shop\n\nPages: 4, the crew picks which.')
   await siteKit.build({}, branded({}))
   assert.match(sent.at(-1), /Pages: Home, Menu, Visit\.$/)
+  // when Brand was skipped, its auto-guessed story pages do not leak into the build brief
+  const brandSkipped = state => ({ ...branded(state), studio: { idea: 'a tea shop', steps: { brand: 'skipped', plan: 'empty' } } })
+  await siteKit.build({}, brandSkipped({}))
+  assert.equal(sent.at(-1), 'a tea shop')
+  // explicit pages set by the person still go through even when Brand was skipped
+  await siteKit.build({}, brandSkipped({ pages: ['Home', 'Menu'] }))
+  assert.equal(sent.at(-1), 'a tea shop\n\nPages: Home, Menu.')
 })

@@ -32,11 +32,13 @@ export function brandRoutes({ chats, model = () => null, projectBrands = null })
   const view = chat => ({ chat: chat.id, brand: chat.brand || null, theme: chat.brand ? brandTheme(chat.brand) : null, packs: chat.brand ? packCards(chat.brand.brief, chat.brand.suggest, chat.brand.pack) : [] })
   const bad = msg => Object.assign(new Error(msg), { status: 400 })
   // the store a call writes to (`S`): the chats, or the projects' brand.json (records are both { id, brand })
-  // any change to a locked sheet opens it again
-  const change = (id, fn, S = chats) => S.update(id, chat => {
+  // any change to a locked sheet opens it again. A change to the look (a pick, a colour, a font: `look`) is the
+  // person's own choice of it, which a Studio project's build uses whether or not it was locked (lockedBrand)
+  const change = (id, fn, S = chats, look = true) => S.update(id, chat => {
     if (!chat.brand) throw bad('no brand sheet yet')
     fn(chat.brand, chat)
     chat.brand.lockedAt = null
+    if (look) chat.brand.touched = Date.now()
   }).then(view)
 
   async function make(input) {
@@ -116,6 +118,8 @@ export function brandRoutes({ chats, model = () => null, projectBrands = null })
         if (typeof v.what === 'string') s.what = v.what.slice(0, 200)
         if (typeof v.who === 'string') s.who = v.who.slice(0, 200)
         if (v.pages != null) s.pages = (Array.isArray(v.pages) ? v.pages : String(v.pages).split(',')).map(x => String(x).trim().slice(0, 40)).filter(Boolean).slice(0, 8)
+        // the lines the person typed themselves: a sheet made again for a new brief keeps them (refresh, below)
+        s.own = [...new Set([...(s.own || []), ...['what', 'who', 'pages'].filter(k => v[k] != null)])]
         return
       }
       const list = input.part === 'type' ? b.types : input.part === 'palette' ? b.palettes : null
@@ -127,7 +131,7 @@ export function brandRoutes({ chats, model = () => null, projectBrands = null })
         Object.assign(o, fixPalette(next))
       } else for (const k of ['heading', 'body']) if (FONT.test(String(v[k] || ''))) o[k] = String(v[k]).trim()
       b.pick[input.part] = o.id
-    }, S)
+    }, S, input.part !== 'story')
   }
 
   const lock = (id, S = chats) => S.update(id, chat => {
@@ -195,13 +199,42 @@ export function brandRoutes({ chats, model = () => null, projectBrands = null })
       if ((made || !s.pages?.length) && found.pages?.length) s.pages = found.pages.slice(0, 8)
     }).then(view)
   }
-  return Object.assign(routes, { story })
+  // The chat wrote a new brief in a Studio project whose brand is not locked: the sheet is made again for it.
+  // What the person did on the old sheet stays: the options from a look or their own words (fill), the story
+  // lines they typed, and a pack they picked (its palette and type, voice, pictures and storyboard). A locked
+  // sheet, a project with no sheet and the same brief are left alone (null: nothing changed).
+  async function refresh(pid, brief) {
+    const have = projectBrands?.get(pid)?.brand
+    const next = String(brief || '').trim().slice(0, 4000)
+    if (!have || !next || have.lockedAt || have.brief === next) return null
+    await fill(projectBrands, pid, next)
+    return projectBrands.update(pid, chat => {
+      const b = chat.brand
+      for (const k of have.story?.own || []) b.story[k] = have.story[k]
+      if (have.story?.own?.length) b.story.own = [...have.story.own]
+      for (const [list, part] of [['palettes', 'palette'], ['types', 'type']]) {
+        const packs = (have[list] || []).filter(x => x.by === 'pack' && !b[list].some(y => y.id === x.id))
+        b[list].push(...packs)
+        if (!b[list].some(x => x.id === have.pick?.[part] && x.by === 'pack')) continue
+        b.pick[part] = have.pick[part]
+        if (part === 'palette' && have.radius) b.radius = have.radius
+      }
+      for (const k of ['voice', 'pictures', 'pack', 'storyboard', 'touched']) if (have[k]) b[k] = have[k]
+    }).then(view)
+  }
+  return Object.assign(routes, { story, refresh })
 }
 
 // the locked sheet of a chat (or of a project, with its brands store), as runSwarm takes it; null when
 // there is none or it is open
 export function lockedBrand(chats, id) {
-  const b = id && chats?.get(id)?.brand
-  const theme = b?.lockedAt ? brandTheme(b) : null
+  const rec = id && chats?.get(id), b = rec?.brand
+  // A Studio project's sheet (its store says where the Brand step stands) also counts when the person chose its
+  // look and did not skip the step: they picked an option and pressed Build without Lock, and the site came out in
+  // colours they had never seen (owner, 2026-11-19: "our branding is weird"). A sheet nobody touched is still only
+  // a guess, and the planner picks the look.
+  const chosen = b && !b.lockedAt && rec.step != null && rec.step !== 'skipped'
+    && !!(b.touched || b.pack || ['palettes', 'types'].some(l => (b[l] || []).some(x => ['pack', 'look', 'person'].includes(x.by) && (x.id === b.pick?.palette || x.id === b.pick?.type))))
+  const theme = b?.lockedAt || chosen ? brandTheme(b) : null
   return theme ? { theme, brief: brandBrief(b) } : null
 }

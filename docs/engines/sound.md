@@ -32,6 +32,7 @@ Game character voices (not films):
 
 Other uses:
 - Crew chatter: a fixed list of nine short lines, read by `SWARM_TTS_URL` or by Kokoro only if it is already installed (server/server.mjs:1345-1360).
+- Loudness: `mix()` ends every film's sound with ffmpeg's `loudnorm` (I=-16, TP=-1.5, LRA=11), then the limiter (`LOUD`, engine/sound.mjs). One pass, so it is near the target, not exact: a music-only film went from -24.1 to -15.7 LUFS (measured with `ebur128`, 2026-11-19).
 - Hearing sound: `readMedia()` and the film critic send a small mp3 (mono, 16 kHz, at most 120 s) to the person's media model, or measure loudness and silence with ffmpeg alone (engine/mediareader.mjs:1-24, engine/mediareader.mjs:117, engine/filmcritic.mjs:1-5).
 
 ## What the person connects

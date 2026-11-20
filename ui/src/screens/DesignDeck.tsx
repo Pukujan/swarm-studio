@@ -132,8 +132,9 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
 
   return (
     <>
-    {/* the chat docks along the bottom (decision 0015); the deck takes the height above it */}
-    <div className="relative flex min-w-0 overflow-hidden" style={{ height: 'calc(100dvh - 3.5rem - var(--chat-h, 0px))' }}>
+    {/* the chat is down the left in a wide window, along the bottom in a narrower one (decision 0015, chat/Dock.tsx);
+        the deck takes what is beside or above it */}
+    <div className="relative flex min-w-0 overflow-hidden" style={{ height: 'calc(100dvh - 3.5rem - var(--chat-h, 0px))', marginLeft: 'var(--chat-w, 0px)' }}>
       <LeftPanel id="deck-layers-panel" model={model} page={page} sheet={sheet} onClose={closeSheet} selected={sel?.key ?? null}
         onPage={id => { setPicked(id); setFollow(false); setSheet(false); stage.current?.focusPage(id) }}
         onLayer={k => { const l = model.layers[k]; const on = l && l.page !== '*' ? l.page : page ?? model.pages[0]?.id; if (!on) return; select({ key: k, page: on }); setPicked(on); setSheet(false); stage.current?.focusPage(on) }} />
