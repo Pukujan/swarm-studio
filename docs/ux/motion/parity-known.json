@@ -60,6 +60,21 @@
     "why": "The deck's spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); the current deck shows nothing while a build loads (its known 'deck loading' audit violation)."
   },
   {
+    "key": "film only in /next/: page @pet-dot endless 1000ms ease-in-out",
+    "label": "intended (spec 41-pet-cursor)",
+    "why": "The new Film studio shows a skeleton with Hermia's cursor on it while the saved film is read (spec 41: she works on whatever is marked busy; web/pet.js PET_BUSY), which the audit's loading gate asks for (docs/ux/AUDIT.md); the current room shows nothing while a film loads (its known 'film loading' audit violation)."
+  },
+  {
+    "key": "film only in /next/: page @pet-tap endless 700ms ease-in-out",
+    "label": "intended (spec 41-pet-cursor)",
+    "why": "The new Film studio shows a skeleton with Hermia's cursor on it while the saved film is read (spec 41: she works on whatever is marked busy; web/pet.js PET_BUSY), which the audit's loading gate asks for (docs/ux/AUDIT.md); the current room shows nothing while a film loads (its known 'film loading' audit violation)."
+  },
+  {
+    "key": "film only in /next/: page ~opacity 200ms x1 ease",
+    "label": "intended (spec 41-pet-cursor)",
+    "why": "The new Film studio shows a skeleton with Hermia's cursor on it while the saved film is read (spec 41: she works on whatever is marked busy; web/pet.js PET_BUSY), which the audit's loading gate asks for (docs/ux/AUDIT.md); the current room shows nothing while a film loads (its known 'film loading' audit violation)."
+  },
+  {
     "key": "game only in /: page @in 250ms x1 ease-out",
     "label": "drift",
     "why": "The current Studio draws the game's App room step list (div.st in #app-steps, @in .25s) in its canvas behind the Overview at this address, where no one sees it. No decision covers it."

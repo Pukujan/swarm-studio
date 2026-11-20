@@ -11,6 +11,7 @@ import { StudioFirst } from './StudioFirst'
 import { DesignDeck } from './DesignDeck'
 // an app build's App room, the app build wall (spec 44); a game's App room has not moved and stays the stand-in
 import { AppWall } from './app/AppWall'
+import { FilmStudio } from './FilmStudio'
 
 export const SCREEN_NAMES: Record<Room, string> = {
   home: 'Projects',
@@ -50,5 +51,7 @@ export const SCREENS: Partial<Record<Room, ComponentType>> = {
   home: Projects,
   overview: Overview,
   plan: PlanBoard,
-  studio: StudioFirst
+  studio: StudioFirst,
+  // a build's film: its storyboard, its making and its cuts (web/canvas/film.js)
+  video: FilmStudio
 }

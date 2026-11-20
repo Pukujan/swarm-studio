@@ -557,6 +557,12 @@ flowchart LR
   L2 -.-> FS
 ```
 
+In the new Studio the Film studio is one screen at `?version=<build>&room=video` (ui/src/screens/FilmStudio.tsx), moved
+from the classic room as it is: Watch is the finished film with its saved cuts and, when the film was made in them, its
+wide, tall and square shapes; New cut is the form under it (the prompt, a style reference, Start from, Voice, Music)
+or an idea typed in the chat; the storyboard's beats sit above both. Shots, and the Launch pad, are still the agreed
+direction above and are in neither Studio.
+
 ## 11. Hermia, the commander
 
 Hermia leads the crew. She is our own character: the owner's reference was an ink-style anime portrait, and we

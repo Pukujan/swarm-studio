@@ -11,8 +11,10 @@ const PICTURES = [
   { k: 'drawn', label: 'Drawn', note: 'SVG · fastest, no keys' }
 ] as const
 
-export function PicturesRow({ pictures: p, onPick, isExpanded, onToggle }: {
+// `pexels`: whether the Studio has a Pexels key (GET /api/setup/parts), undefined while that is still being asked
+export function PicturesRow({ pictures: p, pexels, onPick, isExpanded, onToggle }: {
   pictures: Pictures
+  pexels?: boolean
   onPick: (mode: Pictures['mode']) => void
   isExpanded: boolean
   onToggle: () => void
@@ -30,6 +32,9 @@ export function PicturesRow({ pictures: p, onPick, isExpanded, onToggle }: {
           <Note>{p.painted.ready ? on.note : 'Stock photos fill in'}</Note>
         </>
       ) : <Note>{on.note}</Note>}
+      {/* stock photos with no Pexels key (also what fills in for Painted with no image model): said here, where it is picked */}
+      {pexels === false && (on.k === 'stock' || (on.k === 'painted' && !p.painted.ready)) &&
+        <Why>No Pexels key, so photos come from a small library and match less well. A key is free at pexels.com/api: Parts › Stock photos has the one command.</Why>}
     </Disclosure>
   )
 }

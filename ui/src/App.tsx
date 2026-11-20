@@ -28,7 +28,7 @@ export function App() {
     addEventListener('keydown', onKey)
     return () => { removeEventListener('keydown', mark, true); removeEventListener('keydown', onKey) }
   }, [view.room, go, can])
-  // a screen the next UI has not moved (the Game room, the Film studio, a new project's deck) opens in the classic
+  // a screen the next UI has not moved (the Game room, a new project's deck) opens in the classic
   // Studio at the same address, rather than a stand-in (decision 0024)
   const moved = !!SCREENS[view.room]
   useEffect(() => { if (!moved) location.replace(classicHref()) }, [moved, view.room])

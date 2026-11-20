@@ -8,7 +8,9 @@ import { ic } from './icons.js'
 // 2026-11-13: "people are allowed to choose and they shouldnt be default"). Home, About and Contact used to be
 // filled in and then forced into every build.
 const GUESS = []
-const pagesOf = ctx => ctx.state.pages || (ctx.brand?.story?.pages?.length ? ctx.brand.story.pages : GUESS)
+// when Brand was skipped, its auto-guessed story pages are not handed to the crew as the person's pages
+const brandSkipped = ctx => ctx.studio?.steps?.brand === 'skipped'
+const pagesOf = ctx => ctx.state.pages || (!brandSkipped(ctx) && ctx.brand?.story?.pages?.length ? ctx.brand.story.pages : GUESS)
 // the person skipped the Plan when asked before the build (docs/decisions/0020-ask-before-build.md): the planner
 // picks the pages, so the guess is not handed to the crew as if it were theirs
 const planSkipped = ctx => ctx.studio?.steps?.plan === 'skipped' && !ctx.state.pages?.length

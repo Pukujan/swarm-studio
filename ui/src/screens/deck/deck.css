@@ -66,3 +66,10 @@
 @media (prefers-reduced-motion: reduce) {
   .deck-crew .cursor, .deck-crew .cursor *, .deck-crew .ghost, .deck-crew .spark, .deck-status, .deck-status *, .deck-status *::after, .deck-flag, .deck-play-frame, .deck-think, .deck-toggle, .deck-pop { animation: none !important; transition: none !important; }
 }
+
+/* the wires between pages (web/canvas.css .wires): drawn in over a second, bright while fresh, then faint */
+.deck-wires path { fill: none; stroke-width: 2.5; stroke-linecap: round; opacity: .22; transition: opacity 1.2s; stroke-dasharray: 1; stroke-dashoffset: 1; animation: deck-wire-in 1s ease-out forwards; }
+.deck-wires circle { opacity: .5; transition: opacity 1.2s; }
+.deck-wires .fresh { opacity: .95; }
+@keyframes deck-wire-in { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .deck-wires path { animation: none; stroke-dashoffset: 0; transition: none; } }

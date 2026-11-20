@@ -147,6 +147,22 @@ export async function writeBrief({ said = [], kind = 'site', chat, project = '' 
   return project ? { brief, route: routeFor(said, text) } : { brief }
 }
 
+// A Studio project's Build after a talk: the brief of what the talk decided, so the build is not made from the
+// first words alone. (Owner, 2026-11-19: "hermes website", then a link and three answers saying it is Nous
+// Research's AI agent; the build got "hermes website" and made a fashion house.) What a link in the talk was read
+// to say goes to the planner with it. null when the person typed nothing new after their first words (a pressed
+// option, or the same words again, is not new), when there is no planner, or when it does not answer: the build
+// then goes on with the words it had.
+export async function briefFromTalk({ turns = [], refs = [], kind = 'site', chat = null }) {
+  const said = turns.filter(t => t && !t.brief && String(t.text || '').trim()).map(t => ({ who: t.who === 'person' ? 'person' : 'hermia', text: String(t.text) }))
+  const first = String(turns.find(t => t?.who === 'person')?.text || '').trim()
+  const more = turns.filter(t => t?.who === 'person' && !t.pick && String(t.text || '').trim() && !String(t.text).trim().startsWith(first))
+  if (!chat || !first || !more.length) return null
+  const read = refs.filter(r => r?.kind === 'link' && r.read?.text && r.read.by !== 'none').slice(0, 4).map(r => `- ${r.url}: ${String(r.read.text).slice(0, 600)}`)
+  if (read.length) said.push({ who: 'person', text: `[What the links I gave say]\n${read.join('\n')}` })
+  try { return String((await writeBrief({ said, kind, chat })).brief || '').trim().slice(0, 4000) || null } catch { return null }
+}
+
 // ===================== the plan is a conversation (spec 27) =====================
 
 const clean = (v, n = 300) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n)

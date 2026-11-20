@@ -1,0 +1,16 @@
+/* The Film studio's storyboard: each beat's card comes in after the one before (web/canvas.css .video-pop .vscene,
+   @keyframes vin; docs/ux/MOTION.md). */
+.film-scene { animation: vin .4s ease-out both; }
+.film-scene:nth-child(2) { animation-delay: .35s; }
+.film-scene:nth-child(3) { animation-delay: .7s; }
+.film-scene:nth-child(4) { animation-delay: 1.05s; }
+.film-scene:nth-child(5) { animation-delay: 1.4s; }
+.film-scene:nth-child(6) { animation-delay: 1.75s; }
+.film-scene:nth-child(n+7) { animation-delay: 2.1s; }
+@keyframes vin { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) { .film-scene { animation: none; } }
+
+/* the room comes in as the classic panel does (web/canvas.css .video-pop: pop .2s, a fade and a 6 px rise) */
+.film-room { animation: pop .2s var(--ease); }
+@keyframes pop { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .film-room { animation: none; } }
