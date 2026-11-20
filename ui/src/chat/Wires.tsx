@@ -20,9 +20,11 @@ export function Wires({ side, rect, hot, hover, chips }: { side: RefObject<HTMLE
       const list: { from: Element, key: string, hot: boolean }[] = []
       for (const el of s.querySelectorAll<HTMLElement>('[data-chip][data-wire]')) list.push({ from: el, key: el.dataset.chip || '', hot: el.dataset.chip === hot })
       if (hover?.isConnected) for (const key of (hover.dataset.layers || '').split(' ').filter(Boolean)) list.push({ from: hover, key, hot: true })
-      // the chat is a dock along the bottom: a wire ends above its top edge
+      // the chat is a dock along the bottom: a wire ends above its top edge. Down the left (a wide window, Dock.tsx)
+      // it ends to the right of the column instead
       const W = innerWidth, pad = 6
-      const top = s.getBoundingClientRect().top, H = top
+      const box = s.getBoundingClientRect(), column = s.dataset.chatDock === 'side'
+      const H = column ? innerHeight : box.top, L = column ? box.right : 0
       const keep = new Set<string>()
       for (const [i, l] of list.entries()) {
         const a = l.from.getBoundingClientRect()
@@ -32,8 +34,8 @@ export function Wires({ side, rect, hot, hover, chips }: { side: RefObject<HTMLE
         let bx: number, by: number, edge = false
         if (r && r.width) {
           bx = r.left; by = r.top + Math.min(r.height / 2, 60)
-          if (bx < pad || bx > W - pad || by < pad || by > H - pad) { edge = true; bx = Math.min(W - pad, Math.max(pad, bx)); by = Math.min(H - pad, Math.max(pad, by)) }
-        } else { edge = true; bx = ax; by = H - 28 }
+          if (bx < L + pad || bx > W - pad || by < pad || by > H - pad) { edge = true; bx = Math.min(W - pad, Math.max(L + pad, bx)); by = Math.min(H - pad, Math.max(pad, by)) }
+        } else { edge = true; bx = column ? L + 28 : ax; by = column ? a.top : H - 28 }
         // from the chip's top up to the layer: a gentle curve, upward
         const sx = a.left + a.width / 2, sy = a.top
         const dy = Math.max(30, Math.abs(sy - by) * 0.4)

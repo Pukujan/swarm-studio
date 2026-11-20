@@ -67,7 +67,7 @@ test('a studio record: its steps, its depth, the kit\'s own state merged, and on
     assert.throws(() => s.kit('p1', ['x']), /an object/)
     assert.equal(s.get('../x'), null)
     // the brand, in the brand sheet's store shape
-    assert.deepEqual(s.brands.get('p1'), { id: 'p1', brand: null })
+    assert.deepEqual(s.brands.get('p1'), { id: 'p1', brand: null, step: s.get('p1').steps.brand })
     assert.equal(s.brands.get('p9'), null)
     await s.brands.update('p1', r => { r.brand = { name: 'Moody', locked: true } })
     assert.equal(s.brands.get('p1').brand.name, 'Moody')

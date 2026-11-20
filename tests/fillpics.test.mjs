@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { emptySlots, fillPictures, framesToSlots } from '../engine/fillpics.mjs'
+import { emptySlots, fillPictures, framesToSlots, stockQueue } from '../engine/fillpics.mjs'
 
 function app() {
   const dir = mkdtempSync(join(tmpdir(), 'fp-'))
@@ -83,4 +83,39 @@ test('an exported site gets stand-ins too: static pages with relative paths, and
   assert.ok(existsSync(join(root, 'html', 'img', 'stock', 'CREDITS.md')))
   assert.match(readFileSync(join(root, 'react', 'src', 'sections', 'Hero.jsx'), 'utf8'), /src="\/img\/stock\/[0-9a-f]{12}\.jpg"/)
   assert.ok(existsSync(join(root, 'react', 'public', 'img', 'stock')))
+})
+
+test('a site built with stock photos: each slot gets a photo saved in the build, with an image event, once the layout is done', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'sq-'))
+  const jpg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64)])
+  const events = [], asked = []
+  const pick = async ({ q, w, h, avoid }) => {
+    asked.push({ q, w, h })
+    if (/nothing fits/.test(q)) return null
+    const url = ['https://x.test/a.jpg', 'https://x.test/b.jpg'].find(u => !avoid.has(u))
+    return url ? { url, credit: 'Boathouse by Ana (Pexels)', page: 'https://www.pexels.com/photo/1' } : null
+  }
+  const q = stockQueue({ run: 'r1', dir, emit: (type, data) => events.push({ type, ...data }), pick, bytesOf: async () => jpg, max: 3 })
+  q({ page: 'home', layer: 'hero', html: '<section><img data-gen="timber boathouse on a canal" alt=""><div class="aspect-[3/4]"><img data-gen="a rower at dawn" alt=""></div><img data-gen="already here" src="/x.png"></section>' })
+  q({ page: 'home', layer: 'work', html: '<img data-gen="nothing fits this one"><img data-gen="over the cap">' })
+  // held until the layout is done, as the painters are
+  await new Promise(r => setTimeout(r, 20))
+  assert.equal(events.length, 0)
+  q.start()
+  for (let i = 0; i < 50 && q.busy(); i++) await new Promise(r => setTimeout(r, 10))
+  // two photos, each a different one; the slot nothing fits is left alone and nothing is said to have failed
+  assert.deepEqual(events.map(e => [e.type, e.page, e.layer, e.gen, e.src, e.stock]), [
+    ['image', 'home', 'hero', 'timber boathouse on a canal', '/img/r1/1.jpg', true],
+    ['image', 'home', 'hero', 'a rower at dawn', '/img/r1/2.jpg', true]
+  ])
+  assert.equal(events[0].credit, 'Boathouse by Ana (Pexels)')
+  assert.ok(existsSync(join(dir, 'img', '1.jpg')) && existsSync(join(dir, 'img', '2.jpg')))
+  // the slot's shape is asked for: a tall frame gets a tall photo; a slot with a picture and one over the cap are not asked
+  assert.deepEqual(asked.map(a => [a.q, a.w > a.h]), [['timber boathouse on a canal', true], ['a rower at dawn', false], ['nothing fits this one', true]])
+  // bytes that are not a picture are not saved
+  const bad = [], q2 = stockQueue({ run: 'r2', dir, emit: (t, d) => bad.push(d), pick: async () => ({ url: 'https://x.test/c.jpg' }), bytesOf: async () => Buffer.from('<html>no</html>') })
+  q2({ page: 'home', layer: 'hero', html: '<img data-gen="a quiet harbour">' })
+  q2.start()
+  for (let i = 0; i < 50 && q2.busy(); i++) await new Promise(r => setTimeout(r, 10))
+  assert.equal(bad.length, 0)
 })
