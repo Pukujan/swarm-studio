@@ -119,6 +119,9 @@ export interface ChatProps {
   // what Send does here when it does not build (the App room's box asks the crew or changes the app, issue #542):
   // the box's placeholder, the line while the chat is empty, and the button's word
   box?: { placeholder: string, empty: string, action: string }
+  // words the screen puts in the message box (the Overview's New page: "Add a page: "): a new `id` puts them there
+  // and moves the caret to their end
+  fill?: { id: string, text: string }
 
   // ---------- what the chat tells the screen
   // Send while no talk is on: a build (or, when it starts with /, a command), with the pickers' values and the

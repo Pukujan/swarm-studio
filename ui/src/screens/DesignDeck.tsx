@@ -5,6 +5,9 @@
 // comments, the chat, Play and Watch a visitor, Replay, Publish and Post to Feed, and Export (#404). A file dropped
 // on the stage goes to the project's References (shared/RefDrop.tsx, issue #543; web/canvas/base.js's refDrop).
 // scripts/deck-walk.mjs uses each of them end to end.
+// The machine's `draft` is this deck too: a new project talked through before anything is built (web/home.js newChat,
+// web/canvas/talk.js). There is no build, so the canvas has nothing on it and the chat is the talk (deck/DeckChat.tsx);
+// its Build starts the build, which opens here.
 import { classicHref } from '../shell/classic'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { takeOpening } from '../nav/opening'
@@ -15,6 +18,7 @@ import { useNav } from '../nav/NavProvider'
 import { DeckStage, type Picked, type StageHandle } from './deck/DeckStage'
 import { CommentPin } from './deck/Comment'
 import { DeckChat } from './deck/DeckChat'
+import type { ChatApi } from '../chat'
 import { DesignTab } from './deck/DesignTab'
 import { useEdits } from './deck/edit'
 import { DeckBoard } from './deck/DeckBoard'
@@ -29,9 +33,11 @@ import { useToast } from '../primitives/Toast'
 import { refAt } from '../shared/refs'
 import { useRefDrop } from '../shared/RefDrop'
 
-// `board` forces the board's mode (a story); otherwise the address's ?board= says (src/board/flag.ts)
-export function DesignDeck({ board: forced }: { board?: BoardMode }) {
+// `board` forces the board's mode (a story); otherwise the address's ?board= says (src/board/flag.ts).
+// `api` is the chat's server in a story (src/chat/types.ts ChatApi)
+export function DesignDeck({ board: forced, api }: { board?: BoardMode, api?: ChatApi }) {
   const { view, go } = useNav()
+  const draft = view.room === 'draft'
   // ☰ → Replay (the machine's `replay`): the saved build plays again, and ends on the finished build
   const { model, loading, error, unfinished = false } = useDeckRun(view.run ?? view.version, view.replay, useCallback(() => go({ type: 'replay', on: false }), [go]))
   const stage = useRef<StageHandle>(null)
@@ -132,8 +138,9 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
 
   return (
     <>
-    {/* the chat docks along the bottom (decision 0015); the deck takes the height above it */}
-    <div className="relative flex min-w-0 overflow-hidden" style={{ height: 'calc(100dvh - 3.5rem - var(--chat-h, 0px))' }}>
+    {/* the chat is down the left in a wide window, along the bottom in a narrower one (decision 0015, chat/Dock.tsx);
+        the deck takes what is beside or above it */}
+    <div className="relative flex min-w-0 overflow-hidden" style={{ height: 'calc(100dvh - 3.5rem - var(--chat-h, 0px))', marginLeft: 'var(--chat-w, 0px)' }}>
       <LeftPanel id="deck-layers-panel" model={model} page={page} sheet={sheet} onClose={closeSheet} selected={sel?.key ?? null}
         onPage={id => { setPicked(id); setFollow(false); setSheet(false); stage.current?.focusPage(id) }}
         onLayer={k => { const l = model.layers[k]; const on = l && l.page !== '*' ? l.page : page ?? model.pages[0]?.id; if (!on) return; select({ key: k, page: on }); setPicked(on); setSheet(false); stage.current?.focusPage(on) }} />
@@ -155,6 +162,9 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
           ? <div role="status" aria-busy="true" aria-label="Loading the build" className="wait-in flex-1 bg-void [background-image:radial-gradient(var(--line)_1px,transparent_1px)] [background-size:24px_24px]">
               <div className="m-12 h-[60%] max-w-[640px] rounded-[4px] border border-line bg-surface-2 motion-safe:animate-pulse" />
             </div>
+          : draft
+            // a new project: the canvas with nothing on it (web/canvas/base.js fresh); the chat says what to do
+            ? <div role="region" aria-label="Canvas" className="flex-1 bg-void [background-image:radial-gradient(var(--line)_1px,transparent_1px)] [background-size:24px_24px]" />
           : model.state === 'empty'
             ? <div className="grid flex-1 place-content-center justify-items-center gap-4 p-6 text-center">
                 <p className="font-monospace text-muted">This version has nothing on its pages yet.</p>
@@ -176,7 +186,7 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
       {model.run && <PublishDialog model={model} anchor={publishBtn} isOpen={dialog === 'publish'} onOpenChange={o => setDialog(o ? 'publish' : null)} />}
       {model.run && <ExportDialog model={model} isOpen={dialog === 'export'} onOpenChange={o => setDialog(o ? 'export' : null)} />}
     </div>
-    {model.run && <DeckChat model={model} picked={sel?.key ?? null}
+    {(model.run || draft) && <DeckChat api={api} model={model} picked={sel?.key ?? null}
       onCommand={c => { if (c === 'play') play(); else if (c === 'replay') replay.toggle(); else setDialog(c) }} />}
     </>
   )

@@ -4,3 +4,5 @@
 export type Route = 'none' | 'slash' | 'new' | 'fix' | 'extend'
 export declare function routeMessage(m: { text?: string, run?: string | null, site?: boolean, selected?: boolean, hosted?: boolean }): Route
 export declare function seoAsk(text: string): boolean
+// an app project's Overview: the words change the app unless a page is selected (`selected`: the selected item's kind)
+export declare function toApp(board: { app?: boolean } | null | undefined, selected?: string): boolean

@@ -70,3 +70,35 @@ test('a build whose pictures were never logged as events still gives the film it
   const c = collect([{ type: 'run:start', brief: 'a wine bar' }, { type: 'page', id: 'home', title: 'Tidepool' }], d)
   assert.deepEqual(c.images.map(i => i.file.split(/[\\/]/).pop()), ['1.png', '2.png', '10.png'])
 })
+
+test('a build with no pictures: the film is signed with the site\'s name, and its pages\' shots become its pictures', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, existsSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { execFileSync } = await import('node:child_process')
+  const { screenStills, collect } = await import('../engine/video.mjs')
+  const d = mkdtempSync(join(tmpdir(), 'stills-'))
+  const events = [
+    { type: 'run:start', brief: 'A portfolio for a photographer' },
+    { type: 'page', id: 'home', title: 'Home', purpose: 'Show the work' }, { type: 'page', id: 'about', title: 'About' },
+    { type: 'layer:done', page: '*', layer: 'nav', html: '<nav><a href="#" data-goto="home" aria-label="Mara Voss Photo home">Mara Voss Photo</a><a data-goto="about">About</a></nav>' }
+  ]
+  const c = collect(events, d)
+  // not the first page's title
+  assert.equal(c.brand, 'Mara Voss Photo')
+  assert.equal(c.images.length, 0)
+  // no ffmpeg on this machine: nothing to cut with, and nothing breaks
+  assert.equal((await screenStills(c, events, d, '')).images.length, 0)
+  let ffmpeg = ''
+  try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); ffmpeg = 'ffmpeg' } catch { return }
+  mkdirSync(join(d, 'story', 'screens'), { recursive: true })
+  execFileSync(ffmpeg, ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=navy:s=768x1956', '-frames:v', '1', join(d, 'story', 'screens', 'home-desktop.jpg')])
+  await screenStills(c, events, d, ffmpeg)
+  // the page with a shot is a picture now, wide; the page with none is left out
+  assert.deepEqual(c.images.map(i => [i.n, i.page, i.screen]), [[1, 'home', true]])
+  assert.match(c.images[0].gen, /Home page of the finished site/)
+  assert.ok(existsSync(join(d, 'img', 'video-screen-home.jpg')))
+  // a build that has pictures keeps them: no shots are added
+  const own = { images: [{ n: 1 }], clips: [] }
+  assert.equal((await screenStills(own, events, d, ffmpeg)).images.length, 1)
+})

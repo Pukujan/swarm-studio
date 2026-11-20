@@ -1,13 +1,19 @@
 // The Overview's mock-ups: the real screen on the real machine at the Overview's address, with the server's answers
 // stubbed (no server behind Storybook). One story per state it draws differently: a full project, pages still
 // planned (no snapshots yet), a build at work (pictures painting, the game building), a version with nothing yet,
-// loading, and a version the server does not have.
+// loading, and a version the server does not have. The chat is on every one (overview/OverviewChat.tsx): down the left
+// in a wide window, along the bottom in a narrower one; the last stories show it with the build's own lines, on a
+// phone, and with a section dragged in.
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { useState } from 'react'
 import { makeNav } from '../nav/nav'
 import { NavProvider } from '../nav/NavProvider'
 import { TopBar } from '../shell/TopBar'
+import { SheetsProvider } from './setup/Sheets'
 import { Overview } from './Overview'
+import { deckEvents } from './deck/deck.fixture'
+import { DeckSourceContext, type DeckSource } from './deck/source'
+import { LAYER_TYPE } from '../chat'
 
 // a page's snapshot, drawn here: its theme's colours in bands, as tall as a long page
 const shot = (bg: string, fg: string, accent: string, h = 1800) => `data:image/svg+xml,${encodeURIComponent(
@@ -51,10 +57,14 @@ function stub(mode: Mode) {
   }) as typeof fetch
 }
 
-function Screen({ mode }: { mode: Mode }) {
+// the build's events, which the chat reads its lines from: none, or a finished build's (deck/deck.fixture.ts)
+const quiet: DeckSource = { events: async () => [] }
+const built: DeckSource = { events: async () => deckEvents('done') }
+
+function Screen({ mode, lines = false }: { mode: Mode, lines?: boolean }) {
   // the stub goes in before the screen's first fetch
   const [nav] = useState(() => { stub(mode); return makeNav({ search: '?project=p-tea&version=r-tea-2' }) })
-  return <NavProvider nav={nav}><div className="bg-bg text-text"><TopBar /><Overview /></div></NavProvider>
+  return <NavProvider nav={nav}><SheetsProvider first={false}><DeckSourceContext value={lines ? built : quiet}><div className="bg-bg text-text"><TopBar /><Overview /></div></DeckSourceContext></SheetsProvider></NavProvider>
 }
 
 const meta = {
@@ -72,3 +82,17 @@ export const Working: Story = { args: { mode: 'working' } }
 export const Empty: Story = { args: { mode: 'empty' } }
 export const Loading: Story = { args: { mode: 'hold' } }
 export const Missing: Story = { args: { mode: 'missing' } }
+
+// the chat with what the crew said while they built: their lines in the Chat tab, the build's news in Log
+export const ChatWithTheBuild: Story = { args: { lines: true } }
+// a narrower window: the chat is a dock along the bottom, and the Overview's own dock sits above it
+export const ChatOnAPhone: Story = { args: { lines: true }, globals: { viewport: { value: 'mobile1' } } }
+// a section dragged from Layers into the chat: a chip in the message box, and the words go to just that section
+export const SectionInTheChat: Story = {
+  play: async ({ canvasElement }) => {
+    const chat = await new Promise<Element>(ok => { const look = () => { const el = canvasElement.ownerDocument.querySelector('[data-chat-dock]'); if (el) ok(el); else setTimeout(look, 50) }; look() })
+    const dataTransfer = new DataTransfer()
+    dataTransfer.setData(LAYER_TYPE, JSON.stringify({ key: 'home/hero', name: 'hero' }))
+    chat.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer }))
+  }
+}
