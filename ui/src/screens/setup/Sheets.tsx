@@ -1,16 +1,17 @@
-// Setup and Settings for the whole app, one sheet at a time: `useSheets().open('setup', row?)` and
-// `open('settings')` from any menu (the ☰, and the Projects user menu once it has moved). Setup opens by itself
+// Setup, Settings and Models for the whole app, one sheet at a time: `useSheets().open('setup', row?)`,
+// `open('settings')` and `open('models')` from any menu (the ☰, and the Projects user menu once it has moved). Setup opens by itself
 // once, the first time Projects shows (spec 6). `warn` is true while the last models check failed (the server
 // keeps it across restarts), for the avatar's warning dot and the Setup item's ⚠.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useNav } from '../../nav/NavProvider'
 import { get } from './api'
 import type { SetupRow } from './machines'
+import { ModelsSheet } from './ModelsSheet'
 import { SettingsSheet } from './SettingsSheet'
 import { SetupSheet } from './SetupSheet'
 
-type Open = { sheet: 'setup', row: SetupRow } | { sheet: 'settings' } | null
-type Sheets = { open: (sheet: 'setup' | 'settings', row?: SetupRow) => void, warn: boolean }
+type Open = { sheet: 'setup', row: SetupRow } | { sheet: 'settings' } | { sheet: 'models' } | null
+type Sheets = { open: (sheet: 'setup' | 'settings' | 'models', row?: SetupRow) => void, warn: boolean }
 
 const SheetsContext = createContext<Sheets | null>(null)
 
@@ -32,7 +33,7 @@ export function SheetsProvider({ children, first = true }: { children: ReactNode
     return () => { alive = false }
   }, [first, home])
 
-  const open = useCallback((sheet: 'setup' | 'settings', row: SetupRow = '') => setAt(sheet === 'setup' ? { sheet, row } : { sheet }), [])
+  const open = useCallback((sheet: 'setup' | 'settings' | 'models', row: SetupRow = '') => setAt(sheet === 'setup' ? { sheet, row } : { sheet }), [])
   const onModels = useCallback((ok: boolean | undefined) => setWarn(ok === false), [])
   const value = useMemo(() => ({ open, warn }), [open, warn])
 
@@ -42,8 +43,16 @@ export function SheetsProvider({ children, first = true }: { children: ReactNode
       {at?.sheet === 'setup' && <SetupSheet row={at.row} onClose={() => setAt(null)} onModels={onModels} />}
       {/* Settings › Setup: Settings closes and Setup opens on its Parts (the statechart's #projects.setup.parts) */}
       {at?.sheet === 'settings' && <SettingsSheet onClose={() => setAt(null)} onSetup={() => setAt({ sheet: 'setup', row: 'parts' })} />}
+      {/* Models › Change: Models closes and Setup opens on its Models row, Hermes's picker (web/canvas/settings.js) */}
+      {at?.sheet === 'models' && <ModelsSheet onClose={() => setAt(null)} onSetup={() => setAt({ sheet: 'setup', row: 'models' })} />}
     </SheetsContext>
   )
+}
+
+// the chat's Other…: opens Models where the app's sheets are (a story of the chat alone has none, so nothing)
+export function useModelsSheet(): (() => void) | undefined {
+  const s = useContext(SheetsContext)
+  return useMemo(() => (s ? () => s.open('models') : undefined), [s])
 }
 
 export function useSheets(): Sheets {

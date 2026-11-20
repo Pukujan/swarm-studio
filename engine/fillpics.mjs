@@ -137,3 +137,53 @@ export async function fillSite(exportDir, opts) {
   const react = existsSync(join(exportDir, 'react', 'src')) ? await fillPictures(join(exportDir, 'react'), opts) : { filled: 0, left: 0 }
   return { filled: html.filled + react.filled, left: html.left + react.left }
 }
+
+// ---------- a website built with stock photos (Setup's Pictures: Stock photos)
+// Its picture slots are filled as the painted ones are, so the photos are the build's own: files in
+// runs/<id>/img and an `image` event each, which the pages, their snapshots, the Overview, an export and a film
+// all read. Before, a stock photo was only laid over the slot on the classic Overview and nothing was saved: the
+// new Studio showed empty frames, and a photographer's site and its film had no photos (owner, 2026-11-19: "why
+// are stock pictures failing too?"). The same shape as the painters' queue (server/server.mjs imageQueue):
+// add(layer:done event), start() once the layout is done, drop(), stop(), busy().
+//   pick({ q, w, h, run, avoid }) is standins().pick; bytesOf(url) the photo's bytes, or null
+// A slot no photo fits is left as it was (an export still tries it again, fillSite above); nothing fails.
+const KIND = b => (b[0] === 0xff && b[1] === 0xd8 ? '.jpg' : b[0] === 0x89 && b[1] === 0x50 ? '.png' : b.slice(0, 4).toString() === 'RIFF' && b.slice(8, 12).toString() === 'WEBP' ? '.webp' : '')
+const SIZE = { square: [1024, 1024], portrait: [900, 1200], landscape: [1600, 1000] }
+export function stockQueue({ run, dir, emit, pick, bytesOf, max = 8 }) {
+  const jobs = [], avoid = new Set()
+  let n = 0, held = true, active = 0, off = false
+  const fill = async job => {
+    const [w, h] = SIZE[job.aspect]
+    let photo = null
+    try { photo = await pick({ q: job.gen, w, h, run, avoid }) } catch {}
+    if (!photo?.url) return
+    avoid.add(photo.url)
+    let bytes = null
+    for (const u of [photo.url, photo.publicUrl].filter(Boolean)) { try { bytes = await bytesOf(u) } catch {} if (bytes?.length) break }
+    const ext = bytes?.length ? KIND(bytes) : ''
+    if (!ext || off) return
+    mkdirSync(join(dir, 'img'), { recursive: true })
+    writeFileSync(join(dir, 'img', `${job.n}${ext}`), bytes)
+    emit('image', { page: job.page, layer: job.layer, gen: job.gen, src: `/img/${run}/${job.n}${ext}`, stock: true, model: 'stock photo', ...(photo.credit ? { credit: String(photo.credit).slice(0, 200) } : {}), ...(photo.page ? { from: String(photo.page).slice(0, 300) } : {}) })
+  }
+  const pump = () => {
+    while (!held && !off && active < 2 && jobs.length) {
+      active++
+      fill(jobs.shift()).catch(() => {}).finally(() => { active--; pump() })
+    }
+  }
+  const add = e => {
+    for (const m of String(e.html || '').matchAll(/<img\b[^>]*\bdata-gen="([^"]{3,300})"[^>]*>/g)) {
+      if (n >= max || /\bsrc=/.test(m[0])) continue
+      const box = String(e.html).slice(Math.max(0, m.index - 400), m.index)
+      const aspect = /aspect-(square|\[1\/1\])/.test(box) ? 'square' : /aspect-\[(3\/4|2\/3|4\/5|9\/16)\]/.test(box) ? 'portrait' : 'landscape'
+      jobs.push({ n: ++n, page: e.page, layer: e.layer, gen: m[1], aspect })
+    }
+    pump()
+  }
+  add.start = () => { held = false; pump() }
+  add.drop = () => { if (held) jobs.length = 0 }
+  add.stop = () => { off = true; jobs.length = 0 }
+  add.busy = () => !held && !off && (active > 0 || jobs.length > 0)
+  return add
+}

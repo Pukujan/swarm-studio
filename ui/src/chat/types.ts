@@ -145,7 +145,7 @@ export interface ChatProps {
   onGo?: (e: ChatGo) => void
   // each line the person sends in a talk (the Studio takes its idea from the first)
   onHeard?: (text: string) => void
-  // the build model picker's Other…: the screen opens the models panel
+  // the build model picker's Other…: Models opens (screens/setup) unless the screen gives its own
   onMoreModels?: () => void
 }
 

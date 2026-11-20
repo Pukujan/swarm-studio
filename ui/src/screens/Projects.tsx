@@ -11,7 +11,8 @@ import { Icon } from '../primitives/Icon'
 import { MenuAt, MenuRow, MenuSeparator, Submenu } from '../primitives/Menu'
 import { useToast } from '../primitives/Toast'
 import { useNav } from '../nav/NavProvider'
-import { classicHref, openClassic } from '../shell/classic'
+import { openClassic } from '../shell/classic'
+import { saidOf, talkOn, type ChatKind } from '../chat'
 import { useSheets } from './setup/Sheets'
 import { api, post, raw, said, useStored } from './projects/api'
 import { MakeBox } from './projects/MakeBox'
@@ -332,11 +333,13 @@ export function Projects() {
       </div>
     )
   }
-  // Chats (spec 29): a game chat opens its Plan board; the others open in the Design deck's chat, which has not moved
+  // Chats (spec 29): a game chat opens its Plan board; the others open where they left off in the chat of a deck
+  // with nothing on it (web/home.js openChat)
   async function openChat(id: string) {
-    const chat = await api<{ id?: string, kind?: string, plan?: string }>(`/api/chats/${encodeURIComponent(id)}`).catch(() => null)
+    const chat = await api<{ id?: string, kind?: ChatKind, plan?: string, turns?: { id?: string, who: string, text: string }[] }>(`/api/chats/${encodeURIComponent(id)}`).catch(() => null)
     if (!chat?.id) return void loadChats()
     if (chat.kind === 'game') return void go({ type: 'plan', plan: chat.plan || null })
+    talkOn({ id: `chat:${chat.id}:${Date.now()}`, kind: chat.kind, chat: chat.id, said: saidOf(chat), blank: true })
     go({ type: 'draft' })
   }
   const deleteChat = (id: string) => api(`/api/chats/${encodeURIComponent(id)}`, { method: 'DELETE' }).then(loadChats, err => toast(said(err)))
@@ -420,7 +423,7 @@ export function Projects() {
               if (key === 'theme') { const t = light ? 'dark' : 'light'; document.documentElement.dataset.theme = t; try { localStorage.setItem('swarm-theme', t) } catch { /* this page */ } }
               // the crew's voices and sounds (web/chatter.js): the same keys as the current Studio's switch
               if (key === 'sound') { const on = crew !== 'on'; try { localStorage.setItem('swarm.crew', on ? 'on' : 'muted'); localStorage.setItem('swarm.chatter', JSON.stringify({ ...JSON.parse(localStorage.getItem('swarm.chatter') || '{}'), on })) } catch { /* this page */ } }
-              if (key === 'setup' || key === 'settings') sheets.open(key)
+              if (key === 'setup' || key === 'settings' || key === 'models') sheets.open(key)
               if (key === 'classic') void openClassic()
               return
             }
@@ -480,9 +483,8 @@ export function Projects() {
             <MenuRow key="t" id="theme" icon={light ? 'moon' : 'sun'} label={light ? 'Dark' : 'Light'} />,
             <MenuRow key="s" id="sound" icon="sound" label="Crew sound" on={crew === 'on'} />,
             <MenuSeparator key="-" />,
-            // Models is a sheet of the classic Studio, which has not moved: it opens there. Setup and Settings are this
-            // app's sheets (screens/setup)
-            <MenuRow key="m" id="models" icon="sliders" label="Models" href={classicHref()} />,
+            // Models, Setup and Settings are this app's sheets (screens/setup)
+            <MenuRow key="m" id="models" icon="sliders" label="Models" />,
             <MenuRow key="u" id="setup" icon="check" label="Setup" />,
             <MenuRow key="c" id="settings" icon="link" label="Settings" />,
             <MenuSeparator key="--" />,

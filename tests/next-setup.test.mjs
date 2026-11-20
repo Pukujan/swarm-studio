@@ -39,7 +39,7 @@ test('the next UI draws web/setup-parts.js itself: every name its types declare 
 })
 
 test('the sheets never take, show or keep a key: a key is given to Hermes in the person\'s own terminal', () => {
-  const src = ['ModelPicker', 'PartsRow', 'SetupSheet', 'SettingsSheet', 'fixtures'].map(f => read(`ui/src/screens/setup/${f}.${f === 'fixtures' ? 'ts' : 'tsx'}`)).join('\n')
+  const src = ['ModelPicker', 'ModelsSheet', 'PartsRow', 'SetupSheet', 'SettingsSheet', 'fixtures'].map(f => read(`ui/src/screens/setup/${f}.${f === 'fixtures' ? 'ts' : 'tsx'}`)).join('\n')
   // no box to type a key into, and nothing sends one: the command Hermes asks for it with, then Check again
   assert.doesNotMatch(src, /type="password"/)
   assert.doesNotMatch(src, /models\/signin', \{[^}]*\bkey\b/)
@@ -50,4 +50,22 @@ test('the sheets never take, show or keep a key: a key is given to Hermes in the
   assert.doesNotMatch(src, /mcp_allowlist/)
   assert.doesNotMatch(src, /\.env\b/)
   assert.doesNotMatch(read('ui/src/screens/setup/fixtures.ts'), /sk_|msy-|key":\s*"/)
+})
+
+test('Models opens in the next UI: the user menu and the chat\'s Other… open its sheet, and Change opens Setup on Models', () => {
+  const projects = read('ui/src/screens/Projects.tsx')
+  // the row is this app's sheet, with no address in the classic Studio
+  assert.match(projects, /<MenuRow key="m" id="models" icon="sliders" label="Models" \/>/)
+  assert.match(projects, /key === 'models'\) sheets\.open\(key\)/)
+  const sheets = read('ui/src/screens/setup/Sheets.tsx')
+  assert.match(sheets, /<ModelsSheet onClose=\{\(\) => setAt\(null\)\} onSetup=\{\(\) => setAt\(\{ sheet: 'setup', row: 'models' \}\)\} \/>/)
+  // the chat's Other… opens it wherever the sheets are, unless a screen gives its own
+  const chat = read('ui/src/chat/Chat.tsx')
+  assert.match(chat, /const moreModels = onMoreModels \?\? models/)
+  assert.match(chat, /if \(id === OTHER\) moreModels\?\.\(\)/)
+  // the same routes and roles as the current Studio's pop (web/canvas/settings.js)
+  const sheet = read('ui/src/screens/setup/ModelsSheet.tsx')
+  for (const route of ["get<ModelsInfo>('/api/models')", "get<Options>('/api/setup/models/options')", "post<{ ok?: boolean }>('/api/models', body)"]) assert.ok(sheet.includes(route), route)
+  for (const role of ["role: 'planner'", "role: 'worker'", "role: 'reviewer'", "role: 'image'", "role: 'lite'"]) assert.ok(sheet.includes(role), role)
+  assert.doesNotMatch(sheet, /classic/i)
 })

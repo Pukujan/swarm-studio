@@ -16,9 +16,17 @@ decided a set of rules for it and for the chat. The approved prototype is what t
 
 **The chat**
 - **Always along the bottom**, at every width ("nope chat always in bottom"). Not on the left.
+  - **Changed by the owner on 2026-11-19:** "maybe its better if the chat dock is on t he left like in old version
+    instead?", and "yes" to: *(our wording)* down the left in a wide window (1280 px and up), a column under the top
+    bar with the whole history beside the screen, and **Hide chat** to fold it to a rail (**Show chat**, with the
+    number of suggestions waiting). It never folds or opens by itself. A narrower window keeps the dock along the
+    bottom, as below.
 - **It can be pulled up.** It sits low by default. A handle drags it to one of three heights (low: the message box
   and the last line; middle; high: the whole history). It stays where the person left it when the crew asks
   something new, and never opens or drops by itself.
+  - *(2026-11-19, our wording, after the owner's "chat taking up too much space on the bottom")* Low is one row:
+    the last line, then the message box, Suggestions and Send. The tabs, the chats and the pickers come back at
+    middle and high. A press on the handle with no drag moves nothing; drag or the arrow keys do.
 - **Suggestions are a small underlined text link** beside the chat box, opening a drawer, on every screen with a
   chat. There is no row of reply buttons ("its better to have a suggestion button that can click as a drawer").
 - **One open question at a time** (leaning): the planner never stacks two unanswered questions.
