@@ -6,7 +6,7 @@ import { PetProvider } from './pet/Pet'
 import { ToastProvider } from './primitives/Toast'
 import { NotMovedYet } from './screens/NotMovedYet'
 import { classicHref } from './shell/classic'
-import { SCREENS } from './screens'
+import { screenOf } from './screens'
 import { TopBar } from './shell/TopBar'
 import { TrailProvider } from './shell/Trail'
 
@@ -28,11 +28,11 @@ export function App() {
     addEventListener('keydown', onKey)
     return () => { removeEventListener('keydown', mark, true); removeEventListener('keydown', onKey) }
   }, [view.room, go, can])
-  // a screen the next UI has not moved (the Game room, the Film studio, a new project's deck) opens in the classic
+  // every room has moved to the next UI; a room with no screen here (none today) still opens in the classic
   // Studio at the same address, rather than a stand-in (decision 0024)
-  const moved = !!SCREENS[view.room]
+  const moved = !!screenOf(view)
   useEffect(() => { if (!moved) location.replace(classicHref()) }, [moved, view.room])
-  const Screen = SCREENS[view.room] ?? NotMovedYet
+  const Screen = screenOf(view) ?? NotMovedYet
   return (
     <PetProvider nav={nav}>
       <TrailProvider>

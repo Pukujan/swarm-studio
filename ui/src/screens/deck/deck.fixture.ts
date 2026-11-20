@@ -9,8 +9,9 @@ const T = Date.parse('2026-11-01T11:00:00Z')
 const BRIEF = 'Alpha Tea, a tea subscription for night-shift workers, with gift boxes'
 const PAGES: [string, string][] = [['home', 'Alpha Tea'], ['plans', 'Plans'], ['gifts', 'Gift boxes']]
 
-const html = (title: string, i: number) =>
-  `<section class="px-16 py-20 ${i % 2 ? 'bg-[var(--card)]' : ''}"><h${i ? 2 : 1} class="mb-4 text-5xl font-semibold">${title}</h${i ? 2 : 1}><p class="max-w-xl text-lg opacity-80">${BRIEF}</p></section>`
+// `to`: the pages this section links to (the nav to every page, a hero to the next one), so the deck has wires
+const html = (title: string, i: number, to: string[] = []) =>
+  `<section class="px-16 py-20 ${i % 2 ? 'bg-[var(--card)]' : ''}"><h${i ? 2 : 1} class="mb-4 text-5xl font-semibold">${title}</h${i ? 2 : 1}><p class="max-w-xl text-lg opacity-80">${BRIEF}</p>${to.map(id => `<a class="mr-4 underline" data-goto="${id}">${id}</a>`).join('')}</section>`
 
 export type Cut = 'planned' | 'building' | 'done' | 'stopped' | 'failed'
 
@@ -31,7 +32,7 @@ export function deckEvents(at: Cut = 'done'): DeckEvent[] {
     if (i === cut) { ev.push({ type: 'layer:delta', t: T + 200 + i * 400, run, agent, page, layer: id, text: html(title, i).slice(0, 120) }); return }
     if (i === cut + 1) return
     if (at === 'failed' && i === 3) { ev.push({ type: 'layer:failed', t: T + 600 + i * 400, run, agent, page, layer: id, message: 'the model stopped answering' }); return }
-    ev.push({ type: 'layer:done', t: T + 600 + i * 400, run, agent, page, layer: id, ms: 400, done: i + 1, planned: layers.length, html: html(title, i) })
+    ev.push({ type: 'layer:done', t: T + 600 + i * 400, run, agent, page, layer: id, ms: 400, done: i + 1, planned: layers.length, html: html(title, i, id === 'nav' ? PAGES.map(p => p[0]) : id === 'hero' ? [PAGES[(PAGES.findIndex(p => p[0] === page) + 1) % PAGES.length][0]] : []) })
   })
   if (at === 'done' || at === 'failed') ev.push({ type: 'run:done', t: T + 10000, run, ms: 10000, planned: layers.length, done: at === 'failed' ? layers.length - 1 : layers.length, failed: at === 'failed' ? 1 : 0, pages: PAGES.length })
   if (at === 'stopped') ev.push({ type: 'run:stopped', t: T + 5000, run, reason: { code: 'stopped' } })

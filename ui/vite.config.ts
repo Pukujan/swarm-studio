@@ -50,7 +50,14 @@ export const alias: AliasOptions = [
   { find: '@studio/github', replacement: fileURLToPath(new URL('../web/github.js', import.meta.url)) },
   // a page's picture, taken inside its frame and sized in a worker (web/capture.js, spec 36): the Overview photographs
   // a changed page the same way in both apps (src/screens/overview/Snapper.tsx)
-  { find: '@studio/capture', replacement: fileURLToPath(new URL('../web/capture.js', import.meta.url)) }
+  { find: '@studio/capture', replacement: fileURLToPath(new URL('../web/capture.js', import.meta.url)) },
+  // the Game room's pure rules, the same files the classic room runs (src/screens/game/): what fills the stage and
+  // its typed phrases (web/canvas/stage.js), Autoplay's (web/canvas/autoplay.js), a waiting slice's words and the
+  // room's answers (web/canvas/wander.js), and the state pill's words (web/replaytalk.js)
+  { find: '@studio/stage', replacement: fileURLToPath(new URL('../web/canvas/stage.js', import.meta.url)) },
+  { find: '@studio/autoplay', replacement: fileURLToPath(new URL('../web/canvas/autoplay.js', import.meta.url)) },
+  { find: '@studio/wander', replacement: fileURLToPath(new URL('../web/canvas/wander.js', import.meta.url)) },
+  { find: '@studio/replaytalk', replacement: fileURLToPath(new URL('../web/replaytalk.js', import.meta.url)) }
 ]
 
 export default defineConfig({

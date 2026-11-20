@@ -19,9 +19,10 @@ export interface BoardHandle {
 
 const INSP = 272
 
-export function Board({ ref, label, fit = [0.3, 1.25], selected, onClear, inspector, toast, children }: {
+// fill: the board takes its parent's height (a sheet drawn above a chat's dock), not the window's under the top bar
+export function Board({ ref, label, fit = [0.3, 1.25], selected, onClear, inspector, toast, fill = false, children }: {
   ref?: Ref<BoardHandle>, label: string, fit?: [number, number], selected: boolean, onClear: () => void,
-  inspector?: ReactNode, toast?: string | null, children: ReactNode
+  inspector?: ReactNode, toast?: string | null, fill?: boolean, children: ReactNode
 }) {
   const stage = useRef<HTMLDivElement>(null), world = useRef<HTMLDivElement>(null)
   const cam = useRef({ x: 0, y: 0, k: 1 })
@@ -111,7 +112,7 @@ export function Board({ ref, label, fit = [0.3, 1.25], selected, onClear, inspec
   }, [selected, onClear])
 
   return (
-    <div className="relative flex h-[calc(100dvh-3.5rem)] min-w-0 overflow-hidden bg-void text-text">
+    <div className={`relative flex ${fill ? 'h-full' : 'h-[calc(100dvh-3.5rem)]'} min-w-0 overflow-hidden bg-void text-text`}>
       <div ref={stage} tabIndex={-1} aria-label={label} role="region" onPointerDown={down} onPointerMove={move} onPointerUp={up}
         className={`relative min-w-0 flex-1 touch-none overflow-hidden outline-none [background-image:radial-gradient(var(--line)_1px,transparent_1px)] [background-size:24px_24px] ${panning ? 'cursor-grabbing' : 'cursor-default'}`}>
         <div ref={world} className="absolute top-0 left-0 flex w-max origin-top-left gap-[72px] px-14 pt-12 pb-36">{children}</div>

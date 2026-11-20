@@ -83,6 +83,7 @@ import { workshopRoutes } from './workshops.mjs'
 import { setupRoutes, partsLocal } from './setup.mjs'
 import { uiChoice, UIS } from './uichoice.mjs'
 import { pictureRun, isPictures } from '../engine/setup.mjs'
+import { stockQueue } from '../engine/fillpics.mjs'
 import { ckffPaint, ckffCreds } from '../engine/ckff.mjs'
 import { chooseImage, paintWithBackup } from '../engine/paintretry.mjs'
 import { library, PACKS as LIB_PACKS } from '../engine/library.mjs'
@@ -92,7 +93,7 @@ import { helperRoutes } from './helpers.mjs'
 import { chatTools } from './chattools.mjs'
 import { makeCharacter as planMakeCharacter, meshyKey as planMeshyKey } from '../engine/meshy.mjs'
 import { PLAN_QUESTIONS } from '../engine/plan.mjs'
-import { collect, composition, VOICE_LEAD, videoTools, render, stagePictures, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
+import { collect, screenStills, composition, VOICE_LEAD, videoTools, render, stagePictures, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
 import { makePoster, posterFfmpeg } from '../engine/poster.mjs'
 import { idleWatch, codeStamp, staleCode } from '../engine/lifecycle.mjs'
 import { findFfmpeg } from '../engine/playtest.mjs'
@@ -643,6 +644,12 @@ function startRun({ brief, agents, base = null, ask = '', resume = false, projec
     // painted: the slots are painted; stock: stand-in photos keep them; drawn: no slots at all
     run.paint = pic.paint
     if (pic.paint) { run.images = images = imageQueue(run, emit, pic.choice); painters.set(id, images) }
+    // stock photos (Setup's pick, or painted with no image model): the slots get a photo each, saved in the build
+    else if (pic.images) {
+      const st = standinsOf()
+      run.images = images = stockQueue({ run: id, dir: run.dir, emit, pick: st.pick, bytesOf: standinBytes(st), max: IMG_MAX })
+      painters.set(id, images)
+    }
     return withTrace(id, () => runSwarm({
     images: pic.images,
     provider: provider('planner'),
@@ -1295,8 +1302,14 @@ async function videoNow(id, input = {}) {
     const seed = (Date.now() ^ (Math.random() * 2 ** 31)) >>> 0
     const pinned = TRANSITIONS.includes(input.transition)
     let transition = pinned ? input.transition : 'wipe'
-    send('video:start', { model, images: c.images.length, style: template || 'prompt', idea: prompt, prompt, transition, refs: (input.refs || []).length })
     const tools = videoTools(dataDir, stage => progress(0, stage)) // fetches the renderer while the story is written
+    // a build with no pictures and no footage: its pages' saved shots are its pictures (engine/video.mjs screenStills)
+    if (!fixedBoard && !c.images.length && !c.clips.length) {
+      const t = await tools.catch(() => null)
+      if (t?.ffmpeg) await screenStills(c, readEvents(id) || events, join(runsDir, id), t.ffmpeg).catch(() => {})
+      if (c.images.length) send('video:note', { message: `this build has no pictures, so the film shows its ${c.images.length} page${c.images.length === 1 ? '' : 's'} as built` })
+    }
+    send('video:start', { model, images: c.images.length, style: template || 'prompt', idea: prompt, prompt, transition, refs: (input.refs || []).length })
     mkdirSync(dir, { recursive: true })
     // style references: each broken into a style description, kept with the run; never copied
     let notes = null
@@ -3510,6 +3523,25 @@ ${researchBrief(seen)}`
         if (base) input.base = base
       }
       const pid = typeof input.project === 'string' ? input.project : null
+      // A Studio project's first Build after a talk in its chat: the brief is what the talk decided, in place of the
+      // idea the project was started with (engine/talkplan.mjs briefFromTalk); what the kit added after the idea
+      // (the pages) stays. The idea is kept as the new brief, as a brief written in the chat is (/api/discuss).
+      if (pid && !next && !redo && studios.get(pid) && !projects.get(pid)?.head) {
+        const st = studios.get(pid), idea = String(st.idea || '').trim(), talk = st.chat ? chats.get(st.chat) : null
+        const pm = modelFor('planner')
+        const planner = pm && models.planner.apiKey ? async messages => (await streamChat(provider('planner'), { trace: { kind: 'discuss' }, model: pm, maxTokens: 400, temperature: 0.3, signal: AbortSignal.timeout(25000), extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages })).text : null
+        const said = idea && talk && String(input.brief).trim().startsWith(idea)
+          ? await (await import('../engine/talkplan.mjs')).briefFromTalk({ turns: talk.turns || [], refs: talk.refs || [], kind: st.kind === 'app' ? 'app' : 'site', chat: planner })
+          : null
+        if (said && said !== idea) {
+          // pages the brand sheet guessed from the old idea are not the person's (they never typed or locked them):
+          // they go with the idea they were guessed from, and the planner picks pages for the new brief
+          const sheet = studios.brands.get(pid)?.brand, guessed = sheet && !sheet.lockedAt && !(sheet.story?.own || []).includes('pages') && sheet.story?.pages?.length ? `Pages: ${sheet.story.pages.join(', ')}.` : ''
+          const rest = String(input.brief).trim().slice(idea.length)
+          input.brief = (said + (guessed ? rest.replace(guessed, '') : rest)).trim()
+          try { await studios.update(pid, s => { s.idea = said }) } catch (err) { console.warn('studio idea:', err.message) }
+        }
+      }
       // Ask before every new website build (docs/decisions/0020-ask-before-build.md): the next version of a
       // build that exists (it resolved to that build, engine/extend.mjs followUp), a redo of a project that has versions, a Studio project's
       // Build (the walk is the answer), a chat whose person answered "Skip all" (once), or a script's sure
@@ -3747,6 +3779,15 @@ ${researchBrief(seen)}`
             out.options = turn.options
           }
         } catch (err) { console.warn('chat:', err.message) }
+        // A brief written in an unbuilt Studio project's chat is its idea from then on, and its brand sheet, while not
+        // locked, is made again for it (server/brand.mjs refresh). Only a brief does this: a turn of talk never
+        // remakes the sheet, so it does not change under the person as they type, and the idea is never raw chat.
+        const studioPid = talkPid || (id ? chats.get(id)?.project ?? null : null)
+        const nextIdea = String(out.brief || '').trim().slice(0, 4000)
+        if (nextIdea && studioPid && studios.get(studioPid) && !projects.get(studioPid)?.head && (kind === 'site' || kind === 'app')) {
+          try { await studios.update(studioPid, s => { s.idea = nextIdea }) } catch (err) { console.warn('studio idea:', err.message) }
+          if (await brands.refresh(studioPid, nextIdea).catch(err => { console.warn('brand refresh:', err.message); return null })) out.brandUpdated = true
+        }
         // cards not saved (the chat could not be written) are shown to look at, never to press
         if (cards.length && !out.cards) out.cards = cardsView(cards).map(({ pick, ...c }) => c)
         // what the client keeps of this answer for the next turn: the reply and the cards it showed

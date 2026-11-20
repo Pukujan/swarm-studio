@@ -136,3 +136,17 @@ Every write goes through the chat store's per-chat queue.
   - a painted pack (a mature painted look) needs painted samples, which are slice 3's Pictures;
   - editing the voice and the storyboard frames.
 
+### In the new Studio (2026-11-20)
+
+- A project's sheet, opened from its Studio, is the screen `ui/src/screens/BrandSheet.tsx`, at
+  `?room=brand&project=<id>&step=<step>`.
+- A sheet opened from a chat's brief is drawn by the screen that chat is on, in its canvas's place and beside the chat
+  (`ui/src/screens/brand/ChatSheet.tsx`; today the Design deck's chat, on a new project's deck and on a build's). It is
+  made with `POST /api/brand { chat, brief, kind }` and changed on `/api/brand/:chat/…`, as `web/brand.js` does.
+- The machine says the sheet is open (`brand`, with `from`) and `back` leaves it (spec 34). It keeps no chat, so the
+  sheet has no address of its own and a reload shows the screen it was opened from.
+- When the sheet closes, the chat hears its chat's id and whether it was locked: the brief's button reads
+  **Brand sheet · Locked**, and Build sends that chat, so `/api/run` builds from the locked sheet.
+- Both sheets are one component (`brand/Sheet.tsx`) over two sources (`brand/api.ts` for a project, `brand/source.ts`
+  for a chat).
+

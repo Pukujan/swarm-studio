@@ -57,8 +57,10 @@ export const GROUPS = [
   },
   {
     k: 'website', name: 'Website', parts: [
-      { k: 'standin', name: 'Stand-in photos', need: false, for: 'Real photos while pictures are painted, or instead of them.', by: 'Openverse and the built-in library; Pexels with PEXELS_API_KEY', without: 'Only Openverse and the built-in library.', goes: 'Openverse and Pexels: words from a picture prompt',
-        state: F => has(F, 'PEXELS_API_KEY') === undefined ? wait : has(F, 'PEXELS_API_KEY') ? ok('Pexels') : off('Openverse only'), fix: () => key('PEXELS_API_KEY') }
+      { k: 'standin', name: 'Stock photos', need: false, for: 'Real photos in a site built with Stock photos, and while pictures are painted.', by: 'Openverse and the built-in library; Pexels with PEXELS_API_KEY', without: 'Only Openverse and the built-in library: far fewer photos, so they match the page less well.', goes: 'Openverse and Pexels: words from a picture prompt',
+        state: F => has(F, 'PEXELS_API_KEY') === undefined ? wait : has(F, 'PEXELS_API_KEY') ? ok('Pexels') : off('No Pexels key'),
+        // where the key comes from, in the fix itself (owner, 2026-11-19: "why doesnt our plugin help guide users how to get the api key for stock images?")
+        fix: () => ({ ...key('PEXELS_API_KEY'), note: 'A Pexels key is free. Make an account at pexels.com, open pexels.com/api and copy "Your API key", then run this in Hermes. Swarm Studio reads it when it next starts.' }) }
     ]
   },
   {

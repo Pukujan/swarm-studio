@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { canvasSource } from './canvas-source.mjs'
-import { wordsRead, readIntent, discuss, writeBrief, buildOf, toMessages } from '../engine/talkplan.mjs'
+import { wordsRead, readIntent, discuss, writeBrief, buildOf, toMessages, briefFromTalk } from '../engine/talkplan.mjs'
 
 // the owner's own words (run 2026-11-12T03-08-56-302Z): the prompt, then the brief that reached the build
 const PROMPT = 'full stack saas app for ticket booking, do u wanna grill me first?'
@@ -367,4 +367,25 @@ test('where to start: the parts fit the game, each with a reason, and what is pa
   assert.match(canvas, /o\.id\.startsWith\('start:'\)\) return gameStart/)
   assert.match(studio, /C\.planView\.select\(select\)/)
   assert.match(studio, /C\.planView\.focus\(focus\)/)
+})
+
+test('a Studio Build after a talk: the brief is what the talk decided, with what its link was read to say', async () => {
+  const turns = [
+    { who: 'person', text: 'hermes website' },
+    { who: 'person', text: 'https://hermes-agent.nousresearch.com/ i want a website like this can u help' },
+    { who: 'planner', text: 'Yes. A website for Hermes, an AI agent with memory and skills.' },
+    { who: 'person', text: 'any logo, product detail too use from nous hermes' }
+  ]
+  const refs = [{ kind: 'link', url: 'https://hermes-agent.nousresearch.com/', read: { by: 'page', text: 'Title: Hermes AI Agent by Nous Research' } }]
+  let sent = null
+  const brief = await briefFromTalk({ turns, refs, chat: async m => { sent = m; return 'Brief: Hermes Agent by Nous Research, a dark developer website for an AI agent.' } })
+  assert.match(brief, /^Hermes Agent by Nous Research/)
+  // the planner got the whole talk and the page's own words, not the first message alone
+  assert.match(sent.at(-1).content, /i want a website like this/)
+  assert.match(sent.at(-1).content, /Title: Hermes AI Agent by Nous Research/)
+  // nothing said after the first words, no planner, or a planner that fails: the build keeps its own words
+  assert.equal(await briefFromTalk({ turns: turns.slice(0, 1), refs, chat: async () => 'Brief: x' }), null)
+  assert.equal(await briefFromTalk({ turns: [turns[0], { who: 'person', text: 'Skip Brand', pick: 'go:skip-brand' }, { who: 'person', text: 'hermes website\n\nPages: Home.' }], refs, chat: async () => 'Brief: x' }), null)
+  assert.equal(await briefFromTalk({ turns, refs, chat: null }), null)
+  assert.equal(await briefFromTalk({ turns, refs, chat: async () => { throw new Error('down') } }), null)
 })

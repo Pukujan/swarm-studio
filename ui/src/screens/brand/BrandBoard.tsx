@@ -30,11 +30,13 @@ const INSPECTED = ['story', 'palette', 'type', 'pack']
 const ROW = 'max-w-[1120px] gap-x-4! gap-y-[30px]! items-end!'
 const STORY = 'max-w-[1120px] gap-x-4! gap-y-[30px]!'
 
-export function BrandBoard({ brand, packs = [], busy, sel, onSelect, actions, toast = null }: {
+export function BrandBoard({ brand, packs = [], busy, sel, onSelect, actions, toast = null, fill = false }: {
   brand: Brand | null
   packs?: BrandPack[]
   busy: boolean
   toast?: string | null
+  // beside a chat: the sheet takes the height it is given (board/Board.tsx `fill`)
+  fill?: boolean
   sel: string | null
   onSelect: (key: string | null) => void
   actions: BrandActions
@@ -67,8 +69,8 @@ export function BrandBoard({ brand, packs = [], busy, sel, onSelect, actions, to
 
   if (!brand) {
     return (
-      <div ref={sheet} className="brand-sheet">
-        <Board ref={board} label="Brand sheet" fit={[0.35, 1]} selected={false} onClear={() => {}} toast={toast}>
+      <div ref={sheet} className={`brand-sheet${fill ? ' h-full' : ''}`}>
+        <Board ref={board} label="Brand sheet" fit={[0.35, 1]} selected={false} onClear={() => {}} toast={toast} fill={fill}>
           {busy && (
             <Column>
               <Section label="Story" className={STORY}><Waiting cls="pcard" n={3} cursor /></Section>
@@ -87,8 +89,8 @@ export function BrandBoard({ brand, packs = [], busy, sel, onSelect, actions, to
   const locked = !!brand.lockedAt
   const words = (part: 'palette' | 'type', w: string) => { actions.pick({ part, words: w }).catch(() => {}) }
   return (
-    <div ref={sheet} className={`brand-sheet${locked ? ' locked' : ''}`}>
-    <Board ref={board} label="Brand sheet" fit={[0.35, 1]} selected={!!sel} onClear={() => onSelect(null)} inspector={inspector} toast={toast}>
+    <div ref={sheet} className={`brand-sheet${locked ? ' locked' : ''}${fill ? ' h-full' : ''}`}>
+    <Board ref={board} label="Brand sheet" fit={[0.35, 1]} selected={!!sel} onClear={() => onSelect(null)} inspector={inspector} toast={toast} fill={fill}>
       <Column>
         {packs.length > 0 && <Section name="packs" className="max-w-[1160px] gap-x-4! gap-y-[34px]! pb-[46px]" label="Options">{packs.map(k => <BrandPackCard key={k.slug} k={k} brand={brand} {...card(`pack:${k.slug}`)} />)}</Section>}
         <Section name="story" className={STORY} label="Story">

@@ -44,7 +44,7 @@ Inspector  (layer, while a card is selected; ×, Esc, a click on the empty stage
 | Press | Event | Goes to |
 |---|---|---|
 | The brand card or Mix in the scaffold | `brand { from: 'scaffold' }` | here |
-| Brand sheet in a chat's brief | `brand { from: 'draft' }` | here |
+| Brand sheet in a chat's brief (the Design deck's chat: a new project's deck, or a build's) | `brand { from: 'draft' }` or `{ from: 'deck' }` | here, in the deck's canvas place with the chat beside it |
 | Esc with nothing selected, the crumb's middle part, or Lock | `up` | back where it was opened from (the scaffold's step through history) |
 | The crumb's Projects | `projects` | Projects |
 

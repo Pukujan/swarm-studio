@@ -145,24 +145,31 @@ export function Chat(props: ChatProps) {
   // what Hermia's latest turn offers (one open question at a time: only the latest turn has any)
   const offer = talk.turns.findLast(t => !!t.acts && t.acts.type !== 'brief')
   const offers = !offer?.acts ? 0 : offer.acts.type === 'build' ? 1 : offer.acts.type === 'options' ? offer.acts.options.length : 0
+  // low (Dock.tsx): the last line, and one row with the message box, Suggestions and Send. The tabs, the chats and
+  // the pickers are a pull of the handle away
+  const low = !dock.side && dock.level === 0 && dock.drag == null
+  // down the left in a wide window; folded there, only the rail's button shows (the talk goes on behind it)
+  const folded = dock.side && dock.folded
 
   return (
-    <section ref={side} aria-label="Chat" data-chat-dock="" {...dragProps} style={{ height: dock.px }}
-      className={`side chat-dock fixed inset-x-0 bottom-0 z-30 flex flex-col border-t border-edge bg-deep pt-4 text-text shadow-[0_-18px_40px_-24px_rgb(var(--shade-rgb)/.6)] ${dock.drag == null ? 'motion-safe:transition-[height] motion-safe:duration-200' : ''} ${drop ? 'outline-2 -outline-offset-4 outline-dashed outline-accent' : ''}`}>
-      <DockHandle dock={dock} />
-      <Tabs selectedKey={tab} onSelectionChange={k => setTab(k === 'log' ? 'log' : 'chat')} className="mx-auto flex min-h-0 w-full max-w-[960px] flex-1 flex-col">
-        <div className="flex items-center gap-1 px-2">
+    <section ref={side} aria-label="Chat" data-chat-dock={dock.side ? 'side' : 'bottom'} {...dragProps} style={dock.side ? { width: dock.w } : { height: dock.px }}
+      className={`side chat-dock fixed bottom-0 left-0 z-30 flex flex-col border-edge bg-deep text-text ${dock.side ? 'top-14 border-r pt-2' : `right-0 border-t pt-4 shadow-[0_-18px_40px_-24px_rgb(var(--shade-rgb)/.6)] ${dock.drag == null ? 'motion-safe:transition-[height] motion-safe:duration-200' : ''}`} ${drop ? 'outline-2 -outline-offset-4 outline-dashed outline-accent' : ''}`}>
+      {!dock.side && <DockHandle dock={dock} />}
+      {folded && <Button role="ghost" aria-label={offers ? `Show chat, ${offers} suggested` : 'Show chat'} className="mx-auto min-h-10 min-w-10 flex-col gap-0.5 px-0" onPress={() => dock.setFolded(false)}><span aria-hidden>›</span>{offers > 0 && <span aria-hidden className="font-monospace text-xs text-accent">{offers}</span>}</Button>}
+      <Tabs selectedKey={tab} onSelectionChange={k => setTab(k === 'log' ? 'log' : 'chat')} className={folded ? 'hidden' : 'mx-auto flex min-h-0 w-full max-w-[960px] flex-1 flex-col'}>
+        <div className={low ? 'hidden' : 'flex items-center gap-1 px-2'}>
           <TabList aria-label="Chat or Log" className="flex gap-1">
             <Tab id="chat" className={tabClass}>Chat</Tab>
             <Tab id="log" className={tabClass}>Log</Tab>
           </TabList>
           <Chats api={api} project={project} from={from} current={talk.on ? talk.chat : null} onOpen={id => { setTab('chat'); void talk.openChat(id) }} onNew={() => { setTab('chat'); talk.newChat(); box.current?.focus() }} />
+          {dock.side && <Button role="ghost" aria-label="Hide chat" className="ml-auto min-h-10 min-w-10 px-0" onPress={() => dock.setFolded(true)}><span aria-hidden>‹</span></Button>}
         </div>
         <TabPanel id="chat" className="flex min-h-0 flex-1 flex-col outline-none">
           <Feed lines={feed} acts={acts} label="Messages" empty={talk.on ? undefined : props.box?.empty ?? EMPTY} onHover={setHover} />
-          <form className="composer relative flex flex-col gap-1.5 px-2 pb-2" onSubmit={e => { e.preventDefault(); send() }}>
+          <form className={`composer relative flex gap-1.5 px-2 pb-2 ${low ? 'flex-wrap items-end' : 'flex-col'}`} onSubmit={e => { e.preventDefault(); send() }}>
             {chips.length > 0 && (
-              <div className="flex flex-wrap gap-1.5" onMouseLeave={() => setHot(null)}>
+              <div className="flex basis-full flex-wrap gap-1.5" onMouseLeave={() => setHot(null)}>
                 {chips.map(c => (
                   <span key={c.key} data-chip={c.key} data-wire={c.kind === 'layer' ? '' : undefined} onMouseEnter={() => setHot(c.key)}
                     className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-line-2 bg-surface-2 py-0.5 pr-0.5 pl-2 font-monospace text-xs">
@@ -184,7 +191,7 @@ export function Chat(props: ChatProps) {
                 ))}
               </div>
             )}
-            <TextArea ref={box} aria-label="Message" rows={2} autoComplete="off" value={text} placeholder={talk.on ? 'Tell Hermia…' : props.box?.placeholder ?? 'Describe a product'}
+            <TextArea ref={box} aria-label="Message" rows={low ? 1 : 2} autoComplete="off" value={text} placeholder={talk.on ? 'Tell Hermia…' : props.box?.placeholder ?? 'Describe a product'}
               aria-controls={matches.length ? 'chat-slash' : undefined} aria-activedescendant={matches.length ? `chat-slash-${matches[at]?.name}` : undefined}
               onChange={e => { setText(e.target.value); setSlashAt(0); setSlashOff(false) }}
               onBlur={() => setTimeout(() => setSlashOff(true), 150)}
@@ -199,15 +206,17 @@ export function Chat(props: ChatProps) {
                 }
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() }
               }}
-              className="w-full resize-none rounded-[10px] border border-line-2 bg-void px-3 py-2 font-monospace text-sm text-text outline-none transition-[border-color] duration-[160ms] ease-[cubic-bezier(.2,.7,.2,1)] motion-reduce:transition-none placeholder:text-dim data-[focused]:border-frame-hi" />
-            <div className="row flex min-w-0 items-center gap-1.5">
+              className={`${low ? 'min-w-0 flex-1' : 'w-full'} resize-none rounded-[10px] border border-line-2 bg-void px-3 py-2 font-monospace text-sm text-text outline-none transition-[border-color] duration-[160ms] ease-[cubic-bezier(.2,.7,.2,1)] motion-reduce:transition-none placeholder:text-dim data-[focused]:border-frame-hi`} />
+            <div className={`row flex min-w-0 items-center gap-1.5 ${low ? 'flex-none' : ''} ${dock.side ? 'flex-wrap justify-end' : ''}`}>
               <Suggestions count={offers}>
                 {done => offer ? <Suggested t={offer} a={acts} done={done} /> : <p className="m-0 px-1 py-2 font-monospace text-xs text-muted">Nothing to suggest right now.</p>}
               </Suggestions>
-              <span className="flex-1" />
-              <ChipSelect name="Agents" options={agentList.map(n => ({ id: String(n), label: `${n} agents` }))} value={agents} onChange={setAgents} className="flex-none" />
-              <ChipSelect name="Build model" options={model.options} value={model.value} className="min-w-0 max-w-56 shrink"
-                onChange={id => { if (id === OTHER) onMoreModels?.(); else void model.pick(id) }} />
+              {!low && <>
+                <span className="flex-1" />
+                <ChipSelect name="Agents" options={agentList.map(n => ({ id: String(n), label: `${n} agents` }))} value={agents} onChange={setAgents} className="flex-none" />
+                <ChipSelect name="Build model" options={model.options} value={model.value} className="min-w-0 max-w-56 shrink"
+                  onChange={id => { if (id === OTHER) onMoreModels?.(); else void model.pick(id) }} />
+              </>}
               <Button type="submit" role="primary" className="flex-none">{talk.on ? 'Send' : props.box?.action ?? 'Build'}</Button>
             </div>
           </form>

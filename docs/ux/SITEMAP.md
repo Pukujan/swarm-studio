@@ -284,6 +284,10 @@ flowchart LR
   SW --> SWB["Builds and boards you were invited to"]
 ```
 
+In the next UI the two talk branches (Chats, and "Don't build yet") open on its own Design deck: the deck with nothing
+on it and the chat talking, the machine's `draft`. Build there opens the new build on the same deck. It has no address
+of its own, so a reload shows Projects.
+
 ## 7. Me
 
 ```mermaid
@@ -458,6 +462,12 @@ flowchart LR
   PT --> AN[Animation]
 ```
 
+A talk in the deck's chat ends in a brief (Build, Brand sheet, Keep talking). **Brand sheet** opens that chat's brand
+sheet (spec 31) in the canvas's place, with the chat still beside it: Home › Projects › Chat › Brand sheet, and Lock in
+the top bar. Lock, the crumb's Chat and Esc go back to the deck, where the brief's button then reads Brand sheet ·
+Locked and Build builds from the locked sheet. It has no address of its own: a reload shows the deck. (A project's own
+sheet is the Studio's Brand card, section 5c.)
+
 ### Engine room
 
 ```mermaid
@@ -517,6 +527,14 @@ flowchart LR
 
 The 7-step game wizard is gone. Its questions become the Tweak branch, asked after the first playable build.
 
+The room as built today, in both Studios, is not that tree yet (Play, Tweak and Details are the agreed direction). The
+new Studio's is `ui/src/screens/GameRoom.tsx`, moved from `web/canvas/rooms.js` as it is. Its bar has the state, the
+switch **Crew · Art · Live · Map** (each only when it has something to show), **Autoplay** once the game runs,
+**Preview / Code**, Reload, the engine project to download, Open in its own tab and **Stop**. Its stage follows the
+build: the crew's wall, then the art sheet, then the live game, or the room's card when the build stopped or failed. Its
+chat takes the same switch typed ("show the art", "play it for me"), questions to the crew, and the answer to a slice
+that waits ("fix it", "go on", a note). Starting a game (its questions, Shape it, Cast) is still in the classic Studio.
+
 A game build's wall follows what the crew is doing, after the Map in its first window (spec 44): two painters and one code tile while the art is painted, the play test, a picture window and one code tile after. When the build stops:
 
 ```mermaid
@@ -556,6 +574,12 @@ flowchart LR
   L7 --> L8[Time and channel]
   L2 -.-> FS
 ```
+
+In the new Studio the Film studio is one screen at `?version=<build>&room=video` (ui/src/screens/FilmStudio.tsx), moved
+from the classic room as it is: Watch is the finished film with its saved cuts and, when the film was made in them, its
+wide, tall and square shapes; New cut is the form under it (the prompt, a style reference, Start from, Voice, Music)
+or an idea typed in the chat; the storyboard's beats sit above both. Shots, and the Launch pad, are still the agreed
+direction above and are in neither Studio.
 
 ## 11. Hermia, the commander
 
