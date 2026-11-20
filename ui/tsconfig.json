@@ -34,7 +34,11 @@
       "@studio/pet": ["./src/legacy/studio-pet.d.ts"],
       "@studio/video": ["./src/primitives/studio-video.d.ts"],
       "@studio/setup-parts": ["./src/screens/setup/studio-setup-parts.d.ts"],
-      "@studio/capture": ["./src/board/studio-capture.d.ts"]
+      "@studio/capture": ["./src/board/studio-capture.d.ts"],
+      "@studio/stage": ["./src/screens/game/studio-stage.d.ts"],
+      "@studio/autoplay": ["./src/screens/game/studio-autoplay.d.ts"],
+      "@studio/wander": ["./src/screens/game/studio-wander.d.ts"],
+      "@studio/replaytalk": ["./src/screens/game/studio-replaytalk.d.ts"]
     }
   },
   "include": ["src", ".storybook", "vite.config.ts"]

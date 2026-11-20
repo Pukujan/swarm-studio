@@ -327,7 +327,7 @@ export function StudioFirst() {
   const insp = !!(d && sel && (x || pack || /^(step|ref|asset|lock):/.test(sel)))
 
   return (
-    <div ref={root} className={`project plan scaffold min-h-0 flex-1${insp ? ' insp-on' : ''}${sheet ? ' files-on' : ''}`} style={{ height: 'calc(100dvh - 3.5rem - var(--chat-h, 0px))', minHeight: 0 }}>
+    <div ref={root} className={`project plan scaffold min-h-0 flex-1${insp ? ' insp-on' : ''}${sheet ? ' files-on' : ''}`} style={{ height: 'calc(100dvh - 3.5rem - var(--chat-h, 0px))', minHeight: 0, marginLeft: 'var(--chat-w, 0px)' }}>
       <aside className="pj-side" aria-label="Layers" onKeyDown={e => { if (e.key === 'Escape' && sheet) { e.stopPropagation(); setSheet(false) } }}>
         <div className="flex items-center gap-2 px-3 pt-2.5 pb-2"><span className="rounded-[8px] bg-surface-2 px-2.5 py-1.5 font-label text-[13px] font-semibold uppercase tracking-[.1em] text-text">Layers</span><Button role="ghost" aria-label="Close Layers" onPress={() => setSheet(false)} className="ml-auto hidden min-h-9 min-w-9 px-0 max-[760px]:inline-flex">×</Button></div>
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">

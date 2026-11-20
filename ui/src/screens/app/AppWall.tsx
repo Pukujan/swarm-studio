@@ -2,13 +2,11 @@
 // comes from the machine; the app from its routes (source.ts), loaded once and kept up to date from the stream: an
 // app:* event for this build reads its state again (a local call), a file written is read again. While it shows,
 // it tells the server a viewer is here every 30 s, so the app is not stopped under them (decision 0017).
-// A game's App room has not moved: it stays the stand-in. A file dropped on the wall goes to the project's References
+// A game build's App room is the Game room (../GameRoom.tsx): once the build says it is a game, this hands over and
+// reads nothing more. A file dropped on the wall goes to the project's References
 // (shared/RefDrop.tsx, issue #543), by the build's address when the project is not known, and Hermia asks in the chat.
-import { classicHref } from '../../shell/classic'
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { search } from '../../nav/address'
 import { useNav } from '../../nav/NavProvider'
-import { LinkButton } from '../../primitives/Button'
 import { useTrail } from '../../shell/Trail'
 import { AppWallView, WINDOWS, type Said } from './AppWallView'
 import { doneScreens, type AppModel, type RunEvent } from './model'
@@ -21,6 +19,7 @@ import { crew } from '../deck/crew'
 import { refAt } from '../../shared/refs'
 import { useRefDrop } from '../../shared/RefDrop'
 import { useToast } from '../../primitives/Toast'
+import { GameRoom } from '../GameRoom'
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 
@@ -29,6 +28,9 @@ export function AppWall() {
   const run = view.run || view.version
   const source = useContext(AppSourceContext)
   const [model, setModel] = useState<AppModel | null>(null)
+  // the run that turned out to be a game: the Game room draws it, and this wall stops reading it
+  const [gameRun, setGameRun] = useState<string | null>(null)
+  const game = !!run && gameRun === run
   const [said, setSaid] = useState<Said>(null)
   // the crew's radio for this build (#529): Hermia's orders and the helpers' acts and replies, from the stream
   const [radio, setRadio] = useState<Radio>(NO_RADIO)
@@ -57,7 +59,7 @@ export function AppWall() {
   }, [run, source])
 
   useEffect(() => {
-    if (!run) return
+    if (!run || game) return
     let live = true, again = 0
     setModel(null)
     const refresh = () => {
@@ -68,6 +70,7 @@ export function AppWall() {
     }
     Promise.all([source.state(run), source.map(run).catch(() => null), source.events(run).catch(() => [] as RunEvent[]), source.files(run).catch(() => ({ files: [] })), source.versions?.(run).catch(() => null)]).then(([app, map, events, f, v]) => {
       if (!live) return
+      if (app.kind === 'game') return setGameRun(run)
       const start = events.find(e => e.type === 'run:start')
       const agents = Array.isArray(start?.agents) ? (start.agents as { name?: string }[]).map(x => str(x.name)).filter(Boolean) : []
       setModel({
@@ -91,7 +94,7 @@ export function AppWall() {
     const beat = source.seen ? window.setInterval(() => source.seen?.(run).catch(() => {}), 30000) : 0
     source.seen?.(run).catch(() => {})
     return () => { live = false; clearTimeout(again); clearInterval(beat); stop?.() }
-  }, [run, source, readFile])
+  }, [run, source, readFile, game])
 
   useTrail(model?.title || undefined)
 
@@ -143,16 +146,7 @@ export function AppWall() {
       .finally(() => setGoing(''))
   }, [run, source])
 
-  // a game's App room has not moved: it opens in the classic Studio at this address (decision 0024), with its name
-  // and the way there while it goes (as NotMovedYet, which this cannot import: it reads the screens' list, which lists this)
-  const game = model?.app?.kind === 'game'
-  useEffect(() => { if (game) location.replace(classicHref(search(view, location.search))) }, [game, view])
-  if (game) return (
-    <section className="grid min-h-[60dvh] place-content-center justify-items-center gap-6 p-6 text-center">
-      <h1 className="font-display text-5xl font-extrabold uppercase">Game room</h1>
-      <LinkButton role="primary" href={classicHref(search(view, location.search))}>Open in the Studio</LinkButton>
-    </section>
-  )
+  if (game) return <GameRoom />
   if (!model) return <section aria-label="App build" aria-busy="true" className="grid flex-1 grid-cols-2 grid-rows-2 gap-[10px] p-3">{WINDOWS.map(w => <div key={w} className="rounded-[12px] border border-edge bg-deep" />)}</section>
   return (
     <>

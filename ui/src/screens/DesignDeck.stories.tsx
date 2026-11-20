@@ -1,5 +1,6 @@
 // The Design deck's mock-ups: the real machine at the deck's address (?version=…&room=deck), fed a build's
-// events from deck/deck.fixture.ts instead of the server, one story per state the deck draws differently.
+// events from deck/deck.fixture.ts instead of the server, one story per state the deck draws differently. The build's
+// film (video/film.fixture.ts) is none unless a story says: then its panel floats over the corner.
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { makeNav } from '../nav/nav'
 import { NavProvider } from '../nav/NavProvider'
@@ -7,6 +8,9 @@ import { DesignDeck } from './DesignDeck'
 import { deckEvents, RUN, type Cut } from './deck/deck.fixture'
 import { DeckSourceContext, type DeckSource } from './deck/source'
 import { PhotoSourceContext, type PhotoSource } from '../board/photos'
+import { SheetsProvider } from './setup/Sheets'
+import { filmSource } from './video/film.fixture'
+import { FilmSourceContext, type FilmSource } from './video/source'
 
 // the image-first board (src/board/) with a photo per page, drawn here, so its photo tiers have something to show
 const drawn: PhotoSource = {
@@ -30,10 +34,12 @@ const from = (cut: Cut, live = false): DeckSource => ({ events: async () => deck
 
 const meta = {
   component: DesignDeck,
-  parameters: { source: from('done'), extra: '' },
+  parameters: { source: from('done'), film: filmSource('none'), extra: '' },
   decorators: [(Story, { parameters }) => (
     <NavProvider nav={makeNav({ search: `?version=${RUN}&room=deck${(parameters.extra as string | undefined) ?? ''}` })}>
-      <DeckSourceContext value={parameters.source as DeckSource}><PhotoSourceContext value={drawn}><Story /></PhotoSourceContext></DeckSourceContext>
+      <SheetsProvider first={false}><FilmSourceContext value={parameters.film as FilmSource}>
+        <DeckSourceContext value={parameters.source as DeckSource}><PhotoSourceContext value={drawn}><Story /></PhotoSourceContext></DeckSourceContext>
+      </FilmSourceContext></SheetsProvider>
     </NavProvider>
   )]
 } satisfies Meta<typeof DesignDeck>
@@ -53,6 +59,11 @@ export const Missing: Story = { parameters: { source: { events: () => Promise.re
 export const Playing: Story = { parameters: { extra: '&play=prototype&page=plans' } }
 // ☰ → Replay: the finished build played again on its own clock
 export const Replaying: Story = { parameters: { extra: `&replay=${RUN}` } }
+
+// the build's film, already there when the deck opened: its panel waits minimized (the title, and the progress of
+// one being made); Expand shows it, and its head opens the Film studio
+export const FilmBeingMade: Story = { parameters: { film: filmSource('rendering') } }
+export const FilmReady: Story = { parameters: { film: filmSource('done') } }
 
 // the image-first board behind its flag: photos under the tier manager, as <img> and on the PixiJS canvas
 export const BoardTiers: Story = { args: { board: 'tiers' }, parameters: { source: from('building', true) } }
